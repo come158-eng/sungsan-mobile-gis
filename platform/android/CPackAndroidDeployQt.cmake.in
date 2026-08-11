@@ -1,6 +1,69 @@
-if(NOT "$ENV{KEYNAME}" STREQUAL ""
-   AND NOT "$ENV{KEYPASS}" STREQUAL ""
-   AND NOT "$ENV{STOREPASS}" STREQUAL "")
+# The independent Sungsan package never gives signing credentials to
+# androiddeployqt.  Qt 6.10.x internally expands its documented password
+# environment variables into child-process `pass:<secret>` command arguments.
+# Sungsan therefore builds one unsigned release APK here and signs it later in
+# an isolated, network-disabled container with apksigner's native file:<path>
+# password input support.
+if("@APP_PACKAGE_ID@" STREQUAL "kr.co.sungsan.mobilegis")
+  if("$ENV{SUNG_SAN_RELEASE_BUILD}" STREQUAL "1")
+    execute_process(
+      COMMAND
+        "@ANDROIDDEPLOYQT_EXECUTABLE@"
+        --input @CMAKE_BINARY_DIR@/src/app/android-qfield-deployment-settings.json
+        --output @CMAKE_BINARY_DIR@/src/app/android-build
+        --deployment bundled
+        --android-platform android-@ANDROID_TARGET_PLATFORM@
+        --gradle
+        --release
+      WORKING_DIRECTORY @CMAKE_BINARY_DIR@
+      COMMAND_ECHO NONE
+      COMMAND_ERROR_IS_FATAL ANY)
+
+    set(_sungsan_unsigned_release_apk
+        "@CMAKE_BINARY_DIR@/src/app/android-build/build/outputs/apk/release/android-build-release-unsigned.apk")
+    if(NOT EXISTS "${_sungsan_unsigned_release_apk}")
+      message(FATAL_ERROR
+              "Sungsan unsigned release APK was not produced at the audited Qt output path")
+    endif()
+    file(SIZE "${_sungsan_unsigned_release_apk}" _sungsan_unsigned_release_size)
+    if(_sungsan_unsigned_release_size LESS 1)
+      message(FATAL_ERROR "Sungsan unsigned release APK is empty")
+    endif()
+  elseif("$ENV{SUNG_SAN_RELEASE_BUILD}" STREQUAL "0")
+    execute_process(
+      COMMAND
+        "@ANDROIDDEPLOYQT_EXECUTABLE@"
+        --input @CMAKE_BINARY_DIR@/src/app/android-qfield-deployment-settings.json
+        --output @CMAKE_BINARY_DIR@/src/app/android-build
+        --deployment bundled
+        --android-platform android-@ANDROID_TARGET_PLATFORM@
+        --gradle
+      WORKING_DIRECTORY @CMAKE_BINARY_DIR@
+      COMMAND_ECHO NONE
+      COMMAND_ERROR_IS_FATAL ANY)
+
+    # A non-release Gradle build is automatically signed with an Android debug
+    # key.  Verify that it really is installable before it may be collected as
+    # an explicitly test-only artifact.
+    set(_sungsan_debug_apk
+        "@CMAKE_BINARY_DIR@/src/app/android-build/build/outputs/apk/debug/android-build-debug.apk")
+    execute_process(
+      COMMAND
+        "@ANDROID_SDK_ROOT@/build-tools/@ANDROID_BUILD_TOOLS_VERSION@/apksigner" verify
+        "${_sungsan_debug_apk}"
+      WORKING_DIRECTORY @CMAKE_BINARY_DIR@
+      COMMAND_ECHO NONE
+      COMMAND_ERROR_IS_FATAL ANY)
+  else()
+    message(FATAL_ERROR
+            "SUNG_SAN_RELEASE_BUILD must be exactly 0 or 1 for the Sungsan package")
+  endif()
+
+# Keep the upstream QField packaging behavior unchanged.  Sungsan builds never
+# enter this branch because they use their independent package identifier.
+elseif(NOT "$ENV{KEYNAME}" STREQUAL ""
+       AND NOT "$ENV{KEYPASS}" STREQUAL ""
+       AND NOT "$ENV{STOREPASS}" STREQUAL "")
   execute_process(
     COMMAND
       "@ANDROIDDEPLOYQT_EXECUTABLE@"

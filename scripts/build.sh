@@ -24,11 +24,20 @@ else
 	install_qt_arch="android_arm64_v8a"
 fi
 
-DOCKER_BUILDKIT=1 docker build ${SRC_DIR}/.docker/android_dev -t qfield_and_dev
+if [[ "${SUNG_SAN_DOCKER_IMAGE_READY:-0}" != "1" ]]; then
+	DOCKER_BUILDKIT=1 docker build "${SRC_DIR}/.docker/android_dev" -t qfield_and_dev
+fi
 
 DOCKER_TTY_ARGS=()
 if [[ -t 0 && -t 1 ]]; then
 	DOCKER_TTY_ARGS=(-it)
+fi
+
+SIGNING_ENV_ARGS=(-e STOREPASS -e KEYNAME -e KEYPASS)
+if [[ "${APP_PACKAGE_ID:-}" == "kr.co.sungsan.mobilegis" ]]; then
+	# The full Sungsan build container must never receive release credentials.
+	# Dedicated network-disabled containers perform preflight and final signing.
+	SIGNING_ENV_ARGS=()
 fi
 
 docker run "${DOCKER_TTY_ARGS[@]}" --rm \
@@ -37,9 +46,7 @@ docker run "${DOCKER_TTY_ARGS[@]}" --rm \
 	-e triplet=${triplet} \
 	-e install_qt_version=${install_qt_version} \
 	-e install_qt_arch=${install_qt_arch} \
-	-e STOREPASS \
-	-e KEYNAME \
-	-e KEYPASS \
+	"${SIGNING_ENV_ARGS[@]}" \
 	-e APP_PACKAGE_NAME \
 	-e APP_PACKAGE_ID \
 	-e APP_UPSTREAM_REVISION \
@@ -68,6 +75,7 @@ docker run "${DOCKER_TTY_ARGS[@]}" --rm \
 	-e SENTRY_ENV \
 	-e SUNG_SAN_CONFIGURE_VWORLD \
 	-e SUNG_SAN_VWORLD_API_KEY \
+	-e SUNG_SAN_RELEASE_BUILD \
 	-e APP_VERSION \
 	-e APP_VERSION_STR \
 	-e APK_VERSION_CODE \

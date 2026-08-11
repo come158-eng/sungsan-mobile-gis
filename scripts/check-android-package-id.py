@@ -275,8 +275,11 @@ def check_static_wiring() -> None:
         in build_sungsan
     )
     assert (
-        'APK_SOURCE_DIR="${SOURCE_DIR}/build-sungsan-native-${triplet}/'
-        'src/app/android-build/build/outputs/apk"'
+        'SOURCE_BUILD_DIR="${SOURCE_DIR}/build-sungsan-native-${triplet}"'
+        in build_sungsan
+    )
+    assert (
+        'APK_SOURCE_DIR="${SOURCE_BUILD_DIR}/src/app/android-build/build/outputs/apk"'
         in build_sungsan
     )
     assert (

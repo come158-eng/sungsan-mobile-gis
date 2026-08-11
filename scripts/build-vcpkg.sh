@@ -33,6 +33,26 @@ WITH_SAMPLE_PROJECTS="${WITH_SAMPLE_PROJECTS:-ON}"
 
 echo "Package name ${APP_PACKAGE_NAME} (Android ID: ${APP_PACKAGE_ID})"
 
+if [[ "${APP_PACKAGE_ID}" == "kr.co.sungsan.mobilegis" ]]; then
+	if [[ "${SUNG_SAN_RELEASE_BUILD:-}" != "0" && "${SUNG_SAN_RELEASE_BUILD:-}" != "1" ]]; then
+		echo "오류: SUNG_SAN_RELEASE_BUILD는 성산 빌드에서 0 또는 1이어야 합니다." >&2
+		exit 10
+	fi
+	for forbidden_signing_variable in \
+		STOREPASS \
+		KEYNAME \
+		KEYPASS \
+		QT_ANDROID_KEYSTORE_PATH \
+		QT_ANDROID_KEYSTORE_ALIAS \
+		QT_ANDROID_KEYSTORE_STORE_PASS \
+		QT_ANDROID_KEYSTORE_KEY_PASS; do
+		if [[ -n "${!forbidden_signing_variable:-}" ]]; then
+			echo "오류: 전체 성산 빌드 컨테이너에 서명 비밀을 전달할 수 없습니다." >&2
+			exit 11
+		fi
+	done
+fi
+
 if [[ ${SUNG_SAN_CONFIGURE_VWORLD:-OFF} == ON ]]; then
 	cmake \
 		-D SOURCE_DIR="${SOURCE_DIR}/branding/sungsan/plugins/sungsan_vworld" \

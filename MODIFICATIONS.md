@@ -38,16 +38,38 @@ older beta1 artifact name.
   Extraction rejects path traversal, more than 100,000 entries, or more than
   8 GiB of expanded archive data.
 - `scripts/build.sh`, `scripts/build-vcpkg.sh`,
-  `scripts/build-sungsan-android.sh`: isolated
+  `scripts/build-sungsan-android.sh`, `scripts/validate-sungsan-keystore.sh`,
+  `scripts/sign-sungsan-release-apk.sh`: isolated
   `build-sungsan-native-<ABI>` Release cache and generated-plugin directory,
   fail-fast behavior, blank Sentry settings and safe unset-variable defaults.
   Beta2 refuses any pre-existing native/generated/APK output path, accepts only
-  APKs newer than the current build marker, requires all distribution signing
-  values and `keystore.p12` by default, and selects only signed output. An
-  explicit internal-only unsigned build is renamed `UNSIGNED-TEST-ONLY` so it
-  cannot be mistaken for a release artifact.
+  APKs newer than the current build marker, keeps release credentials entirely
+  out of the full source-build container, and rejects source-tree keystores.
+  Qt produces an exact unsigned release APK without `--sign`; a separate
+  network-disabled, read-only container validates an external read-only
+  keystore, fixes its certificate SHA-256 before compilation, runs `zipalign`
+  before `apksigner`, reads passwords from private files, and checks the final
+  signature against the fixed certificate. Internal debug-key output is named
+  `DEBUG-KEY-TEST-ONLY`; secret-free CI handoff output is named
+  `UNSIGNED-RELEASE-SIGNING-INPUT-ONLY`, so neither can be mistaken for a
+  signed release.
 - `.docker/android_dev/Dockerfile`, `cmake/Platform.cmake`: Android target and
   installed SDK platform synchronized at API 36; build-tools remains 35.0.1.
+- `.github/workflows/sungsan-android.yml`: manual-only arm64 CI with immutable
+  official Action commit pins. The build job produces a debug-key test APK or
+  unsigned release input but receives no release keystore, alias or password.
+  A second no-checkout job protected by the repository `sungsan-release`
+  environment downloads only the immutable artifact ID, enforces an exact
+  three-file inventory, fixes the signing certificate SHA-256, then aligns,
+  signs and verifies exactly one signer using the official `ubuntu-24.04`
+  runner's Android build-tools 35.0.1. Required reviewers and administrator
+  bypass prevention must be configured in repository settings because YAML
+  cannot enforce those environment rules. In the development worktree, the
+  upstream Android workflow is retained only as
+  `.github/workflows/android.yml.disabled`, preventing its push/PR/release and
+  S3/Play/Sentry paths from registering in this fork. The distributable source
+  ZIP includes only `.github/workflows/sungsan-android.yml` and excludes that
+  disabled reference together with every other upstream workflow.
 - `README.md`, `branding/sungsan/README.ko.md`,
   `branding/sungsan/PRODUCT_REQUIREMENTS.ko.md`: Sungsan-first source identity,
   one-command build instructions, product boundaries and explicit APK/device

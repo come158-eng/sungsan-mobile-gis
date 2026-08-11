@@ -597,7 +597,7 @@ def check_android_bridge() -> None:
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APK_SOURCE_DIR="${SOURCE_DIR}/build-sungsan-native-${triplet}/src/app/android-build/build/outputs/apk"',
+        'APK_SOURCE_DIR="${SOURCE_BUILD_DIR}/src/app/android-build/build/outputs/apk"',
         "APK lookup uses the isolated Sungsan native build directory",
     )
     require_regex(
@@ -614,14 +614,15 @@ def check_android_bridge() -> None:
     require_regex(
         "scripts/build-sungsan-android.sh",
         r"signing_variable_count\s*!=\s*0\s*&&\s*signing_variable_count\s*!=\s*3.*?"
-        r"signing_variable_count\s*==\s*0.*?ALLOW_UNSIGNED_TEST_BUILD.*?exit\s+8.*?"
-        r"keystore\.p12.*?\*-signed\.apk",
-        "distribution build requires complete signing and selects signed output",
+        r"ALLOW_UNSIGNED_TEST_BUILD.*?BUILD_KIND=\"signed_release\".*?"
+        r"SUNG_SAN_KEYSTORE_PATH.*?android-build-release-unsigned\.apk.*?"
+        r"android-build-release-signed\.apk",
+        "distribution build requires external signing and selects the exact signed output",
     )
     require(
         "scripts/build-sungsan-android.sh",
-        '"${OUTPUT_DIR}/UNSIGNED-TEST-ONLY-$(basename "${apk_file}")"',
-        "explicit unsigned test artifacts cannot be mistaken for releases",
+        '"${OUTPUT_DIR}/DEBUG-KEY-TEST-ONLY-$(basename "${APK_FILES[0]}")"',
+        "explicit debug-key test artifacts cannot be mistaken for releases",
     )
     forbid(
         "scripts/build-sungsan-android.sh",
