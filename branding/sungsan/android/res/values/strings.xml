@@ -1,0 +1,79 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11. -->
+<!--
+  Sungsan's Android default resources intentionally use Korean. Android falls
+  back to this file when the device locale has no matching values-* folder, so
+  early native dialogs never expose the upstream product wording.
+-->
+<resources>
+    <string name="app_name" translatable="false">Sungsan Mobile GIS</string>
+    <!-- The native shared library keeps its upstream binary name. This value is not user-visible. -->
+    <string name="lib_name" translatable="false">qfield</string>
+    <string name="done_unpacking_msg">준비가 끝났습니다. 성산 모바일 GIS를 시작합니다.</string>
+    <string name="unpacking_title">성산 모바일 GIS를 준비하고 있습니다</string>
+    <string name="unpacking_msg">처음 한 번만 실행되며 잠시 걸릴 수 있습니다</string>
+    <string name="unpacking_msg_following">거의 끝났습니다. 잠시만 기다려 주세요.</string>
+    <string name="use_internal_storage">내부 저장소 사용</string>
+    <string name="external_storage_unavailable">설치 데이터를 준비하고 있습니다. 시간이 조금 걸릴 수 있습니다.</string>
+    <string name="noexternalstorage_dialog">외부 저장소(/sdcard)를 사용할 수 없습니다. 휴대폰이 USB로 PC에 연결되어 있을 때 발생할 수 있습니다. USB 케이블을 분리한 뒤 앱을 다시 시작해 주세요.</string>
+    <string name="primary_storage">내부 저장소</string>
+    <string name="secondary_storage">성산 모바일 GIS 파일 폴더</string>
+    <string name="secondary_storage_extra">추가 파일 폴더</string>
+    <string name="secondary_storage_read_only">외부 저장소(읽기 전용)</string>
+    <string name="inaccessible">접근할 수 없음</string>
+    <string name="loading">불러오는 중</string>
+    <string name="select_project">QGIS 프로젝트 또는 데이터를 선택하세요</string>
+    <string name="recent_projects">최근 프로젝트 및 데이터</string>
+    <string name="rate_title">성산 모바일 GIS 평가하기</string>
+    <string name="rate_message">앱이 도움이 되었다면 잠시 시간을 내어 평가해 주세요.</string>
+    <string name="rate_now">지금 평가</string>
+    <string name="remind_later">나중에 알림</string>
+    <string name="no_thanks">괜찮습니다</string>
+    <string name="favorite_directories">즐겨찾기 폴더</string>
+    <string name="favorites_sample_projects">예제 프로젝트</string>
+    <string name="favorites_imported_projects">가져온 프로젝트</string>
+    <string name="favorites_imported_datasets">가져온 데이터</string>
+    <string name="added_to_favorites">즐겨찾기에 추가했습니다</string>
+    <string name="removed_from_favorites">즐겨찾기에서 제거했습니다</string>
+    <string name="external_files_title">중요 안내</string>
+    <string name="external_files_message"><![CDATA[성산 모바일 GIS 파일 폴더를 이용하면 USB 케이블로 프로젝트와 파일을 휴대폰에 복사할 수 있습니다. 폴더의 전체 경로는 위쪽 표시줄에서 확인할 수 있습니다.<br/><br/>앱을 삭제하면 이 폴더의 내용도 삭제될 수 있으므로 중요한 현장 데이터는 먼저 PC로 복사해 주세요.]]></string>
+    <string name="external_files_ok">확인</string>
+    <string name="grant_permission">모든 파일 접근 권한</string>
+    <string name="grant_all_files_permission"><![CDATA[로컬 프로젝트와 데이터, 좌표계 파일, 글꼴, 배경지도를 열려면 파일 접근 권한이 필요합니다.<br/><br/>다음 화면에서 <b>성산 모바일 GIS</b>를 선택하고 <b>모든 파일에 대한 접근 허용</b>을 켜 주세요.]]></string>
+    <string name="grant">허용</string>
+    <string name="deny_always">계속 허용하지 않음</string>
+    <string name="deny_once">이번만 허용하지 않음</string>
+    <string name="import_error">가져오기 오류</string>
+    <string name="import_dataset_error">선택한 데이터를 올바르게 가져오지 못했습니다.</string>
+    <string name="import_project_archive_error">현장 프로젝트 압축 파일을 가져오지 못했습니다. 불완전한 프로젝트는 열지 않았으며, 기존 자료는 가능한 한 그대로 유지했습니다. ZIP 파일과 저장 공간을 확인한 뒤 다시 시도해 주세요.</string>
+    <string name="import_project_folder_error">선택한 프로젝트 폴더를 올바르게 가져오지 못했습니다.</string>
+    <string name="import_overwrite_title">가져오기 확인</string>
+    <string name="import_overwrite_folder">같은 이름의 프로젝트 폴더가 있습니다. 기존 내용을 덮어쓸까요?</string>
+    <string name="import_overwrite_dataset_single">같은 이름의 데이터가 있습니다. 기존 데이터를 덮어쓸까요?</string>
+    <string name="import_overwrite_dataset_multiple">같은 이름의 데이터가 하나 이상 있습니다. 기존 데이터를 덮어쓸까요?</string>
+    <string name="import_overwrite_confirm">가져와서 덮어쓰기</string>
+    <string name="import_overwrite_cancel">취소</string>
+    <string name="export_error">내보내기 오류</string>
+    <string name="export_to_folder_error">프로젝트 폴더를 올바르게 내보내지 못했습니다.</string>
+    <string name="export_project_zip_error">현장 프로젝트 압축 파일을 만들지 못해 공유하지 않았습니다. 저장 공간을 확인한 뒤 다시 시도해 주세요.</string>
+    <string name="delete_confirm_title">삭제 확인</string>
+    <string name="delete_confirm_dataset">이 데이터는 완전히 삭제됩니다. 삭제할까요?</string>
+    <string name="delete_confirm_folder">이 프로젝트 폴더는 완전히 삭제됩니다. 삭제할까요?</string>
+    <string name="delete_confirm">삭제</string>
+    <string name="delete_cancel">취소</string>
+    <string name="storage_information_title">저장소 안내</string>
+    <string name="storage_information_message">프로젝트와 현장 데이터를 안전하게 관리하려면 저장소 사용 방법을 확인해 주세요. 이 안내는 위쪽 메뉴에서 다시 열 수 있습니다.</string>
+    <string name="storage_information_view">사용 방법 보기</string>
+    <string name="storage_information_dismiss">나중에 보기</string>
+    <string name="import_project_wait">프로젝트를 가져오는 중입니다. 잠시만 기다려 주세요.</string>
+    <string name="import_dataset_wait">데이터를 가져오는 중입니다. 잠시만 기다려 주세요.</string>
+    <string name="update_project_wait">휴대폰의 프로젝트를 업데이트하는 중입니다. 잠시만 기다려 주세요.</string>
+    <string name="upload_pending_attachments">첨부 파일을 서버로 전송하고 있습니다</string>
+    <string name="operation_unsupported">지원하지 않는 작업</string>
+    <string name="import_operation_unsupported">이 휴대폰에서는 해당 가져오기 작업을 지원하지 않습니다.</string>
+    <string name="export_operation_unsupported">이 휴대폰에서는 해당 내보내기 작업을 지원하지 않습니다.</string>
+    <string name="processing_message">처리 중…</string>
+    <string name="positioning_title">위치</string>
+    <string name="positioning_running">위치 확인 기능이 실행 중입니다</string>
+    <string name="copy_to_clipboard">클립보드에 복사</string>
+</resources>

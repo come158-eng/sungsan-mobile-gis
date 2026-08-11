@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2, user-scalable=yes"/>
+    <script>
+      // push any fragment as a query string to redirect server
+      window.onload = function hashFunction() {
+        var query = location.hash.substr(1);
+        if (query != "") {
+          var xhttp = new XMLHttpRequest();
+          xhttp.open("GET", "/?" + query, true);
+          xhttp.send();
+        }
+      };
+    </script>
+    <style>
+      body {
+        font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif,
+          "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      }
+    </style>
+  </head>
+  <body>
+    <h2>QField OAuth2 verification has finished</h2>
+    <p>If you have not been returned to QField, bring the application to the forefront.</p>
+  </body>
+</html>

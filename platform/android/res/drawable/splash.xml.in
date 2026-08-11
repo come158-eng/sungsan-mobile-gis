@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+    android:width="@APP_SPLASH_WIDTH@"
+    android:height="@APP_SPLASH_HEIGHT@"
+    android:drawable="@APP_SPLASH_DRAWABLE@"
+    android:gravity="center" />
+</layer-list>

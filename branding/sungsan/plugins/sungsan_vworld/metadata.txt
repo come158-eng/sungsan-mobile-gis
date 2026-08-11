@@ -1,0 +1,5 @@
+name=성산 VWorld 기본지도
+description=프로젝트를 열 때 VWorld 위성영상을 가장 아래 배경 레이어로 자동 추가합니다.
+author=Sungsan
+version=1.0.0
+icon=icon.png

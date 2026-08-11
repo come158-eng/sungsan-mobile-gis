@@ -1,0 +1,141 @@
+{
+  "vcpkg-configuration": {
+    "overlay-ports": [
+      "vcpkg/ports"
+    ],
+    "overlay-triplets": [
+      "vcpkg/triplets"
+    ]
+  },
+  "name": "qfield",
+  "version-string": "dev",
+  "description": "A simplified and touch optimized frontend for QGIS.",
+  "homepage": "https://github.com/opengisch/qfield",
+  "dependencies": [
+    "catch2",
+    {
+      "name": "ffmpeg",
+      "default-features": false,
+      "features": [
+        "avcodec",
+        "avdevice",
+        "avformat",
+        {
+          "name": "openh264",
+          "platform": "linux | windows"
+        },
+        "swresample",
+        "swscale"
+      ],
+      "platform": "linux | android | windows"
+    },
+    {
+      "name": "gdal",
+      "default-features": false
+    },
+    "nu-book-zxing-cpp",
+    {
+      "name": "qca",
+      "host": true,
+      "default-features": false
+    },
+    {
+      "name": "qca",
+      "default-features": false,
+      "features": [
+        "ossl"
+      ]
+    },
+    "qgis",
+    {
+      "name": "qgis",
+      "host": true,
+      "default-features": false
+    },
+    {
+      "name": "qtbase",
+      "default-features": false
+    },
+    {
+      "name": "qtcharts",
+      "features": [
+        "qml"
+      ]
+    },
+    "qtconnectivity",
+    "qtdeclarative",
+    "qtimageformats",
+    "qtlocation",
+    {
+      "name": "qtmultimedia",
+      "default-features": false,
+      "features": [
+        {
+          "name": "ffmpeg",
+          "platform": "linux | android | windows"
+        },
+        "qml"
+      ]
+    },
+    "qtquick3d",
+    "qtremoteobjects",
+    {
+      "name": "qtsensors",
+      "features": [
+        "qml"
+      ]
+    },
+    {
+      "name": "qtserialport",
+      "platform": "!ios"
+    },
+    {
+      "name": "qttools",
+      "host": true,
+      "default-features": false
+    },
+    "qtwebdav",
+    {
+      "name": "qtwebsockets",
+      "features": [
+        "qml"
+      ]
+    },
+    {
+      "name": "qtwebview",
+      "features": [
+        {
+          "name": "webview2",
+          "platform": "windows"
+        }
+      ]
+    },
+    {
+      "name": "sentry-cocoa",
+      "platform": "ios"
+    },
+    {
+      "name": "sentry-native",
+      "default-features": false,
+      "features": [
+        "backend",
+        {
+          "name": "breakpad",
+          "platform": "windows | linux"
+        },
+        "transport"
+      ],
+      "platform": "osx | linux | (windows & !arm & !uwp)"
+    },
+    "spix-qt6",
+    {
+      "name": "tiff",
+      "features": [
+        "lerc",
+        "libdeflate",
+        "webp",
+        "zstd"
+      ]
+    }
+  ]
+}

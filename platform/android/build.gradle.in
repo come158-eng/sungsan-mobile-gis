@@ -1,0 +1,114 @@
+// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
+buildscript {
+    ext {
+        buildToolsVersion = "@ANDROID_BUILD_TOOLS_VERSION@"
+        minSdkVersion = @ANDROID_PLATFORM_INT@
+        compileSdkVersion = @ANDROID_TARGET_PLATFORM@
+        targetSdkVersion = @ANDROID_TARGET_PLATFORM@
+        ndkVersion = '@ANDROID_NDK_VERSION@'
+    }
+
+    repositories {
+        mavenCentral()
+        google()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.10.1'
+    }
+}
+
+apply plugin: 'com.android.application'
+
+allprojects {
+    repositories {
+        mavenCentral()
+        google()
+    }
+
+    gradle.projectsEvaluated {
+        tasks.withType(JavaCompile) {
+            options.compilerArgs << "-Xlint:deprecation"
+        }
+    }
+}
+
+def outputPathName = "some.apk"
+
+dependencies {
+    implementation fileTree(dir: 'libs', include: ['*.jar'])
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.documentfile:documentfile:1.0.1'
+    implementation "androidx.fragment:fragment:1.8.9"
+    implementation 'com.google.android.material:material:1.13.0'
+}
+
+android {
+    /*******************************************************
+     * The following variables:
+     * - androidBuildToolsVersion,
+     * - androidCompileSdkVersion
+     * - qt5AndroidDir - holds the path to qt android files
+     *                   needed to build any Qt application
+     *                   on Android.
+     *
+     * are defined in gradle.properties file. This file is
+     * updated by QtCreator and androiddeployqt tools.
+     * Changing them manually might break the compilation!
+     *******************************************************/
+
+    ndkVersion = '@ANDROID_NDK_VERSION@'
+    compileSdkVersion = @ANDROID_TARGET_PLATFORM@
+    namespace = '@APP_PACKAGE_ID@'
+
+    sourceSets {
+        main {
+            manifest.srcFile 'AndroidManifest.xml'
+            java.srcDirs = [qt5AndroidDir + '/src', 'src', 'java']
+            aidl.srcDirs = [qt5AndroidDir + '/src', 'src', 'aidl']
+            res.srcDirs = [qt5AndroidDir + '/res', 'res']
+            resources.srcDirs = ['src']
+            renderscript.srcDirs = ['src']
+            assets.srcDirs = ['assets']
+            jniLibs.srcDirs = ['libs']
+       }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+
+    lintOptions {
+        abortOnError = false
+        disable 'MissingTranslation'
+    }
+
+    defaultConfig {
+      applicationId = '@APP_PACKAGE_ID@'
+      minSdkVersion = @ANDROID_PLATFORM_INT@
+      targetSdkVersion = @ANDROID_TARGET_PLATFORM@
+      ndk {
+        abiFilters "@ANDROID_ABI@"
+      }
+    }
+
+    buildTypes {
+      release {
+         ndk {
+           abiFilters "@ANDROID_ABI@"
+         }
+       }
+      debug {
+         ndk {
+           abiFilters "@ANDROID_ABI@"
+         }
+       }
+    }
+}
+
+// Add Sentry's SDK as a dependency.
+dependencies {
+    implementation 'io.sentry:sentry-android:7.22.6'
+}
