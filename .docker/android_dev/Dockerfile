@@ -51,6 +51,13 @@ apt-get -y dist-upgrade
 
 apt-get -y --no-install-recommends install $APT_PACKAGES
 
+# Keep the generator installation explicit.  Windows-created source archives
+# and changes to the accumulated APT_PACKAGES value must never allow a long
+# Android SDK download to finish before a missing Ninja tool is discovered.
+apt-get -y --no-install-recommends install cmake ninja-build
+test -x /usr/bin/ninja
+/usr/bin/ninja --version
+
 # Android SDK/NDK
 curl -o /android-sdk-10406996.zip https://dl.google.com/android/repository/commandlinetools-linux-10406996_latest.zip
 unzip /android-sdk-10406996.zip -d android-sdk

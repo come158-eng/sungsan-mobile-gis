@@ -10,6 +10,11 @@ export SOURCE_DIR=/usr/src/qfield
 CMAKE_BUILD_DIR="${QFIELD_CMAKE_BUILD_DIR:-/usr/src/qfield/build-${triplet}}"
 ANDROID_NDK_VERSION=$(sed -En -e 's/^Pkg.Revision\s*=\s*([0-9a-f]+)/\1/p' ${ANDROID_NDK_HOME}/source.properties)
 ANDROID_BUILD_TOOLS_VERSION="${ANDROID_BUILD_TOOLS_VERSION:-35.0.1}"
+NINJA_PATH="$(command -v ninja || true)"
+if [[ -z "${NINJA_PATH}" || ! -x "${NINJA_PATH}" ]]; then
+	echo "오류: Android 빌드 이미지에 Ninja 실행 파일이 없습니다." >&2
+	exit 12
+fi
 
 [[ -z ${APP_NAME:-} ]] && APP_NAME="QField Home"
 [[ -z ${APP_PACKAGE_NAME:-} ]] && APP_PACKAGE_NAME="qfield_home"
@@ -64,6 +69,7 @@ fi
 cmake -S "${SOURCE_DIR}" \
 	-B "${CMAKE_BUILD_DIR}" \
 	-G Ninja \
+	-D CMAKE_MAKE_PROGRAM:FILEPATH="${NINJA_PATH}" \
 	-D CMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}" \
 	-D VCPKG_TARGET_TRIPLET="${triplet}" \
 	-D ANDROID_NDK_VERSION="${ANDROID_NDK_VERSION}" \

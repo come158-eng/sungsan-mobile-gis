@@ -28,6 +28,15 @@ if [[ "${SUNG_SAN_DOCKER_IMAGE_READY:-0}" != "1" ]]; then
 	DOCKER_BUILDKIT=1 docker build "${SRC_DIR}/.docker/android_dev" -t qfield_and_dev
 fi
 
+# Fail before the multi-hour dependency build if the reviewed image does not
+# contain the CMake generator required by build-vcpkg.sh.
+docker run --rm qfield_and_dev bash -euo pipefail -c '
+  test -x /usr/bin/ninja
+  test -x /usr/bin/cmake
+  /usr/bin/ninja --version
+  /usr/bin/cmake --version
+'
+
 DOCKER_TTY_ARGS=()
 if [[ -t 0 && -t 1 ]]; then
 	DOCKER_TTY_ARGS=(-it)
