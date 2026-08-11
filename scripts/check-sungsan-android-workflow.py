@@ -105,7 +105,7 @@ def main() -> int:
         run_blocks = shell_run_blocks(source)
     except ValueError:
         run_blocks = []
-    require(len(run_blocks) == 12, "all 12 literal shell blocks are structurally found")
+    require(len(run_blocks) == 13, "all 13 literal shell blocks are structurally found")
     shell_syntax_ok = bool(run_blocks)
     for block in run_blocks:
         result = subprocess.run(
@@ -118,6 +118,26 @@ def main() -> int:
         )
         shell_syntax_ok = shell_syntax_ok and result.returncode == 0
     require(shell_syntax_ok, "all workflow shell blocks pass bash syntax validation")
+    permission_step = section(
+        source,
+        "      - name: Restore reviewed build script permissions\n",
+        "      - name: Run source, signing and workflow gates\n",
+    )
+    require(bool(permission_step), "Windows archive permission recovery precedes source gates")
+    require(
+        "chmod 0755" in permission_step
+        and all(
+            f"scripts/{name}" in permission_step
+            for name in (
+                "build.sh",
+                "build-vcpkg.sh",
+                "build-sungsan-android.sh",
+                "validate-sungsan-keystore.sh",
+                "sign-sungsan-release-apk.sh",
+            )
+        ),
+        "only the five reviewed build entry points receive executable permission",
+    )
 
     trigger_match = re.search(
         r"(?m)^on:\s*\r?\n"

@@ -40,6 +40,20 @@ jobs:
           submodules: false
           persist-credentials: false
 
+      # ZIP extraction and GitHub Desktop on Windows do not preserve Unix
+      # executable bits. Restore only the reviewed build entry points before
+      # any source-controlled script is executed.
+      - name: Restore reviewed build script permissions
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 0755 \
+            scripts/build.sh \
+            scripts/build-vcpkg.sh \
+            scripts/build-sungsan-android.sh \
+            scripts/validate-sungsan-keystore.sh \
+            scripts/sign-sungsan-release-apk.sh
+
       - name: Run source, signing and workflow gates
         shell: bash
         run: |
