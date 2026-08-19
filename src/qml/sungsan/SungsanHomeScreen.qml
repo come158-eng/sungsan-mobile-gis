@@ -5,7 +5,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Effects
 import org.qfield
 import Theme
 
@@ -62,13 +61,20 @@ Page {
       anchors.topMargin: 22 + mainWindow.sceneTopMargin
       spacing: 4
 
-      Image {
+      Rectangle {
         Layout.preferredWidth: 168
-        Layout.preferredHeight: 88
-        source: "qrc:/images/app_logo.svg"
-        fillMode: Image.PreserveAspectFit
-        sourceSize.width: 336
-        sourceSize.height: 176
+        Layout.preferredHeight: 54
+        radius: 27
+        color: "#ffffff"
+
+        Label {
+          anchors.centerIn: parent
+          text: "SUNG SAN"
+          color: "#194793"
+          font.pixelSize: 21
+          font.bold: true
+          font.letterSpacing: 1.5
+        }
       }
 
       Label {
@@ -124,21 +130,12 @@ Page {
             radius: 14
             color: "#e9f1ff"
 
-            Image {
-              id: currentProjectIcon
+            Label {
               anchors.centerIn: parent
-              width: 26
-              height: 26
-              source: Theme.getThemeVectorIcon("ic_map_white_24dp")
-              sourceSize.width: 26
-              sourceSize.height: 26
-              visible: false
-            }
-            MultiEffect {
-              anchors.fill: currentProjectIcon
-              source: currentProjectIcon
-              colorization: 1
-              colorizationColor: "#194793"
+              text: "▣"
+              color: "#194793"
+              font.pixelSize: 24
+              font.bold: true
             }
           }
 
@@ -262,21 +259,12 @@ Page {
               Layout.preferredHeight: 40
               radius: 12
               color: "#eef3f9"
-              Image {
-                id: recentProjectIcon
+              Label {
                 anchors.centerIn: parent
-                width: 23
-                height: 23
-                source: recentButton.ProjectType === RecentProjectListModel.LinkProject ? Theme.getThemeVectorIcon("ic_download_white_24dp") : Theme.getThemeVectorIcon("ic_map_white_24dp")
-                sourceSize.width: 23
-                sourceSize.height: 23
-                visible: false
-              }
-              MultiEffect {
-                anchors.fill: recentProjectIcon
-                source: recentProjectIcon
-                colorization: 1
-                colorizationColor: "#194793"
+                text: recentButton.ProjectType === RecentProjectListModel.LinkProject ? "↓" : "▣"
+                color: "#194793"
+                font.pixelSize: 22
+                font.bold: true
               }
             }
             ColumnLayout {

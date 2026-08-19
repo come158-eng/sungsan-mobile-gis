@@ -584,12 +584,12 @@ def check_android_bridge() -> None:
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APP_VERSION_STR="${APP_VERSION_STR:-1.0.0-sungsan-beta2}"',
+        'APP_VERSION_STR="${APP_VERSION_STR:-1.0.0-sungsan-beta3}"',
         "Sungsan product version name",
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APK_VERSION_CODE="${APK_VERSION_CODE:-10000002}"',
+        'APK_VERSION_CODE="${APK_VERSION_CODE:-10000003}"',
         "monotonically increased Android version code",
     )
     require(
@@ -749,6 +749,28 @@ def check_mandatory_vworld_plugin_restore() -> None:
         PASSES.append("bundled VWorld directory UUID is exactly sungsan_vworld")
 
 
+def check_crash_safe_sungsan_startup() -> None:
+    startup_files = [
+        "src/qml/sungsan/SungsanActionButton.qml",
+        "src/qml/sungsan/SungsanHomeScreen.qml",
+        "src/qml/sungsan/SungsanFieldPanel.qml",
+    ]
+    forbidden = ("QtQuick.Effects", "MultiEffect", "qrc:/images/app_logo.svg", "Image {")
+    for path in startup_files:
+        source = read(path)
+        for token in forbidden:
+            if token in source:
+                FAILURES.append(f"{path}: startup must not render {token!r}")
+            else:
+                PASSES.append(f"{path}: startup excludes {token!r}")
+
+    require(
+        "src/qml/sungsan/SungsanHomeScreen.qml",
+        'text: "SUNG SAN"',
+        "Sungsan startup keeps a text-rendered brand mark",
+    )
+
+
 def main() -> int:
     qml_files = [
         "src/qml/qgismobileapp.qml",
@@ -768,6 +790,7 @@ def main() -> int:
     check_android_bridge()
     check_vworld()
     check_mandatory_vworld_plugin_restore()
+    check_crash_safe_sungsan_startup()
 
     if FAILURES:
         print(f"FAIL: {len(FAILURES)} issue(s); {len(PASSES)} static checks passed")
