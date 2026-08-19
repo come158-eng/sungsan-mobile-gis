@@ -3,6 +3,13 @@
 Modified by Sungsan through 2026-08-11 from QField v4.2.11 commit
 `f7123fc8dfa40be4e874d9bf5b46e81c6d05039b`.
 
+Additional Sungsan build reliability modification on 2026-08-19:
+`vcpkg/ports/libaec/` overrides the pinned vcpkg 1.1.6 port to download the
+same upstream release from the Deutsches Klimarechenzentrum official GitHub
+mirror with a fixed SHA-512. This avoids repeated HTTP 429 failures from the
+original DKRZ GitLab archive endpoint. The source version, build logic and
+BSD-2-Clause license remain unchanged.
+
 This source is Sungsan Mobile GIS `1.0.0-sungsan-beta2`
 (`versionCode 10000002`). Beta2 adds the archive, project-read, Qt-thread and
 clean-build safety fixes described below; it must not be published under the
