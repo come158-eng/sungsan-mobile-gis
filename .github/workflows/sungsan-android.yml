@@ -65,6 +65,7 @@ jobs:
           python3 scripts/check-android-project-archive-import.py
           python3 scripts/check-android-package-id.py
           python3 scripts/check-sungsan-libaec-source.py
+          python3 scripts/check-sungsan-build-inputs.py
           bash -n scripts/build.sh
           bash -n scripts/build-vcpkg.sh
           bash -n scripts/build-sungsan-android.sh
@@ -120,6 +121,20 @@ jobs:
             exit 4
           fi
 
+      # actions/cache v6.1.0 - official GitHub verified release commit.
+      # Each run gets an immutable key but may restore the newest compatible
+      # prior partial cache. This lets a later run reuse already-built vcpkg
+      # packages even when an application-level check fails near the end.
+      - name: Restore compatible Sungsan vcpkg binary cache
+        id: vcpkg_cache_restore
+        continue-on-error: true
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/sungsan-vcpkg-cache
+          key: sungsan-vcpkg-arm64-${{ hashFiles('vcpkg.json', 'vcpkg/ports/**', 'vcpkg/triplets/**', '.docker/android_dev/Dockerfile') }}-${{ github.run_id }}
+          restore-keys: |
+            sungsan-vcpkg-arm64-${{ hashFiles('vcpkg.json', 'vcpkg/ports/**', 'vcpkg/triplets/**', '.docker/android_dev/Dockerfile') }}-
+
       - name: Build installable debug-key test APK
         if: ${{ success() && inputs.build_mode == 'test_only' }}
         shell: bash
@@ -150,6 +165,17 @@ jobs:
           set -euo pipefail
           mkdir -p "${CACHE_DIR}"
           ./scripts/build-sungsan-android.sh
+
+      # Save valid content-addressed vcpkg packages even when the later CMake
+      # or application build fails. A unique run key avoids freezing an
+      # incomplete cache forever; the next run restores it via the prefix.
+      - name: Save partial or complete Sungsan vcpkg binary cache
+        if: ${{ always() && steps.vcpkg_cache_restore.outputs.cache-hit != 'true' }}
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ${{ runner.temp }}/sungsan-vcpkg-cache
+          key: ${{ steps.vcpkg_cache_restore.outputs.cache-primary-key }}
 
       - name: Validate APK and create an exact three-file artifact
         id: package

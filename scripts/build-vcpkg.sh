@@ -1,11 +1,12 @@
 #!/bin/bash
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-19.
 
 set -euo pipefail
 
 echo "building for ${triplet} on Qt ${install_qt_version} (${install_qt_arch})"
 
 export SOURCE_DIR=/usr/src/qfield
+python3 "${SOURCE_DIR}/scripts/check-sungsan-build-inputs.py"
 
 CMAKE_BUILD_DIR="${QFIELD_CMAKE_BUILD_DIR:-/usr/src/qfield/build-${triplet}}"
 ANDROID_NDK_VERSION=$(sed -En -e 's/^Pkg.Revision\s*=\s*([0-9a-f]+)/\1/p' ${ANDROID_NDK_HOME}/source.properties)

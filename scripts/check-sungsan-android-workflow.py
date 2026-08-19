@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-19.
 """Dependency-free security gate for the manual two-job Android workflow.
 
 The release build job must never receive Sungsan release credentials.  Only a
@@ -27,6 +27,7 @@ MODIFICATIONS = ROOT / "MODIFICATIONS.md"
 CHECKOUT_SHA = "d23441a48e516b6c34aea4fa41551a30e30af803"  # v6.1.0
 UPLOAD_SHA = "043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"  # v7.0.1
 DOWNLOAD_SHA = "3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"  # v8.0.1
+CACHE_SHA = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"  # v6.1.0
 
 
 def shell_run_blocks(source: str) -> list[str]:
@@ -185,6 +186,26 @@ def main() -> int:
         "download uses official v8.0.1 full SHA",
     )
     require("actions/download-artifact v8.0.1" in signer, "download pin has a version comment")
+    require(
+        source.count(f"actions/cache/restore@{CACHE_SHA}") == 1
+        and source.count(f"actions/cache/save@{CACHE_SHA}") == 1,
+        "vcpkg restore and save use official cache v6.1.0 full SHA",
+    )
+    require("actions/cache v6.1.0" in source, "cache pin has an auditable version comment")
+    require(
+        "sungsan-vcpkg-arm64-${{ hashFiles(" in build
+        and "-${{ github.run_id }}" in build
+        and "cache-primary-key" in build,
+        "vcpkg cache uses a content version and immutable per-run save key",
+    )
+    require(
+        "always() && steps.vcpkg_cache_restore.outputs.cache-hit != 'true'" in build,
+        "partial vcpkg packages are saved after a later build failure",
+    )
+    require(
+        build.count("continue-on-error: true") == 2,
+        "cache service outages cannot block APK compilation or validation",
+    )
     all_uses = re.findall(r"(?m)^\s*uses:\s*([^\s#]+)", source)
     require(
         bool(all_uses)

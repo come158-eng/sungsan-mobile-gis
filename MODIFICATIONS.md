@@ -9,6 +9,13 @@ same upstream release from the Deutsches Klimarechenzentrum official GitHub
 mirror with a fixed SHA-512. This avoids repeated HTTP 429 failures from the
 original DKRZ GitLab archive endpoint. The source version, build logic and
 BSD-2-Clause license remain unchanged.
+The same pass removes the optional standalone PNG splash from the CMake input
+and uses the already-validated Sungsan vector icon for the Android splash. A
+new dependency-free gate validates all icon densities, vector assets, Korean
+resources, theme and VWorld inputs both on the runner and inside the container
+before vcpkg starts. The manual workflow also restores and saves versioned
+vcpkg binary packages so a late application failure does not require rebuilding
+every completed dependency on the next run.
 
 This source is Sungsan Mobile GIS `1.0.0-sungsan-beta2`
 (`versionCode 10000002`). Beta2 adds the archive, project-read, Qt-thread and
