@@ -246,6 +246,13 @@ def check_android_default_strings() -> None:
         r"\"\$\{ANDROID_TEMPLATE_FOLDER\}/res/values/strings\.xml\"\s*COPYONLY\s*\)",
         "Sungsan default resources replace only the staged Android values file",
     )
+    require_regex(
+        package_path,
+        r"configure_file\s*\(\s*"
+        r"\$\{CMAKE_SOURCE_DIR\}/platform/android/generated\.xml\.in\s*"
+        r"\$\{ANDROID_TEMPLATE_FOLDER\}/res/values/generated\.xml\s*@ONLY\s*\)",
+        "git revision resource is compiled from the Android res/values directory",
+    )
 
 
 def check_upstream_revision_attribution() -> None:

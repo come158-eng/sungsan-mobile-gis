@@ -12,6 +12,7 @@ before CMake starts the multi-hour vcpkg dependency build.
 from __future__ import annotations
 
 import json
+import re
 import struct
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -95,6 +96,57 @@ def check_xml(relative: str, purpose: str) -> None:
         PASSES.append(f"valid XML: {purpose}")
 
 
+def check_android_manifest_string_resources() -> None:
+    """Catch source-owned Android string links before the multi-hour build."""
+
+    manifest_path = ROOT / "platform/android/AndroidManifest.xml.in"
+    strings_path = ROOT / "branding/sungsan/android/res/values/strings.xml"
+    generated_path = ROOT / "platform/android/generated.xml.in"
+    package_path = ROOT / "cmake/Package.cmake"
+
+    try:
+        manifest = manifest_path.read_text(encoding="utf-8")
+        strings_root = ET.parse(strings_path).getroot()
+        generated_root = ET.parse(generated_path).getroot()
+        package_source = package_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError, ET.ParseError) as error:
+        FAILURES.append(f"Android resource-link preflight failed: {error}")
+        return
+
+    manifest_names = set(re.findall(r"@string/([A-Za-z0-9_]+)", manifest))
+    staged_names = {
+        element.get("name", "")
+        for root in (strings_root, generated_root)
+        for element in root.findall("string")
+        if element.get("name")
+    }
+
+    # fatal_error_msg is supplied by Qt's Android template at androiddeployqt
+    # time. The other Manifest string resources are owned by this repository.
+    qt_generated_names = {"fatal_error_msg"}
+    missing = sorted(manifest_names - staged_names - qt_generated_names)
+    if missing:
+        FAILURES.append(
+            "AndroidManifest.xml.in: unresolved source-owned @string resources: "
+            + ", ".join(missing)
+        )
+    else:
+        PASSES.append("all Manifest @string resources have a staged provider")
+
+    required_stage_fragments = (
+        "${ANDROID_TEMPLATE_FOLDER}/res/values/generated.xml",
+        "platform/android/generated.xml.in",
+        "@ONLY",
+    )
+    if not all(fragment in package_source for fragment in required_stage_fragments):
+        FAILURES.append(
+            "cmake/Package.cmake: configured git_rev resource is not staged "
+            "under res/values/generated.xml"
+        )
+    else:
+        PASSES.append("configured git_rev is staged in Android res/values")
+
+
 def check_json(relative: str, purpose: str) -> None:
     path = require_file(relative, f"{purpose} exists")
     if not path.is_file():
@@ -136,6 +188,8 @@ def main() -> int:
         "branding/sungsan/android/res/values/strings.xml",
         "Sungsan native default strings",
     )
+    check_xml("platform/android/generated.xml.in", "generated Android build strings")
+    check_android_manifest_string_resources()
     check_json("branding/sungsan/theme.json", "Sungsan theme")
 
     for relative, purpose in (

@@ -97,6 +97,13 @@ if(ANDROID AND ANDROIDDEPLOYQT_EXECUTABLE)
 
     set(ANDROID_TEMPLATE_FOLDER "${CMAKE_BINARY_DIR}/android-template")
     file(COPY ${CMAKE_SOURCE_DIR}/platform/android/ DESTINATION ${ANDROID_TEMPLATE_FOLDER}/)
+    # Android Gradle only compiles XML resources below res/values.  Keeping
+    # generated.xml at the package root leaves @string/git_rev unresolved at
+    # :processReleaseResources, so stage the configured resource explicitly.
+    configure_file(
+      ${CMAKE_SOURCE_DIR}/platform/android/generated.xml.in
+      ${ANDROID_TEMPLATE_FOLDER}/res/values/generated.xml
+      @ONLY)
     if(APP_PACKAGE_ID STREQUAL "kr.co.sungsan.mobilegis")
       # Keep upstream Android defaults untouched. Sungsan's package instead
       # receives Korean default resources so devices with any system locale

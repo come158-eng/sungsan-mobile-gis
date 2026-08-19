@@ -1,5 +1,9 @@
 # Sungsan Mobile GIS modifications
 
+- 2026-08-19: Stage the configured Android `git_rev` string under
+  `res/values/generated.xml` and add an early Manifest resource-link check so
+  a missing source-owned `@string/...` fails before the multi-hour build.
+
 Modified by Sungsan through 2026-08-11 from QField v4.2.11 commit
 `f7123fc8dfa40be4e874d9bf5b46e81c6d05039b`.
 
