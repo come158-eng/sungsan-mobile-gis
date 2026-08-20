@@ -5,6 +5,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import org.qfield
 import Theme
 
 Item {
@@ -63,12 +64,36 @@ Item {
       spacing: 10
 
       Button {
-        Layout.preferredWidth: 44
+        Layout.preferredWidth: 62
         Layout.preferredHeight: 44
-        text: "⌂"
+        text: "‹ 뒤로"
         flat: true
-        font.pixelSize: 24
+        font.pixelSize: 14
+        font.bold: true
+        Accessible.name: "뒤로가기"
         onClicked: root.homeRequested()
+        contentItem: Label {
+          text: parent.text
+          color: "white"
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+          font: parent.font
+        }
+        background: Rectangle {
+          radius: 13
+          color: parent.down ? "#153d7d" : "#2a58a0"
+        }
+      }
+
+      Button {
+        Layout.preferredWidth: 64
+        Layout.preferredHeight: 44
+        text: "레이어"
+        flat: true
+        font.pixelSize: 13
+        font.bold: true
+        Accessible.name: "레이어 목록 열기"
+        onClicked: root.layersRequested()
         contentItem: Label {
           text: parent.text
           color: "white"
@@ -329,3 +354,4 @@ Item {
     }
   }
 }
+
