@@ -16,7 +16,10 @@ Page {
     if (appIsSungsan && visible) {
       visible = false;
       finished();
+      return;
     }
+
+    prepareCloudScreen();
   }
 
   signal finished
@@ -1058,10 +1061,6 @@ Page {
   }
 
   Component.onCompleted: {
-    prepareCloudScreen();
-  }
-
-  onVisibleChanged: {
     prepareCloudScreen();
   }
 
