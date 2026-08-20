@@ -350,6 +350,7 @@ def check_qml_resources() -> None:
 
 def check_shell_wiring() -> None:
     root = "src/qml/qgismobileapp.qml"
+    home = "src/qml/sungsan/SungsanHomeScreen.qml"
     branded_surface = "\n".join(
         read(path)
         for path in (
@@ -361,6 +362,12 @@ def check_shell_wiring() -> None:
     require(root, 'import "sungsan"', "Sungsan QML directory imported")
     require(root, "SungsanHomeScreen {", "Sungsan home instantiated")
     require(root, "SungsanFieldPanel {", "Sungsan field panel instantiated")
+    require(home, "property string projectPath: ProjectPath", "recent project path role is safely aliased")
+    require(home, "property string projectTitle: ProjectTitle", "recent project title role is safely aliased")
+    require(home, "property int projectType: ProjectType", "recent project type role is safely aliased")
+    forbid(home, "property string ProjectPath", "QML property declarations cannot begin with uppercase letters")
+    forbid(home, "property string ProjectTitle", "QML property declarations cannot begin with uppercase letters")
+    forbid(home, "property int ProjectType", "QML property declarations cannot begin with uppercase letters")
     require(root, "platformUtilities.importProjectArchive()", "ZIP project import wired")
     require(root, "platformUtilities.sendCompressedFolderTo(", "ZIP project export wired")
     require(
