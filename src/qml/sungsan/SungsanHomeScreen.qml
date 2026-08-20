@@ -242,15 +242,15 @@ Page {
 
         delegate: Button {
           id: recentButton
-          required property string ProjectPath
-          required property string ProjectTitle
-          required property int ProjectType
+          property string projectPath: ProjectPath
+          property string projectTitle: ProjectTitle
+          property int projectType: ProjectType
           width: recentProjects.width
           height: 72
           leftPadding: 14
           rightPadding: 14
 
-          onClicked: root.openRecentProjectRequested(ProjectPath, ProjectTitle, ProjectType)
+          onClicked: root.openRecentProjectRequested(projectPath, projectTitle, projectType)
 
           contentItem: RowLayout {
             spacing: 12
@@ -261,7 +261,7 @@ Page {
               color: "#eef3f9"
               Label {
                 anchors.centerIn: parent
-                text: recentButton.ProjectType === RecentProjectListModel.LinkProject ? "↓" : "▣"
+                text: recentButton.projectType === RecentProjectListModel.LinkProject ? "↓" : "▣"
                 color: "#194793"
                 font.pixelSize: 22
                 font.bold: true
@@ -272,7 +272,7 @@ Page {
               spacing: 2
               Label {
                 Layout.fillWidth: true
-                text: recentButton.ProjectTitle.length > 0 ? recentButton.ProjectTitle : "이름 없는 프로젝트"
+                text: recentButton.projectTitle.length > 0 ? recentButton.projectTitle : "이름 없는 프로젝트"
                 color: "#17324d"
                 font.pixelSize: 15
                 font.bold: true
@@ -280,7 +280,7 @@ Page {
               }
               Label {
                 Layout.fillWidth: true
-                text: recentButton.ProjectType === RecentProjectListModel.LinkProject ? "온라인 패키지" : recentButton.ProjectPath
+                text: recentButton.projectType === RecentProjectListModel.LinkProject ? "온라인 패키지" : recentButton.projectPath
                 color: "#718293"
                 font.pixelSize: 11
                 elide: Text.ElideMiddle
