@@ -351,6 +351,7 @@ def check_qml_resources() -> None:
 def check_shell_wiring() -> None:
     root = "src/qml/qgismobileapp.qml"
     home = "src/qml/sungsan/SungsanHomeScreen.qml"
+    cloud = "src/qml/QFieldCloudScreen.qml"
     branded_surface = "\n".join(
         read(path)
         for path in (
@@ -368,6 +369,17 @@ def check_shell_wiring() -> None:
     forbid(home, "property string ProjectPath", "QML property declarations cannot begin with uppercase letters")
     forbid(home, "property string ProjectTitle", "QML property declarations cannot begin with uppercase letters")
     forbid(home, "property int ProjectType", "QML property declarations cannot begin with uppercase letters")
+    cloud_source = read(cloud)
+    if cloud_source.count("onVisibleChanged:") != 1:
+        FAILURES.append(f"{cloud}: visible-change handler must be declared exactly once")
+    else:
+        PASSES.append("QFieldCloudScreen has one visible-change handler")
+    require_regex(
+        cloud,
+        r"onVisibleChanged:\s*\{\s*if\s*\(appIsSungsan\s*&&\s*visible\)\s*"
+        r"\{.*?finished\(\);\s*return;\s*\}\s*prepareCloudScreen\(\);",
+        "Sungsan cloud bypass and ordinary cloud preparation share one QML handler",
+    )
     require(root, "platformUtilities.importProjectArchive()", "ZIP project import wired")
     require(root, "platformUtilities.sendCompressedFolderTo(", "ZIP project export wired")
     require(
