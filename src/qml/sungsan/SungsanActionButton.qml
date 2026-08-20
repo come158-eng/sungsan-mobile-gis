@@ -5,6 +5,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 
 Button {
   id: control
@@ -15,56 +16,42 @@ Button {
   property string detailText: ""
   property bool emphasized: false
   property bool compact: false
-  readonly property string symbolText: {
-    const sourceText = String(iconSource).toLowerCase();
-    if (sourceText.indexOf("location") >= 0)
-      return "◎";
-    if (sourceText.indexOf("folder") >= 0)
-      return "▣";
-    if (sourceText.indexOf("download") >= 0)
-      return "↓";
-    if (sourceText.indexOf("upload") >= 0)
-      return "↑";
-    if (sourceText.indexOf("remove") >= 0)
-      return "−";
-    if (sourceText.indexOf("check") >= 0)
-      return "✓";
-    if (sourceText.indexOf("pause") >= 0)
-      return "Ⅱ";
-    if (sourceText.indexOf("update") >= 0)
-      return "↻";
-    if (sourceText.indexOf("add") >= 0 || sourceText.indexOf("create") >= 0)
-      return "+";
-    if (sourceText.indexOf("list") >= 0 || sourceText.indexOf("map") >= 0)
-      return "≡";
-    return "●";
-  }
 
-  implicitWidth: compact ? 68 : 132
-  implicitHeight: compact ? 68 : (detailText.length > 0 ? 82 : 68)
-  leftPadding: compact ? 5 : 12
-  rightPadding: compact ? 5 : 12
-  topPadding: compact ? 5 : 9
-  bottomPadding: compact ? 5 : 9
+  implicitWidth: compact ? 72 : 132
+  implicitHeight: compact ? 70 : (detailText.length > 0 ? 82 : 68)
+  leftPadding: compact ? 6 : 12
+  rightPadding: compact ? 6 : 12
+  topPadding: compact ? 6 : 9
+  bottomPadding: compact ? 6 : 9
 
   contentItem: GridLayout {
     columns: control.compact ? 1 : 2
     columnSpacing: 10
-    rowSpacing: 1
+    rowSpacing: control.compact ? 4 : 2
 
     Rectangle {
-      Layout.preferredWidth: 40
-      Layout.preferredHeight: 40
+      Layout.preferredWidth: control.compact ? 36 : 40
+      Layout.preferredHeight: control.compact ? 36 : 40
       Layout.alignment: Qt.AlignVCenter | (control.compact ? Qt.AlignHCenter : 0)
       radius: 12
       color: control.emphasized ? "#ffffff" : (control.down ? "#dbe7f7" : "#eaf0f8")
 
-      Label {
+      Image {
+        id: iconImage
         anchors.centerIn: parent
-        text: control.symbolText
-        color: control.accentColor
-        font.pixelSize: 23
-        font.bold: true
+        width: control.compact ? 22 : 24
+        height: control.compact ? 22 : 24
+        source: control.iconSource
+        sourceSize.width: width
+        sourceSize.height: height
+        visible: false
+      }
+
+      MultiEffect {
+        anchors.fill: iconImage
+        source: iconImage
+        colorization: 1
+        colorizationColor: control.accentColor
         opacity: control.enabled ? 1 : 0.42
       }
     }
@@ -82,6 +69,7 @@ Button {
         font.bold: true
         elide: Text.ElideRight
         horizontalAlignment: control.compact ? Text.AlignHCenter : Text.AlignLeft
+        verticalAlignment: Text.AlignVCenter
       }
 
       Label {
@@ -108,3 +96,4 @@ Button {
     border.color: control.hovered ? control.accentColor : "#d9e1e9"
   }
 }
+
