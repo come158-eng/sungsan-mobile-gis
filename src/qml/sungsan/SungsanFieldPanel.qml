@@ -26,6 +26,10 @@ Item {
   property bool geometryInProgress: false
   property bool geometryValid: false
   property bool moreExpanded: false
+  readonly property real dockHorizontalMargin: 12
+  readonly property real actionSpacing: 8
+  readonly property real actionButtonHeight: 70
+  readonly property int actionColumns: width >= 600 ? 4 : (width >= 420 ? 3 : 2)
   readonly property real reservedBottom: workDock.height
   readonly property real reservedTop: fieldHeader.height
 
@@ -159,7 +163,7 @@ Item {
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    height: dockColumn.implicitHeight + 22 + mainWindow.sceneBottomMargin
+    height: dockColumn.implicitHeight + 20 + mainWindow.sceneBottomMargin
     color: "#f7f9fc"
     radius: 22
     border.color: "#d3dce6"
@@ -169,10 +173,10 @@ Item {
       anchors.left: parent.left
       anchors.right: parent.right
       anchors.top: parent.top
-      anchors.leftMargin: 12 + mainWindow.sceneLeftMargin
-      anchors.rightMargin: 12 + mainWindow.sceneRightMargin
+      anchors.leftMargin: root.dockHorizontalMargin + mainWindow.sceneLeftMargin
+      anchors.rightMargin: root.dockHorizontalMargin + mainWindow.sceneRightMargin
       anchors.topMargin: 10
-      spacing: 8
+      spacing: root.actionSpacing
 
       RowLayout {
         Layout.fillWidth: true
@@ -204,13 +208,13 @@ Item {
 
       GridLayout {
         Layout.fillWidth: true
-        columns: 4
-        columnSpacing: 7
-        rowSpacing: 7
+        columns: root.actionColumns
+        columnSpacing: root.actionSpacing
+        rowSpacing: root.actionSpacing
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 64
+          Layout.preferredHeight: root.actionButtonHeight
           text: "현재 위치"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_location_white_24dp")
@@ -219,7 +223,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 64
+          Layout.preferredHeight: root.actionButtonHeight
           text: "레이어"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_baseline-list_white_24dp")
@@ -228,7 +232,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 64
+          Layout.preferredHeight: root.actionButtonHeight
           text: root.editMode ? "조사 중" : "조사 시작"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_create_white_24dp")
@@ -238,7 +242,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 64
+          Layout.preferredHeight: root.actionButtonHeight
           text: "수동 저장"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_check_white_24dp")
@@ -265,13 +269,13 @@ Item {
       GridLayout {
         visible: root.moreExpanded
         Layout.fillWidth: true
-        columns: 4
-        columnSpacing: 7
-        rowSpacing: 7
+        columns: Math.min(3, root.actionColumns)
+        columnSpacing: root.actionSpacing
+        rowSpacing: root.actionSpacing
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 64
+          Layout.preferredHeight: root.actionButtonHeight
           text: "객체 추가"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_add_white_24dp")
@@ -282,7 +286,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 64
+          Layout.preferredHeight: root.actionButtonHeight
           text: root.autoSaveEnabled ? "자동저장 켬" : "자동저장 끔"
           compact: true
           iconSource: Theme.getThemeVectorIcon(root.autoSaveEnabled ? "ic_update_white_24dp" : "ic_pause_black_24dp")
@@ -291,8 +295,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          Layout.columnSpan: 2
-          implicitHeight: 64
+          Layout.preferredHeight: root.actionButtonHeight
           text: "결과 내보내기"
           compact: true
           detailText: "현장 폴더를 ZIP으로 공유"
@@ -304,13 +307,13 @@ Item {
       GridLayout {
         visible: root.editMode
         Layout.fillWidth: true
-        columns: 4
-        columnSpacing: 7
-        rowSpacing: 7
+        columns: root.actionColumns
+        columnSpacing: root.actionSpacing
+        rowSpacing: root.actionSpacing
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 58
+          Layout.preferredHeight: root.actionButtonHeight
           text: "지점 찍기"
           compact: true
           detailText: "화면 중심 또는 GPS 위치"
@@ -321,7 +324,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 58
+          Layout.preferredHeight: root.actionButtonHeight
           text: "한 점 취소"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_remove_vertex_white_24dp")
@@ -331,7 +334,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 58
+          Layout.preferredHeight: root.actionButtonHeight
           text: "도형 완료"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_check_white_24dp")
@@ -342,7 +345,7 @@ Item {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          implicitHeight: 58
+          Layout.preferredHeight: root.actionButtonHeight
           text: "도형 취소"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_clear_white_24dp")
