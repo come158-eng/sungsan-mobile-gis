@@ -367,8 +367,20 @@ QgisMobileapp::QgisMobileapp( QgsApplication *app, QObject *parent )
   PlatformUtilities::instance()->setScreenLockPermission( false );
 
   load( QUrl( "qrc:/qml/qgismobileapp.qml" ) );
-  mMapCanvas = rootObjects().first()->findChild<QgsQuickMapCanvasMap *>();
-  Q_ASSERT_X( mMapCanvas, "QML Init", "QgsQuickMapCanvasMap not found. It is likely that we failed to load the QML files. Check debug output for related messages." );
+  if ( rootObjects().isEmpty() )
+  {
+    qCritical() << "QML initialization failed: no root object was created";
+    QTimer::singleShot( 0, mApp, [] { QCoreApplication::exit( EXIT_FAILURE ); } );
+    return;
+  }
+
+  mMapCanvas = rootObjects().constFirst()->findChild<QgsQuickMapCanvasMap *>();
+  if ( !mMapCanvas )
+  {
+    qCritical() << "QML initialization failed: QgsQuickMapCanvasMap was not found";
+    QTimer::singleShot( 0, mApp, [] { QCoreApplication::exit( EXIT_FAILURE ); } );
+    return;
+  }
   mMapCanvas->mapSettings()->setProject( mProject );
   mBookmarkModel->setMapSettings( mMapCanvas->mapSettings() );
   mAsyncLegendImageProvider->setMapSettings( mMapCanvas->mapSettings() );
