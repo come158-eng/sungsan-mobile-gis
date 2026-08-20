@@ -4,8 +4,8 @@
  */
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.impl
 import QtQuick.Layouts
-import QtQuick.Effects
 
 Button {
   id: control
@@ -36,22 +36,12 @@ Button {
       radius: 12
       color: control.emphasized ? "#ffffff" : (control.down ? "#dbe7f7" : "#eaf0f8")
 
-      Image {
-        id: iconImage
+      IconLabel {
         anchors.centerIn: parent
-        width: control.compact ? 22 : 24
-        height: control.compact ? 22 : 24
-        source: control.iconSource
-        sourceSize.width: width
-        sourceSize.height: height
-        visible: false
-      }
-
-      MultiEffect {
-        anchors.fill: iconImage
-        source: iconImage
-        colorization: 1
-        colorizationColor: control.accentColor
+        icon.source: control.iconSource
+        icon.width: control.compact ? 22 : 24
+        icon.height: control.compact ? 22 : 24
+        icon.color: control.accentColor
         opacity: control.enabled ? 1 : 0.42
       }
     }
