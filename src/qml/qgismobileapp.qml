@@ -5382,7 +5382,7 @@ ApplicationWindow {
     id: sungsanFieldPanel
     anchors.fill: parent
 
-    projectLoaded: qgisProject && !!qgisProject.fileName && !welcomeScreen.visible && !dashBoard.opened && !overlayFeatureFormDrawer.opened && !featureListForm.visible && !qfieldLocalDataPickerScreen.visible
+    projectLoaded: !welcomeScreen.visible && !dashBoard.opened && !overlayFeatureFormDrawer.opened && !featureListForm.visible && !qfieldLocalDataPickerScreen.visible
     projectName: qgisProject && qgisProject.fileName ? ProjectUtils.title(qgisProject) : ""
     activeLayerName: dashBoard.activeLayer ? dashBoard.activeLayer.name : "선택된 조사 레이어 없음"
     editMode: stateMachine.state === "digitize"
@@ -5393,6 +5393,8 @@ ApplicationWindow {
     gpsAccuracy: positionSource.positionInformation && positionSource.positionInformation.haccValid ? positionSource.positionInformation.hacc : -1
     vworldReady: mainWindow.sungsanVWorldReady
     canAddFeature: digitizingToolbar.digitizingAllowed
+    pointLayer: dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point
+    multiVertexLayer: dashBoard.activeLayer && (dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Line || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Polygon)
     geometryInProgress: digitizingToolbar.isDigitizing
     geometryValid: digitizingToolbar.geometryValid
 
@@ -5414,9 +5416,20 @@ ApplicationWindow {
 
     onAddFeatureRequested: {
       mainWindow.sungsanStartSurvey();
-      if (stateMachine.state === "digitize" && dashBoard.activeLayer) {
-        displayToast("지도를 움직인 뒤 ‘지점 찍기’를 눌러 조사 객체를 입력하세요.");
-      }
+      // A point is complete as soon as its one coordinate is captured.  Let
+      // QField confirm it immediately so the attribute form opens without a
+      // redundant vertex/geometry-complete step.  Line and polygon layers
+      // keep the explicit multi-vertex controls below.
+      Qt.callLater(function () {
+        if (stateMachine.state !== "digitize" || !dashBoard.activeLayer || !digitizingToolbar.digitizingAllowed) {
+          return;
+        }
+        if (dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point) {
+          digitizingToolbar.triggerAddVertex();
+        } else if (dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Line || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Polygon) {
+          displayToast("지도 중심이나 GPS 위치를 맞춘 뒤 ‘꼭짓점 추가’를 눌러 도형을 그리세요.");
+        }
+      });
     }
 
     onAddVertexRequested: {
@@ -5459,7 +5472,10 @@ ApplicationWindow {
   SungsanHomeScreen {
     id: welcomeScreen
     objectName: "welcomeScreen"
-    visible: !iface.hasProjectOnLaunch()
+    // Always begin Sungsan builds at the project hub.  Otherwise Android can
+    // resume QField's cached blank/default canvas and hide every import,
+    // back and layer control before a real field package has been opened.
+    visible: true
 
     model: RecentProjectListModel {
       id: recentProjectListModel
@@ -6033,3 +6049,4 @@ ApplicationWindow {
     }
   }
 }
+
