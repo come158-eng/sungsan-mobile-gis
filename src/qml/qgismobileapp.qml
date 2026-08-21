@@ -5507,6 +5507,9 @@ ApplicationWindow {
     gpsActive: positionSource.active
     gpsPositionValid: positionSource.positionInformation && positionSource.positionInformation.latitudeValid
     gpsAccuracy: positionSource.positionInformation && positionSource.positionInformation.haccValid ? positionSource.positionInformation.hacc : -1
+    gpsDeviceName: positioningSettings.positioningDeviceName
+    gpsQualityText: positionSource.positionInformation ? positionSource.positionInformation.qualityDescription : ""
+    gpsSatellites: positionSource.positionInformation ? positionSource.positionInformation.satellitesUsed : 0
     vworldReady: mainWindow.sungsanVWorldReady
     canAddFeature: digitizingToolbar.digitizingAllowed
     canEditExistingPoint: dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point && !dashBoard.activeLayer.readOnly && projectInfo.editRights
@@ -5527,6 +5530,12 @@ ApplicationWindow {
     }
 
     onCurrentLocationRequested: mainWindow.sungsanShowCurrentLocation()
+
+    onGnssSettingsRequested: {
+      qfieldSettings.reset();
+      qfieldSettings.currentPanel = 1;
+      qfieldSettings.visible = true;
+    }
 
     onLayersRequested: {
       dashBoard.open();
@@ -5656,6 +5665,7 @@ ApplicationWindow {
 
     onSettingsRequested: {
       qfieldSettings.reset();
+      qfieldSettings.currentPanel = 1;
       qfieldSettings.visible = true;
     }
 
