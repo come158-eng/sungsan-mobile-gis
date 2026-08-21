@@ -146,6 +146,8 @@ class QFIELD_CORE_EXPORT PlatformUtilities : public QObject
     Q_INVOKABLE virtual void importProjectArchive() const;
     //! Requests and imports one or more datasets into QField's application directory action
     Q_INVOKABLE virtual void importDatasets() const;
+    //! Requests one or more LandStar delimited point files for immediate import
+    Q_INVOKABLE virtual void importLandStarPoints() const;
 
     /**
      * Update a local project content from a user-picked archive file action
@@ -333,6 +335,9 @@ class QFIELD_CORE_EXPORT PlatformUtilities : public QObject
 
     //! Emitted when a resource has been opened.
     void resourceCanceled( const QString &message );
+
+    //! Emitted when Android has copied a LandStar point file into the app inbox.
+    void landStarFileReceived( const QString &path );
 
   private:
     /**
