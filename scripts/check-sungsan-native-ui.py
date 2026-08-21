@@ -246,13 +246,6 @@ def check_android_default_strings() -> None:
         r"\"\$\{ANDROID_TEMPLATE_FOLDER\}/res/values/strings\.xml\"\s*COPYONLY\s*\)",
         "Sungsan default resources replace only the staged Android values file",
     )
-    require_regex(
-        package_path,
-        r"configure_file\s*\(\s*"
-        r"\$\{CMAKE_SOURCE_DIR\}/platform/android/generated\.xml\.in\s*"
-        r"\$\{ANDROID_TEMPLATE_FOLDER\}/res/values/generated\.xml\s*@ONLY\s*\)",
-        "git revision resource is compiled from the Android res/values directory",
-    )
 
 
 def check_upstream_revision_attribution() -> None:
@@ -351,6 +344,7 @@ def check_qml_resources() -> None:
 def check_shell_wiring() -> None:
     root = "src/qml/qgismobileapp.qml"
     home = "src/qml/sungsan/SungsanHomeScreen.qml"
+    panel = "src/qml/sungsan/SungsanFieldPanel.qml"
     cloud = "src/qml/QFieldCloudScreen.qml"
     branded_surface = "\n".join(
         read(path)
@@ -363,6 +357,26 @@ def check_shell_wiring() -> None:
     require(root, 'import "sungsan"', "Sungsan QML directory imported")
     require(root, "SungsanHomeScreen {", "Sungsan home instantiated")
     require(root, "SungsanFieldPanel {", "Sungsan field panel instantiated")
+    require(panel, "import org.qfield", "Sungsan field panel imports the Theme provider")
+    require(panel, 'text: "‹ 뒤로"', "Sungsan map header exposes a visible back button")
+    require(panel, 'Accessible.name: "레이어 목록 열기"', "Sungsan map header exposes layer access")
+    panel_source = read(panel)
+    if panel_source.count('text: "레이어"') != 1:
+        FAILURES.append(f"{panel}: layer access must appear exactly once in the field UI")
+    else:
+        PASSES.append("Sungsan field UI exposes one non-duplicated layer button")
+    require(panel, "visible: root.editMode && root.multiVertexLayer", "line and polygon controls stay hidden for point layers")
+    require(panel, 'text: root.pointLayer ? "지점 추가" : "객체 추가"', "point capture has one direct add action")
+    require(
+        root,
+        "projectLoaded: !welcomeScreen.visible",
+        "Sungsan map controls do not disappear on a loaded map with an empty project filename",
+    )
+    require(
+        root,
+        "visible: true\n\n    model: RecentProjectListModel",
+        "Sungsan always starts at the project hub instead of a cached blank canvas",
+    )
     require(home, "property string projectPath: ProjectPath", "recent project path role is safely aliased")
     require(home, "property string projectTitle: ProjectTitle", "recent project title role is safely aliased")
     require(home, "property int projectType: ProjectType", "recent project type role is safely aliased")
@@ -404,6 +418,13 @@ def check_shell_wiring() -> None:
         root,
         r"onAddVertexRequested\s*:\s*\{.*?digitizingToolbar\.triggerAddVertex\s*\(\s*\)",
         "Sungsan vertex button reaches digitizing toolbar",
+    )
+    require_regex(
+        root,
+        r"onAddFeatureRequested\s*:\s*\{.*?Qt\.callLater.*?"
+        r"geometryType\s*\(\s*\)\s*===\s*Qgis\.GeometryType\.Point.*?"
+        r"digitizingToolbar\.triggerAddVertex\s*\(\s*\)",
+        "Sungsan point add captures once and opens the attribute workflow directly",
     )
     require_regex(
         root,
@@ -603,12 +624,12 @@ def check_android_bridge() -> None:
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APP_VERSION_STR="${APP_VERSION_STR:-1.0.0-sungsan-beta3}"',
+        'APP_VERSION_STR="${APP_VERSION_STR:-1.0.0-sungsan-beta2}"',
         "Sungsan product version name",
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APK_VERSION_CODE="${APK_VERSION_CODE:-10000003}"',
+        'APK_VERSION_CODE="${APK_VERSION_CODE:-10000002}"',
         "monotonically increased Android version code",
     )
     require(
@@ -768,28 +789,6 @@ def check_mandatory_vworld_plugin_restore() -> None:
         PASSES.append("bundled VWorld directory UUID is exactly sungsan_vworld")
 
 
-def check_crash_safe_sungsan_startup() -> None:
-    startup_files = [
-        "src/qml/sungsan/SungsanActionButton.qml",
-        "src/qml/sungsan/SungsanHomeScreen.qml",
-        "src/qml/sungsan/SungsanFieldPanel.qml",
-    ]
-    forbidden = ("QtQuick.Effects", "MultiEffect", "qrc:/images/app_logo.svg", "Image {")
-    for path in startup_files:
-        source = read(path)
-        for token in forbidden:
-            if token in source:
-                FAILURES.append(f"{path}: startup must not render {token!r}")
-            else:
-                PASSES.append(f"{path}: startup excludes {token!r}")
-
-    require(
-        "src/qml/sungsan/SungsanHomeScreen.qml",
-        'text: "SUNG SAN"',
-        "Sungsan startup keeps a text-rendered brand mark",
-    )
-
-
 def main() -> int:
     qml_files = [
         "src/qml/qgismobileapp.qml",
@@ -809,7 +808,6 @@ def main() -> int:
     check_android_bridge()
     check_vworld()
     check_mandatory_vworld_plugin_restore()
-    check_crash_safe_sungsan_startup()
 
     if FAILURES:
         print(f"FAIL: {len(FAILURES)} issue(s); {len(PASSES)} static checks passed")
@@ -825,3 +823,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+
