@@ -367,7 +367,9 @@ def check_shell_wiring() -> None:
         PASSES.append("Sungsan field UI exposes one non-duplicated layer button")
     require(panel, "visible: root.editMode && root.multiVertexLayer", "line and polygon controls stay hidden for point layers")
     require(panel, 'text: root.pointLayer ? "지점 추가" : "객체 추가"', "point capture has one direct add action")
-    require(panel, 'text: root.existingPointSelectionPending ? "지점 선택 취소" : "기존 지점 속성입력"', "existing point attribute workflow is exposed for point layers")
+    require(panel, 'text: root.existingPointSelectionPending ? "지점 선택 취소" : "지점 사진·속성"', "existing point photo and attribute workflow is exposed for point layers")
+    require(panel, 'text: "LandStar 측점 받기"', "LandStar point exchange is exposed in the field panel")
+    require(panel, 'text: "CAD TXT 생성"', "CAD text export is exposed in the field panel")
     require(panel, "visible: root.pointLayer", "existing point attribute action is limited to point layers")
     require(
         root,
@@ -432,8 +434,8 @@ def check_shell_wiring() -> None:
         root,
         r"onEditExistingPointRequested\s*:\s*\{.*?"
         r"sungsanExistingPointEditPending\s*=\s*true.*?"
-        r"속성을 입력할 기존 맨홀 점",
-        "existing point workflow waits for a map selection without creating geometry",
+        r"사진과 속성을 입력할 맨홀·LandStar 점",
+        "existing and LandStar point workflow waits for a map selection without creating geometry",
     )
     require_regex(
         root,
@@ -647,12 +649,12 @@ def check_android_bridge() -> None:
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APP_VERSION_STR="${APP_VERSION_STR:-1.0.0}"',
+        'APP_VERSION_STR="${APP_VERSION_STR:-1.1.0}"',
         "Sungsan product version name",
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APK_VERSION_CODE="${APK_VERSION_CODE:-10000004}"',
+        'APK_VERSION_CODE="${APK_VERSION_CODE:-10100000}"',
         "monotonically increased Android version code",
     )
     require(
