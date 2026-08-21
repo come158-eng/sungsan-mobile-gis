@@ -500,6 +500,7 @@ jobs:
 
           "${apksigner}" sign \
             --v2-signing-enabled true \
+            --v4-signing-enabled false \
             --ks "${SECRET_DIR}/keystore.p12" \
             --ks-key-alias "${keyname}" \
             --ks-pass "file:${SECRET_DIR}/storepass.txt" \
