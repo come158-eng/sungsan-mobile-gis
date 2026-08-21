@@ -482,9 +482,15 @@ jobs:
           aapt="${build_tools}/aapt"
           keyname="$(<"${SECRET_DIR}/keyname.txt")"
           anchored_digest="$(<"${SECRET_DIR}/prebuild-certificate.sha256")"
-          [[ "${anchored_digest}" =~ ^[0-9a-f]{64}$ ]]
+          if [[ ! "${anchored_digest}" =~ ^[0-9a-f]{64}$ ]]; then
+            echo "Approved signing certificate digest is invalid." >&2
+            exit 15
+          fi
 
-          [[ ! -e "${SIGN_DIR}" && ! -L "${SIGN_DIR}" ]]
+          if [[ -e "${SIGN_DIR}" || -L "${SIGN_DIR}" ]]; then
+            echo "Signing output directory must not pre-exist." >&2
+            exit 16
+          fi
           mkdir -m 0700 "${SIGN_DIR}"
           aligned_apk="${RUNNER_TEMP}/sungsan-release-aligned.apk"
           signed_apk="${SIGN_DIR}/${signed_name}"
@@ -505,7 +511,11 @@ jobs:
           report="${RUNNER_TEMP}/sungsan-release-signature-report.txt"
           "${apksigner}" verify --verbose --print-certs "${signed_apk}" > "${report}"
           "${zipalign}" -c -P 16 -v 4 "${signed_apk}" >/dev/null
-          grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "${report}"
+          if ! grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "${report}"; then
+            cat "${report}" >&2
+            echo "Signed APK did not verify with APK Signature Scheme v2." >&2
+            exit 18
+          fi
           mapfile -t signer_digests < <(
             sed -n 's/^Signer #[0-9][0-9]* certificate SHA-256 digest: //p' "${report}" |
               tr '[:upper:]' '[:lower:]'
@@ -514,15 +524,29 @@ jobs:
               [[ ! "${signer_digests[0]}" =~ ^[0-9a-f]{64}$ ]] ||
               [[ "${signer_digests[0]}" != "${anchored_digest}" ]]; then
             echo "Signed APK must have exactly the approved Sungsan signer." >&2
-            exit 16
+            exit 19
           fi
           rm -f -- "${report}"
 
-          badging="$(${aapt} dump badging "${signed_apk}")"
-          grep -Fq "package: name='kr.co.sungsan.mobilegis'" <<<"${badging}"
-          grep -Fq "versionName='1.0.0'" <<<"${badging}"
-          grep -Fq "versionCode='10000004'" <<<"${badging}"
-          [[ "$(grep '^native-code:' <<<"${badging}")" == "native-code: 'arm64-v8a'" ]]
+          badging="$("${aapt}" dump badging "${signed_apk}")"
+          package_line="$(grep '^package:' <<<"${badging}" || true)"
+          native_line="$(grep '^native-code:' <<<"${badging}" || true)"
+          if ! grep -Fq "package: name='kr.co.sungsan.mobilegis'" <<<"${badging}"; then
+            echo "Unexpected Android application ID: ${package_line}" >&2
+            exit 20
+          fi
+          if ! grep -Fq "versionName='1.0.0'" <<<"${badging}"; then
+            echo "Unexpected Android versionName: ${package_line}" >&2
+            exit 21
+          fi
+          if ! grep -Fq "versionCode='10000004'" <<<"${badging}"; then
+            echo "Unexpected Android versionCode: ${package_line}" >&2
+            exit 22
+          fi
+          if [[ "${native_line}" != "native-code: 'arm64-v8a'" ]]; then
+            echo "Unexpected Android native ABI set: ${native_line}" >&2
+            exit 23
+          fi
 
           chmod 0644 "${signed_apk}"
           cd "${SIGN_DIR}"
@@ -541,10 +565,13 @@ jobs:
           mapfile -d '' inventory < <(find "${SIGN_DIR}" -mindepth 1 -print0)
           if (( ${#inventory[@]} != 3 )); then
             echo "Signed artifact must contain exactly three entries." >&2
-            exit 17
+            exit 24
           fi
           for inventory_path in "${inventory[@]}"; do
-            [[ -f "${inventory_path}" && ! -L "${inventory_path}" ]]
+            if [[ ! -f "${inventory_path}" || -L "${inventory_path}" ]]; then
+              echo "Signed artifact entries must be regular, non-symlink files." >&2
+              exit 25
+            fi
           done
           mapfile -t actual_names < <(
             printf '%s\n' "${inventory[@]##*/}" | LC_ALL=C sort
@@ -553,7 +580,10 @@ jobs:
           mapfile -t expected_names < <(
             printf '%s\n' "${expected_names[@]}" | LC_ALL=C sort
           )
-          [[ "${actual_names[*]}" == "${expected_names[*]}" ]]
+          if [[ "${actual_names[*]}" != "${expected_names[*]}" ]]; then
+            printf 'Unexpected signed artifact inventory: %s\n' "${actual_names[*]}" >&2
+            exit 26
+          fi
           echo "dist_dir=${SIGN_DIR}" >> "${GITHUB_OUTPUT}"
 
       - name: Remove protected signing material
