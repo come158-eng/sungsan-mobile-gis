@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-19.
+# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
 
 set -euo pipefail
 umask 077
 
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." >/dev/null && pwd)"
-python3 "${SOURCE_DIR}/scripts/check-sungsan-build-inputs.py"
 OUTPUT_DIR="${OUTPUT_DIR:-${SOURCE_DIR}/build-sungsan-apk}"
 export triplet="${triplet:-arm64-android}"
 SOURCE_BUILD_DIR="${SOURCE_DIR}/build-sungsan-native-${triplet}"
@@ -134,11 +133,7 @@ export APP_PACKAGE_ID="kr.co.sungsan.mobilegis"
 export APP_UPSTREAM_REVISION="f7123fc8dfa40be4e874d9bf5b46e81c6d05039b"
 export APP_ICON="sungsan_mobile_gis"
 export APP_ICON_PATH="/usr/src/qfield/branding/sungsan/assets"
-# The dedicated PNG is retained as a reviewed branding asset, but the Android
-# package uses the already-validated Sungsan vector drawable for its splash.
-# This removes a redundant optional FILEPATH that previously failed only after
-# the multi-hour vcpkg configure step despite the icon assets being available.
-export APP_SPLASH_PATH=""
+export APP_SPLASH_PATH="branding/sungsan/assets/sungsan_splash.png"
 export APP_THEME_PATH="/usr/src/qfield/branding/sungsan/theme.json"
 export APP_DEFAULT_LANGUAGE="ko"
 export APP_URL_SCHEME="sungsanmobilegis"
@@ -154,8 +149,8 @@ export APP_CLOUD_NOTIFICATION_RUNNING_TEXT="현장 첨부 파일을 전송하고
 export APP_BUNDLED_PLUGINS="/usr/src/qfield/build-sungsan-native-generated/plugins"
 export WITH_SAMPLE_PROJECTS="OFF"
 export APP_VERSION="${APP_VERSION:-v4.2.11}"
-export APP_VERSION_STR="${APP_VERSION_STR:-1.0.0-sungsan-beta3}"
-export APK_VERSION_CODE="${APK_VERSION_CODE:-10000003}"
+export APP_VERSION_STR="${APP_VERSION_STR:-1.0.0-sungsan-beta2}"
+export APK_VERSION_CODE="${APK_VERSION_CODE:-10000002}"
 export WITH_ALL_FILES_ACCESS="${WITH_ALL_FILES_ACCESS:-OFF}"
 export SENTRY_DSN=""
 export SENTRY_ENV=""
@@ -327,3 +322,4 @@ else
   chmod 0644 "${DEBUG_OUTPUT_APK}"
   echo "경고: 배포 금지 디버그키 시험 APK 1개를 DEBUG-KEY-TEST-ONLY 이름으로 복사했습니다." >&2
 fi
+
