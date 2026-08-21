@@ -23,8 +23,10 @@ Item {
   property real gpsAccuracy: -1
   property bool vworldReady: false
   property bool canAddFeature: false
+  property bool canEditExistingPoint: false
   property bool pointLayer: false
   property bool multiVertexLayer: false
+  property bool existingPointSelectionPending: false
   property bool geometryInProgress: false
   property bool geometryValid: false
   property bool moreExpanded: false
@@ -40,6 +42,7 @@ Item {
   signal currentLocationRequested
   signal layersRequested
   signal addFeatureRequested
+  signal editExistingPointRequested
   signal addVertexRequested
   signal removeVertexRequested
   signal confirmGeometryRequested
@@ -255,6 +258,19 @@ Item {
         }
       }
 
+      SungsanActionButton {
+        visible: root.pointLayer
+        Layout.fillWidth: true
+        Layout.preferredHeight: root.actionButtonHeight
+        text: root.existingPointSelectionPending ? "지점 선택 취소" : "기존 지점 속성입력"
+        compact: true
+        detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "맨홀 점 선택 후 빈 속성 입력·수정"
+        iconSource: Theme.getThemeVectorIcon(root.existingPointSelectionPending ? "ic_clear_white_24dp" : "ic_create_white_24dp")
+        enabled: root.canEditExistingPoint && !root.geometryInProgress
+        emphasized: root.existingPointSelectionPending
+        onClicked: root.editExistingPointRequested()
+      }
+
       Button {
         Layout.fillWidth: true
         Layout.preferredHeight: 34
@@ -351,4 +367,3 @@ Item {
     }
   }
 }
-
