@@ -23,6 +23,8 @@ Item {
   property real gpsAccuracy: -1
   property bool vworldReady: false
   property bool canAddFeature: false
+  property bool pointLayer: false
+  property bool multiVertexLayer: false
   property bool geometryInProgress: false
   property bool geometryValid: false
   property bool moreExpanded: false
@@ -224,10 +226,13 @@ Item {
         SungsanActionButton {
           Layout.fillWidth: true
           Layout.preferredHeight: root.actionButtonHeight
-          text: "레이어"
+          text: root.pointLayer ? "지점 추가" : "객체 추가"
           compact: true
-          iconSource: Theme.getThemeVectorIcon("ic_baseline-list_white_24dp")
-          onClicked: root.layersRequested()
+          detailText: root.pointLayer ? "화면 중심 또는 GPS 위치" : "선·면 그리기 시작"
+          iconSource: Theme.getThemeVectorIcon("ic_add_white_24dp")
+          enabled: root.canAddFeature && !root.geometryInProgress
+          emphasized: root.editMode && !root.geometryInProgress
+          onClicked: root.addFeatureRequested()
         }
 
         SungsanActionButton {
@@ -254,7 +259,7 @@ Item {
         Layout.fillWidth: true
         Layout.preferredHeight: 34
         flat: true
-        text: root.moreExpanded ? "간단히 보기 ︿" : "더보기 · 객체 추가 / 자동저장 / 결과 내보내기 ﹀"
+        text: root.moreExpanded ? "간단히 보기 ︿" : "더보기 · 자동저장 / 결과 내보내기 ﹀"
         onClicked: root.moreExpanded = !root.moreExpanded
         contentItem: Label {
           text: parent.text
@@ -269,20 +274,9 @@ Item {
       GridLayout {
         visible: root.moreExpanded
         Layout.fillWidth: true
-        columns: Math.min(3, root.actionColumns)
+        columns: Math.min(2, root.actionColumns)
         columnSpacing: root.actionSpacing
         rowSpacing: root.actionSpacing
-
-        SungsanActionButton {
-          Layout.fillWidth: true
-          Layout.preferredHeight: root.actionButtonHeight
-          text: "객체 추가"
-          compact: true
-          iconSource: Theme.getThemeVectorIcon("ic_add_white_24dp")
-          enabled: root.canAddFeature
-          emphasized: !root.geometryInProgress && root.editMode
-          onClicked: root.addFeatureRequested()
-        }
 
         SungsanActionButton {
           Layout.fillWidth: true
@@ -305,7 +299,7 @@ Item {
       }
 
       GridLayout {
-        visible: root.editMode
+        visible: root.editMode && root.multiVertexLayer
         Layout.fillWidth: true
         columns: root.actionColumns
         columnSpacing: root.actionSpacing
@@ -314,9 +308,9 @@ Item {
         SungsanActionButton {
           Layout.fillWidth: true
           Layout.preferredHeight: root.actionButtonHeight
-          text: "지점 찍기"
+          text: "꼭짓점 추가"
           compact: true
-          detailText: "화면 중심 또는 GPS 위치"
+          detailText: "선·면을 이어서 그리기"
           iconSource: Theme.getThemeVectorIcon("ic_add_vertex_white_24dp")
           emphasized: true
           onClicked: root.addVertexRequested()
