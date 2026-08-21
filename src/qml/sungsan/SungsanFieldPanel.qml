@@ -18,6 +18,7 @@ Item {
   property bool editMode: false
   property bool autoSaveEnabled: true
   property string lastSavedText: ""
+  property string lastLandStarSyncText: ""
   property bool gpsActive: false
   property bool gpsPositionValid: false
   property real gpsAccuracy: -1
@@ -50,6 +51,8 @@ Item {
   signal manualSaveRequested
   signal autoSaveToggled(bool enabled)
   signal exportRequested
+  signal landStarSyncRequested
+  signal cadTextExportRequested
 
   visible: projectLoaded
   enabled: visible
@@ -262,9 +265,9 @@ Item {
         visible: root.pointLayer
         Layout.fillWidth: true
         Layout.preferredHeight: root.actionButtonHeight
-        text: root.existingPointSelectionPending ? "지점 선택 취소" : "기존 지점 속성입력"
+        text: root.existingPointSelectionPending ? "지점 선택 취소" : "지점 사진·속성"
         compact: true
-        detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "맨홀 점 선택 후 빈 속성 입력·수정"
+        detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "맨홀·LandStar 점의 근경·원경·기타 촬영"
         iconSource: Theme.getThemeVectorIcon(root.existingPointSelectionPending ? "ic_clear_white_24dp" : "ic_create_white_24dp")
         enabled: root.canEditExistingPoint && !root.geometryInProgress
         emphasized: root.existingPointSelectionPending
@@ -311,6 +314,26 @@ Item {
           detailText: "현장 폴더를 ZIP으로 공유"
           iconSource: Theme.getThemeVectorIcon("ic_cloud_upload_24dp")
           onClicked: root.exportRequested()
+        }
+
+        SungsanActionButton {
+          Layout.fillWidth: true
+          Layout.preferredHeight: root.actionButtonHeight
+          text: "LandStar 측점 받기"
+          compact: true
+          detailText: root.lastLandStarSyncText.length > 0 ? "최근 반영 " + root.lastLandStarSyncText : "LandStar 공유·내보내기 파일 반영"
+          iconSource: Theme.getThemeVectorIcon("ic_bluetooth_receiver_black_24dp")
+          onClicked: root.landStarSyncRequested()
+        }
+
+        SungsanActionButton {
+          Layout.fillWidth: true
+          Layout.preferredHeight: root.actionButtonHeight
+          text: "CAD TXT 생성"
+          compact: true
+          detailText: "측점명,N,E,Z,코드"
+          iconSource: Theme.getThemeVectorIcon("ic_file_black_24dp")
+          onClicked: root.cadTextExportRequested()
         }
       }
 
