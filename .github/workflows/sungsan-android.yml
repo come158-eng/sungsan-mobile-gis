@@ -511,9 +511,11 @@ jobs:
           report="${RUNNER_TEMP}/sungsan-release-signature-report.txt"
           "${apksigner}" verify --verbose --print-certs "${signed_apk}" > "${report}"
           "${zipalign}" -c -P 16 -v 4 "${signed_apk}" >/dev/null
-          if ! grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "${report}"; then
+          if ! grep -Fq 'Verified using v2 scheme (APK Signature Scheme v2): true' "${report}" &&
+             ! grep -Fq 'Verified using v3 scheme (APK Signature Scheme v3): true' "${report}" &&
+             ! grep -Fq 'Verified using v3.1 scheme (APK Signature Scheme v3.1): true' "${report}"; then
             cat "${report}" >&2
-            echo "Signed APK did not verify with APK Signature Scheme v2." >&2
+            echo "Signed APK did not verify with a supported v2/v3 APK signature scheme." >&2
             exit 18
           fi
           mapfile -t signer_digests < <(
