@@ -218,6 +218,23 @@ public class QFieldActivity extends QtActivity {
     }
 
     @Override
+    protected void onResume() {
+        super.onResume();
+        // Re-check finite administrator tokens whenever the app returns to the
+        // foreground. Permanent (expiresAt=0) approvals remain a one-time
+        // activation, while an expired temporary approval cannot keep using an
+        // already-open activity indefinitely.
+        if (requiresSungsanActivation() && !hasValidSungsanActivation()) {
+            getWindow().getDecorView().post(new Runnable() {
+                @Override
+                public void run() {
+                    showSungsanActivationDialog();
+                }
+            });
+        }
+    }
+
+    @Override
     public void onNewIntent(Intent intent) {
         // Prevent activity restart
         intent.setFlags(intent.getFlags() &
@@ -230,8 +247,8 @@ public class QFieldActivity extends QtActivity {
             return;
         }
 
-        if (intent.getAction() == Intent.ACTION_VIEW ||
-            intent.getAction() == Intent.ACTION_SEND) {
+        if (Intent.ACTION_VIEW.equals(intent.getAction()) ||
+            Intent.ACTION_SEND.equals(intent.getAction())) {
             String scheme = intent.getScheme();
             if (scheme != null && scheme.equals("qfield")) {
                 qfieldIntent = intent;
@@ -311,21 +328,52 @@ public class QFieldActivity extends QtActivity {
         executorService.execute(new Runnable() {
             @Override
             public void run() {
-                String scheme = projectIntent.getScheme();
-                String action = projectIntent.getAction();
-                String type = projectIntent.getType();
+                final Intent incomingIntent = projectIntent;
+                if (incomingIntent == null) {
+                    dismissBlockingProgressDialog();
+                    return;
+                }
+
+                String scheme = incomingIntent.getScheme();
+                String action = incomingIntent.getAction();
+                String type = incomingIntent.getType();
                 Context context = getApplication().getApplicationContext();
 
                 Uri uri = null;
                 if (Intent.ACTION_SEND.equals(action)) {
-                    uri = (Uri)projectIntent.getParcelableExtra(
+                    uri = (Uri)incomingIntent.getParcelableExtra(
                         Intent.EXTRA_STREAM);
+                    if (uri == null) {
+                        uri = incomingIntent.getData();
+                    }
+                    if (uri == null && incomingIntent.getClipData() != null &&
+                        incomingIntent.getClipData().getItemCount() > 0) {
+                        uri = incomingIntent.getClipData().getItemAt(0).getUri();
+                    }
                     scheme = "";
                 } else {
-                    uri = projectIntent.getData();
+                    uri = incomingIntent.getData();
+                }
+
+                if (uri == null) {
+                    dismissBlockingProgressDialog();
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (!isFinishing()) {
+                                displayAlertDialog(
+                                    getString(R.string.import_error),
+                                    "공유된 파일을 확인하지 못했습니다.");
+                            }
+                        }
+                    });
+                    return;
                 }
 
                 String filePath = QFieldUtils.getPathFromUri(context, uri);
+                if (filePath == null) {
+                    filePath = "";
+                }
                 String importDatasetPath = "";
                 String importProjectPath = "";
                 File externalFilesDir = getApplicationDir();
@@ -340,13 +388,18 @@ public class QFieldActivity extends QtActivity {
 
                 if ((ContentResolver.SCHEME_CONTENT.equals(scheme) ||
                      Intent.ACTION_SEND.equals(action)) &&
-                    importDatasetPath != "") {
+                    !importDatasetPath.isEmpty()) {
                     DocumentFile documentFile =
                         DocumentFile.fromSingleUri(context, uri);
-                    String fileName = documentFile.getName();
-                    long fileBytes = documentFile.length();
+                    String fileName =
+                        documentFile != null ? documentFile.getName() : null;
+                    long fileBytes =
+                        documentFile != null ? documentFile.length() : -1L;
                     if (fileName == null) {
-                        if (type != null) {
+                        String uriName = uri.getLastPathSegment();
+                        if (uriName != null && !uriName.trim().isEmpty()) {
+                            fileName = uriName;
+                        } else if (type != null) {
                             // File name not provided
                             fileName =
                                 new SimpleDateFormat("yyyyMMdd_HHmmss")
@@ -359,7 +412,8 @@ public class QFieldActivity extends QtActivity {
                     fileName = safeLeafName(fileName);
 
                     if (fileName != null) {
-                        if (isLandStarPointFile(fileName)) {
+                        if (isLandStarPointFile(fileName) ||
+                            isLandStarMimeType(type)) {
                             final Uri landStarUri = uri;
                             runOnUiThread(new Runnable() {
                                 @Override
@@ -392,8 +446,10 @@ public class QFieldActivity extends QtActivity {
                                       e);
                             }
 
-                            String projectFolderName =
-                                projectFolderNameForArchive(documentFile);
+                            String projectFolderName = documentFile != null
+                                                           ? projectFolderNameForArchive(
+                                                                 documentFile)
+                                                           : "";
                             if (!projectName.isEmpty() &&
                                 !projectFolderName.isEmpty()) {
                                 String projectPath =
@@ -472,13 +528,13 @@ public class QFieldActivity extends QtActivity {
                             return;
                         }
 
-                        Boolean canWrite = filePath != ""
+                        Boolean canWrite = !filePath.isEmpty()
                                                ? new File(filePath).canWrite()
                                                : false;
                         if (!canWrite) {
                             Log.v("QField",
                                   "Content intent detected: " + action + " : " +
-                                      projectIntent.getDataString() + " : " +
+                                      incomingIntent.getDataString() + " : " +
                                       type + " : " + fileName);
                             String importFilePath =
                                 importDatasetPath + fileName;
@@ -513,7 +569,9 @@ public class QFieldActivity extends QtActivity {
                     landStarFileReceived(filePath);
                     return;
                 }
-                openProject(filePath);
+                if (!filePath.isEmpty()) {
+                    openProject(filePath);
+                }
             }
         });
     }
@@ -718,6 +776,15 @@ public class QFieldActivity extends QtActivity {
                name.endsWith(".pxy") || name.endsWith(".kof");
     }
 
+    private static boolean isLandStarMimeType(String mimeType) {
+        if (mimeType == null) {
+            return false;
+        }
+        return mimeType.equalsIgnoreCase("text/plain") ||
+               mimeType.equalsIgnoreCase("text/csv") ||
+               mimeType.equalsIgnoreCase("application/csv");
+    }
+
     private static String safeLeafName(String fileName) {
         String leaf = fileName == null ? "" : new File(fileName).getName();
         leaf = leaf.replaceAll("[\\x00-\\x1f<>:\"/\\\\|?*]", "_")
@@ -758,19 +825,24 @@ public class QFieldActivity extends QtActivity {
     }
 
     /**
-     * Copies one bounded LandStar text file and normalizes Korean Windows-949
-     * input to UTF-8. C++ receives only a private, validated UTF-8 file.
+     * Copies one bounded LandStar text file, preserves the exact raw bytes in
+     * a private sidecar for survey evidence, and normalizes Korean Windows-949
+     * input to UTF-8. C++ parses only the validated UTF-8 file.
      */
     private boolean copyLandStarPointFile(InputStream input, File destination,
                                           long declaredLength) {
         final int maximumBytes = 25 * 1024 * 1024;
-        if (input == null || destination == null || declaredLength <= 0 ||
+        if (input == null || destination == null ||
             declaredLength > maximumBytes) {
             return false;
         }
         try {
+            final int initialCapacity =
+                declaredLength > 0
+                    ? (int)Math.min(declaredLength, 1024L * 1024L)
+                    : 64 * 1024;
             ByteArrayOutputStream buffer = new ByteArrayOutputStream(
-                (int)Math.min(declaredLength, 1024L * 1024L));
+                initialCapacity);
             byte[] chunk = new byte[64 * 1024];
             int total = 0;
             int read;
@@ -804,13 +876,32 @@ public class QFieldActivity extends QtActivity {
             if (text.startsWith("\uFEFF")) {
                 text = text.substring(1);
             }
+            File rawDestination = new File(
+                destination.getAbsolutePath() + ".source");
+            if (rawDestination.exists() && !rawDestination.delete()) {
+                return false;
+            }
+            try (FileOutputStream rawOutput =
+                     new FileOutputStream(rawDestination)) {
+                rawOutput.write(raw);
+                rawOutput.flush();
+                rawOutput.getFD().sync();
+            }
             try (FileOutputStream output = new FileOutputStream(destination)) {
                 output.write(text.getBytes(StandardCharsets.UTF_8));
                 output.flush();
                 output.getFD().sync();
             }
-            return destination.isFile() && destination.length() > 0;
+            if (!destination.isFile() || destination.length() <= 0 ||
+                !rawDestination.isFile() || rawDestination.length() != raw.length) {
+                destination.delete();
+                rawDestination.delete();
+                return false;
+            }
+            return true;
         } catch (Exception error) {
+            destination.delete();
+            new File(destination.getAbsolutePath() + ".source").delete();
             Log.e("SungsanLandStar",
                   "Could not validate LandStar point file.", error);
             return false;
@@ -825,16 +916,35 @@ public class QFieldActivity extends QtActivity {
         final ContentResolver resolver = getContentResolver();
         final DocumentFile documentFile =
             DocumentFile.fromSingleUri(context, uri);
-        if (documentFile == null || !isLandStarPointFile(documentFile.getName()) ||
-            documentFile.length() <= 0 ||
-            documentFile.length() > 25L * 1024L * 1024L) {
+        String displayName =
+            documentFile != null ? documentFile.getName() : null;
+        if ((displayName == null || displayName.trim().isEmpty()) &&
+            uri.getLastPathSegment() != null) {
+            displayName = uri.getLastPathSegment();
+        }
+        final String mimeType = resolver.getType(uri);
+        if (!isLandStarPointFile(displayName) &&
+            isLandStarMimeType(mimeType)) {
+            final String extension =
+                mimeType != null && mimeType.toLowerCase().contains("csv")
+                    ? ".csv"
+                    : ".txt";
+            displayName = "landstar_" +
+                          new SimpleDateFormat("yyyyMMdd_HHmmss")
+                              .format(new Date().getTime()) +
+                          extension;
+        }
+        final long declaredLength =
+            documentFile != null ? documentFile.length() : -1L;
+        if (!isLandStarPointFile(displayName) ||
+            declaredLength > 25L * 1024L * 1024L) {
             displayAlertDialog(
                 "LandStar 측점 연결 실패",
                 "TXT, CSV, PXY 또는 KOF 측점 파일(최대 25 MB)을 선택해 주세요.");
             return;
         }
 
-        final File destination = uniqueLandStarInboxFile(documentFile.getName());
+        final File destination = uniqueLandStarInboxFile(displayName);
         if (destination == null) {
             displayAlertDialog("LandStar 측점 연결 실패",
                                "앱의 LandStar 수신 폴더를 만들지 못했습니다.");
@@ -852,7 +962,7 @@ public class QFieldActivity extends QtActivity {
                 boolean imported = false;
                 try (InputStream input = resolver.openInputStream(uri)) {
                     imported = copyLandStarPointFile(
-                        input, destination, documentFile.length());
+                        input, destination, declaredLength);
                 } catch (Exception error) {
                     Log.e("SungsanLandStar",
                           "Could not copy LandStar point file.", error);
@@ -866,6 +976,8 @@ public class QFieldActivity extends QtActivity {
                             landStarFileReceived(destination.getAbsolutePath());
                         } else {
                             destination.delete();
+                            new File(destination.getAbsolutePath() + ".source")
+                                .delete();
                             displayAlertDialog(
                                 "LandStar 측점 연결 실패",
                                 "선택한 측점 파일을 앱으로 안전하게 복사하지 못했습니다.");
@@ -1037,8 +1149,8 @@ public class QFieldActivity extends QtActivity {
         intent.putExtra("QFIELD_APP_DATA_DIRS", appDataDirs.toString());
 
         Intent sourceIntent = getIntent();
-        if (sourceIntent.getAction() == Intent.ACTION_VIEW ||
-            sourceIntent.getAction() == Intent.ACTION_SEND) {
+        if (Intent.ACTION_VIEW.equals(sourceIntent.getAction()) ||
+            Intent.ACTION_SEND.equals(sourceIntent.getAction())) {
             String scheme = sourceIntent.getScheme();
             if (scheme != null && scheme.equals("qfield")) {
                 qfieldIntent = sourceIntent;

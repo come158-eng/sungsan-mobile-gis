@@ -345,6 +345,7 @@ def check_shell_wiring() -> None:
     root = "src/qml/qgismobileapp.qml"
     home = "src/qml/sungsan/SungsanHomeScreen.qml"
     panel = "src/qml/sungsan/SungsanFieldPanel.qml"
+    gallery = "src/qml/editorwidgets/relationeditors/gallery_relation_editor.qml"
     cloud = "src/qml/QFieldCloudScreen.qml"
     branded_surface = "\n".join(
         read(path)
@@ -368,12 +369,57 @@ def check_shell_wiring() -> None:
     require(panel, "visible: root.editMode && root.multiVertexLayer", "line and polygon controls stay hidden for point layers")
     require(panel, 'text: root.pointLayer ? "지점 추가" : "객체 추가"', "point capture has one direct add action")
     require(panel, 'text: root.existingPointSelectionPending ? "지점 선택 취소" : "지점 사진·속성"', "existing point photo and attribute workflow is exposed for point layers")
-    require(panel, 'text: "LandStar 측점 받기"', "LandStar point exchange is exposed in the field panel")
-    require(panel, 'text: "CAD TXT 생성"', "CAD text export is exposed in the field panel")
+    require(
+        panel,
+        'detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "기존 지점의 근경·원경·기타·추가사진"',
+        "existing point workflow advertises categorized and extra photos",
+    )
+    forbid(panel, 'text: "LandStar 측점 받기"', "mobile field panel excludes the manual LandStar file picker")
+    forbid(panel, 'text: "CAD TXT 생성"', "mobile field panel excludes desktop CAD text export")
+    forbid(panel, "property string lastLandStarSyncText", "mobile field panel excludes obsolete LandStar sync state")
+    forbid(panel, "signal landStarSyncRequested", "mobile field panel excludes obsolete manual LandStar signal")
+    forbid(panel, "signal cadTextExportRequested", "mobile field panel excludes obsolete CAD export signal")
+    forbid(root, "function sungsanRequestLandStarSync", "mobile shell excludes the manual LandStar picker function")
+    forbid(root, "function sungsanCreateCadText", "mobile shell excludes the CAD text export function")
+    forbid(root, "onLandStarSyncRequested", "mobile shell excludes the manual LandStar handler")
+    forbid(root, "onCadTextExportRequested", "mobile shell excludes the CAD text export handler")
+    require(root, "function onLandStarFileReceived(path)", "Android LandStar share is received automatically")
+    require(root, "mainWindow.sungsanImportLandStarFile(path)", "received LandStar share enters the native importer")
+    require(root, "property string sungsanPendingLandStarPath", "LandStar share path survives project loading")
+    require_regex(
+        root,
+        r"function\s+onLoadProjectEnded\s*\([^)]*\)\s*\{.*?"
+        r"sungsanPendingLandStarPath\.length\s*>\s*0.*?"
+        r"Qt\.callLater\s*\(\s*function\s*\(\s*\)\s*\{.*?"
+        r"sungsanImportLandStarFile\s*\(\s*mainWindow\.sungsanPendingLandStarPath\s*\)",
+        "pending LandStar share imports automatically after project load",
+    )
     require(panel, 'text: "외부 GNSS 연결"', "generic external GNSS setup is exposed in the field panel")
     require(panel, "CHCNAV 포함 표준 NMEA", "GNSS setup describes model-independent NMEA compatibility")
     require(panel, "Bluetooth/BLE · TCP/UDP", "GNSS setup lists the supported receiver transports")
     require(panel, "visible: root.pointLayer", "existing point attribute action is limited to point layers")
+    require(
+        gallery,
+        'relationId === "sungsan_field_photos"',
+        "categorized photo chooser is limited to the Sungsan field-photo relation",
+    )
+    for photo_type in ("근경", "원경", "기타"):
+        require(
+            gallery,
+            f'text: "{photo_type} 촬영"',
+            f"existing point photo chooser exposes {photo_type}",
+        )
+    require(gallery, 'text: "추가 사진 촬영"', "existing point photo chooser exposes unlimited extra photos")
+    require(
+        gallery,
+        'attributeFormModel.changeAttribute("photo_type", photoType)',
+        "photo type is written before the attachment naming expression is evaluated",
+    )
+    require(
+        gallery,
+        "pendingSungsanPhotoType",
+        "photo type survives the Android or built-in camera round trip",
+    )
     require(
         root,
         "projectLoaded: !welcomeScreen.visible",
@@ -416,6 +462,13 @@ def check_shell_wiring() -> None:
     require(root, "qfieldSettings.currentPanel = 1", "GNSS actions open the positioning settings panel directly")
     require(root, "positionSource.positionInformation.qualityDescription", "NMEA RTK quality is shown on the field panel")
     require(root, "positionSource.positionInformation.satellitesUsed", "GNSS satellites used are shown on the field panel")
+    require(root, "property bool sungsanGnssFresh: false", "stale GNSS state defaults to unsafe")
+    require(root, "ageSeconds <= 5", "field GNSS position expires after five seconds")
+    require(root, "Number.isFinite(positionTimeMs)", "invalid GNSS timestamps stay invalid")
+    require(panel, "이전 위치 사용 금지", "stale GNSS is explicitly rejected in the field status bar")
+    require(panel, "Flickable {", "short screens can scroll the bottom action panel")
+    require(panel, "mainWindow.sceneBottomMargin", "bottom action panel includes the system safe area")
+    require(panel, 'root.vworldReady ? "영상 준비" : "선택 가능"', "disabled VWorld is presented as an option, not a pending forced layer")
     require(root, 'changeMode("digitize")', "survey mode wired")
     require(root, "dashBoard.ensureEditableLayerSelected()", "editable layer selection wired")
     require_regex(
@@ -441,8 +494,8 @@ def check_shell_wiring() -> None:
         root,
         r"onEditExistingPointRequested\s*:\s*\{.*?"
         r"sungsanExistingPointEditPending\s*=\s*true.*?"
-        r"사진과 속성을 입력할 맨홀·LandStar 점",
-        "existing and LandStar point workflow waits for a map selection without creating geometry",
+        r"기존 지점의 근경·원경·기타·추가사진과 속성을 입력하려면 지도에서 지점을 눌러 주세요",
+        "existing point photo workflow waits for a map selection without creating geometry",
     )
     require_regex(
         root,
@@ -656,12 +709,12 @@ def check_android_bridge() -> None:
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APP_VERSION_STR="${APP_VERSION_STR:-1.1.0}"',
+        'APP_VERSION_STR="${APP_VERSION_STR:-1.2.0}"',
         "Sungsan product version name",
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APK_VERSION_CODE="${APK_VERSION_CODE:-10100000}"',
+        'APK_VERSION_CODE="${APK_VERSION_CODE:-10200000}"',
         "monotonically increased Android version code",
     )
     require(
@@ -770,49 +823,43 @@ def check_vworld() -> None:
         PASSES.append("no real-looking VWorld key in production source")
 
 
-def check_mandatory_vworld_plugin_restore() -> None:
+def check_opt_in_vworld_plugin_restore() -> None:
     plugin_manager = "src/core/pluginmanager.cpp"
     require(plugin_manager, '#include "qfield.h"', "plugin manager reads Sungsan build identity")
     require(
         plugin_manager,
         'QStringLiteral( "sungsan_vworld" )',
-        "mandatory plugin uses the exact bundled-directory UUID",
+        "opt-in plugin uses the exact bundled-directory UUID",
     )
     require_regex(
         plugin_manager,
-        r"isMandatorySungsanVWorldPlugin.*?qfield::isSungsanBuild\s*&&\s*"
+        r"isOptInSungsanVWorldPlugin.*?qfield::isSungsanBuild\s*&&\s*"
         r"pluginInformation\.bundled\s*&&\s*pluginInformation\.uuid\s*==\s*"
         r"sungsanVWorldPluginUuid",
-        "mandatory VWorld predicate is limited to Sungsan, bundled and exact UUID",
+        "opt-in VWorld predicate is limited to Sungsan, bundled and exact UUID",
     )
-    require_regex(
+    forbid(
         plugin_manager,
-        r"normalizeMandatorySungsanVWorldSettings.*?setValue\s*\(\s*"
-        r"QStringLiteral\s*\(\s*\"uuid\"\s*\).*?setValue\s*\(\s*"
-        r"QStringLiteral\s*\(\s*\"userEnabled\"\s*\)\s*,\s*true\s*\).*?"
-        r"setValue\s*\(\s*QStringLiteral\s*\(\s*\"permissionGranted\"\s*\)\s*,\s*"
-        r"true\s*\).*?settings\.sync\s*\(\s*\)",
-        "mandatory VWorld settings are normalized and flushed before loading",
+        "normalizeMandatorySungsanVWorldSettings",
+        "legacy forced VWorld enablement",
     )
 
     source = read(plugin_manager)
     restore_start = source.find("void PluginManager::restoreAppPlugins()")
     enable_start = source.find("void PluginManager::enableAppPlugin", restore_start)
     restore_body = source[restore_start:enable_start]
-    forced_restore_pattern = re.compile(
-        r"isMandatorySungsanVWorldPlugin\s*\([^)]*\).*?"
-        r"normalizeMandatorySungsanVWorldSettings\s*\([^)]*\).*?"
-        r"loadPlugin\s*\(",
+    opt_in_restore_pattern = re.compile(
+        r"if\s*\(\s*isOptInSungsanVWorldPlugin\s*\(\s*plugin\s*\)\s*\)\s*"
+        r"\{\s*continue\s*;\s*\}",
         re.DOTALL,
     )
-    forced_restore_count = len(forced_restore_pattern.findall(restore_body))
-    if restore_start < 0 or enable_start < 0 or forced_restore_count != 2:
+    if restore_start < 0 or enable_start < 0 or not opt_in_restore_pattern.search(restore_body):
         FAILURES.append(
-            "src/core/pluginmanager.cpp: mandatory VWorld normalization-before-load "
-            "must cover saved and first-run bundled restore paths exactly twice"
+            "src/core/pluginmanager.cpp: first-run bundled VWorld must remain disabled "
+            "until the user explicitly enables it"
         )
     else:
-        PASSES.append("mandatory VWorld restore covers saved and first-run states")
+        PASSES.append("bundled VWorld is opt-in on first run")
 
     plugin_dir = ROOT / "branding/sungsan/plugins/sungsan_vworld"
     if plugin_dir.name != "sungsan_vworld" or not (plugin_dir / "main.qml.in").is_file():
@@ -824,6 +871,7 @@ def check_mandatory_vworld_plugin_restore() -> None:
 def main() -> int:
     qml_files = [
         "src/qml/qgismobileapp.qml",
+        "src/qml/editorwidgets/relationeditors/gallery_relation_editor.qml",
         "src/qml/sungsan/SungsanActionButton.qml",
         "src/qml/sungsan/SungsanHomeScreen.qml",
         "src/qml/sungsan/SungsanFieldPanel.qml",
@@ -839,7 +887,7 @@ def main() -> int:
     check_save_api()
     check_android_bridge()
     check_vworld()
-    check_mandatory_vworld_plugin_restore()
+    check_opt_in_vworld_plugin_restore()
 
     if FAILURES:
         print(f"FAIL: {len(FAILURES)} issue(s); {len(PASSES)} static checks passed")

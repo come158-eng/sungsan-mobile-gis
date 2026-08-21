@@ -21,8 +21,11 @@ before vcpkg starts. The manual workflow also restores and saves versioned
 vcpkg binary packages so a late application failure does not require rebuilding
 every completed dependency on the next run.
 
-This source is Sungsan Mobile GIS `1.1.0-sungsan-release`
-(`versionCode 10000003`). Beta3 removes SVG rendering and Qt Quick graphical
+This source is Sungsan Mobile GIS `1.2.0-sungsan-release`
+(`versionCode 10200000`). The production field release adds explicit LandStar
+CRS confirmation, source evidence retention, external GNSS freshness checks,
+relation-backed unlimited point photos, and the generic field-project template.
+Beta3 removes SVG rendering and Qt Quick graphical
 effects from the initial Sungsan home and field controls after a Fold7 startup
 failure, while preserving the branded Korean workflow. Beta2 adds the archive, project-read, Qt-thread and
 clean-build safety fixes described below; it must not be published under the

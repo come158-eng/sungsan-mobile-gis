@@ -33,9 +33,9 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
     /**
      * Imports one UTF-8 LandStar CSV/TXT/PXY/KOF file.
      *
-     * A preferred point layer can be supplied. Otherwise the bridge selects
-     * the Sungsan field-object layer and finally falls back to the first
-     * writable point layer. The default no-header order is
+     * A preferred Sungsan field-object layer can be supplied. Otherwise the
+     * bridge requires one unambiguous Sungsan LandStar import target. The
+     * default no-header order is
      * point-name,northing,easting,elevation,code.
      */
     Q_INVOKABLE QVariantMap importLandStarFile( const QString &filePath, QgsProject *project, QgsVectorLayer *preferredLayer = nullptr );
@@ -48,7 +48,7 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
     Q_INVOKABLE QVariantMap exportCadText( QgsVectorLayer *layer, const QString &projectHomePath );
 
   private:
-    QgsVectorLayer *selectTargetLayer( QgsProject *project, QgsVectorLayer *preferredLayer ) const;
+    QgsVectorLayer *selectTargetLayer( QgsProject *project, QgsVectorLayer *preferredLayer, QString *error = nullptr ) const;
 };
 
 #endif // SUNGSANSURVEYBRIDGE_H

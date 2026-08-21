@@ -30,6 +30,8 @@ RelationEditorBase {
   }
 
   property bool isCardView: true
+  readonly property bool isSungsanFieldPhotoRelation: appIsSungsan && relationId === "sungsan_field_photos"
+  property string pendingSungsanPhotoType: ""
   property string imagePrefix: {
     if (qgisProject == undefined)
       return "";
@@ -239,7 +241,10 @@ RelationEditorBase {
             FileUtils.restrictImageSize(imagePrefix + path, maximumWidthHeight);
           }
         }
-        showAddFeaturePopup(undefined, path);
+        showAddFeaturePopup(undefined, path, pendingSungsanPhotoType);
+        pendingSungsanPhotoType = "";
+      } else {
+        pendingSungsanPhotoType = "";
       }
     }
   }
@@ -284,10 +289,11 @@ RelationEditorBase {
     appExpressionContextScopesGenerator: appScopesGenerator
   }
 
-  function capturePhoto() {
+  function capturePhoto(photoType) {
     stopAllMedia();
     Qt.inputMethod.hide();
-    prepareFeature();
+    pendingSungsanPhotoType = isSungsanFieldPhotoRelation && photoType ? photoType : "";
+    prepareFeature(pendingSungsanPhotoType);
     platformUtilities.createDir(qgisProject.homePath, 'DCIM');
     attachmentNamingEvaluator.expressionText = ExternalResourceUtils.getAttachmentNaming(referencingFeatureListModel.relation ? referencingFeatureListModel.relation.referencingLayer : null, referencingFeatureListModel.attachmentFieldName);
     if (platformUtilities.capabilities & PlatformUtilities.NativeCamera && settings.valueBool("nativeCamera2", true)) {
@@ -303,6 +309,7 @@ RelationEditorBase {
   function captureVideo() {
     stopAllMedia();
     Qt.inputMethod.hide();
+    pendingSungsanPhotoType = "";
     prepareFeature();
     platformUtilities.createDir(qgisProject.homePath, 'DCIM');
     attachmentNamingEvaluator.expressionText = ExternalResourceUtils.getAttachmentNaming(referencingFeatureListModel.relation ? referencingFeatureListModel.relation.referencingLayer : null, referencingFeatureListModel.attachmentFieldName);
@@ -319,6 +326,7 @@ RelationEditorBase {
   function captureAudio() {
     stopAllMedia();
     Qt.inputMethod.hide();
+    pendingSungsanPhotoType = "";
     prepareFeature();
     attachmentNamingEvaluator.expressionText = ExternalResourceUtils.getAttachmentNaming(referencingFeatureListModel.relation ? referencingFeatureListModel.relation.referencingLayer : null, referencingFeatureListModel.attachmentFieldName);
     relationAudioRecorderLoader.active = true;
@@ -326,6 +334,7 @@ RelationEditorBase {
 
   headerActions: [
     QfToolButton {
+      id: addMediaButton
       width: 48
       height: 48
       enabled: isEnabled
@@ -357,12 +366,51 @@ RelationEditorBase {
           captureAudio();
           break;
         default:
-          capturePhoto();
+          if (isSungsanFieldPhotoRelation) {
+            const menuPosition = addMediaButton.mapToItem(relationEditor, 0, addMediaButton.height);
+            sungsanPhotoTypeMenu.popup(menuPosition.x, menuPosition.y);
+          } else {
+            capturePhoto();
+          }
           break;
         }
       }
     }
   ]
+
+  QfMenu {
+    id: sungsanPhotoTypeMenu
+    title: "사진 종류 선택"
+    minimumRowWidth: 180
+
+    MenuItem {
+      text: "근경 촬영"
+      height: 48
+      leftPadding: Theme.menuItemLeftPadding
+      onTriggered: relationEditor.capturePhoto("근경")
+    }
+
+    MenuItem {
+      text: "원경 촬영"
+      height: 48
+      leftPadding: Theme.menuItemLeftPadding
+      onTriggered: relationEditor.capturePhoto("원경")
+    }
+
+    MenuItem {
+      text: "기타 촬영"
+      height: 48
+      leftPadding: Theme.menuItemLeftPadding
+      onTriggered: relationEditor.capturePhoto("기타")
+    }
+
+    MenuItem {
+      text: "추가 사진 촬영"
+      height: 48
+      leftPadding: Theme.menuItemLeftPadding
+      onTriggered: relationEditor.capturePhoto("추가")
+    }
+  }
 
   QfSwitch {
     id: viewSwitch
@@ -456,7 +504,7 @@ RelationEditorBase {
     referencingFeatureListModel.sortOrder = referencingFeatureListModel.sortOrder === Qt.AscendingOrder ? Qt.DescendingOrder : Qt.AscendingOrder;
   }
 
-  function prepareFeature() {
+  function prepareFeature(photoType) {
     ensureEmbeddedFormLoaded();
     embeddedPopup.state = 'Add';
     embeddedPopup.currentLayer = relationEditorModel.relation.referencingLayer;
@@ -466,11 +514,14 @@ RelationEditorBase {
       embeddedPopup.linkedRelationOrderingField = relationEditorModel.orderingField;
     }
     embeddedPopup.attributeFormModel.applyParentDefaultValues();
+    if (isSungsanFieldPhotoRelation && photoType) {
+      embeddedPopup.attributeFormModel.changeAttribute("photo_type", photoType);
+    }
     attachmentNamingEvaluator.feature = embeddedPopup.feature;
   }
 
-  function showAddFeaturePopup(geometry, attachmentPath) {
-    prepareFeature();
+  function showAddFeaturePopup(geometry, attachmentPath, photoType) {
+    prepareFeature(photoType);
     if (geometry !== undefined) {
       embeddedPopup.applyGeometry(geometry);
     }
@@ -568,10 +619,14 @@ RelationEditorBase {
               FileUtils.restrictImageSize(imagePrefix + filepath, maximumWidthHeight);
             }
           }
-          showAddFeaturePopup(undefined, filepath);
+          showAddFeaturePopup(undefined, filepath, pendingSungsanPhotoType);
+          pendingSungsanPhotoType = "";
           close();
         }
-        onCanceled: close()
+        onCanceled: {
+          pendingSungsanPhotoType = "";
+          close();
+        }
         onClosed: relationCameraLoader.active = false
       }
     }

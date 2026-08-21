@@ -19,6 +19,7 @@ Page {
 
   signal importProjectRequested
   signal browseProjectsRequested
+  signal createFieldProjectRequested
   signal openRecentProjectRequested(string path, string title, int projectType)
   signal continueSurveyRequested
   signal settingsRequested
@@ -207,6 +208,15 @@ Page {
           detailText: "가져온 프로젝트와 자료 찾기"
           iconSource: Theme.getThemeVectorIcon("ic_folder_open_black_24dp")
           onClicked: root.browseProjectsRequested()
+        }
+
+        SungsanActionButton {
+          Layout.fillWidth: true
+          Layout.columnSpan: root.width >= 520 ? 2 : 1
+          text: "기본 현장 프로젝트 만들기"
+          detailText: "LandStar 측점과 현장 사진을 바로 기록"
+          iconSource: Theme.getThemeVectorIcon("ic_add_white_24dp")
+          onClicked: root.createFieldProjectRequested()
         }
       }
 

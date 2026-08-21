@@ -15,7 +15,7 @@
  ***************************************************************************/
 
 // Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11:
-// always restore the bundled Sungsan VWorld basemap plugin in Sungsan builds.
+// keep the bundled Sungsan VWorld basemap available, but opt-in.
 
 #include "platformutilities.h"
 #include "pluginmanager.h"
@@ -37,22 +37,9 @@ namespace
 {
   const QString sungsanVWorldPluginUuid = QStringLiteral( "sungsan_vworld" );
 
-  bool isMandatorySungsanVWorldPlugin( const PluginInformation &pluginInformation )
+  bool isOptInSungsanVWorldPlugin( const PluginInformation &pluginInformation )
   {
     return qfield::isSungsanBuild && pluginInformation.bundled && pluginInformation.uuid == sungsanVWorldPluginUuid;
-  }
-
-  void normalizeMandatorySungsanVWorldSettings( const PluginInformation &pluginInformation )
-  {
-    QSettings settings;
-    QString pluginKey = pluginInformation.path;
-    pluginKey.replace( QChar( '/' ), QChar( '_' ) );
-    settings.beginGroup( QStringLiteral( "/qfield/plugins/%1" ).arg( pluginKey ) );
-    settings.setValue( QStringLiteral( "uuid" ), pluginInformation.uuid );
-    settings.setValue( QStringLiteral( "userEnabled" ), true );
-    settings.setValue( QStringLiteral( "permissionGranted" ), true );
-    settings.endGroup();
-    settings.sync();
   }
 }
 
@@ -279,12 +266,7 @@ void PluginManager::restoreAppPlugins()
     const QString uuid = settings.value( QStringLiteral( "%1/uuid" ).arg( pluginKey ) ).toString();
     checkedPluginUUids << uuid;
     const PluginInformation pluginInformation = mPluginModel->pluginInformation( uuid );
-    if ( isMandatorySungsanVWorldPlugin( pluginInformation ) )
-    {
-      normalizeMandatorySungsanVWorldSettings( pluginInformation );
-      loadPlugin( pluginInformation.path, pluginInformation.name, true );
-    }
-    else if ( settings.value( QStringLiteral( "%1/userEnabled" ).arg( pluginKey ), false ).toBool() )
+    if ( settings.value( QStringLiteral( "%1/userEnabled" ).arg( pluginKey ), false ).toBool() )
     {
       if ( mPluginModel->hasPluginInformation( uuid ) )
       {
@@ -299,9 +281,11 @@ void PluginManager::restoreAppPlugins()
   {
     if ( plugin.bundled && !checkedPluginUUids.contains( plugin.uuid ) )
     {
-      if ( isMandatorySungsanVWorldPlugin( plugin ) )
+      // VWorld performs a network request and changes the project layer tree.
+      // Ship it with the app, but wait until the user enables it in Plugins.
+      if ( isOptInSungsanVWorldPlugin( plugin ) )
       {
-        normalizeMandatorySungsanVWorldSettings( plugin );
+        continue;
       }
       loadPlugin( plugin.path, plugin.name, true );
     }

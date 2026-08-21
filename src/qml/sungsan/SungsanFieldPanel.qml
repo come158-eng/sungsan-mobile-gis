@@ -18,9 +18,9 @@ Item {
   property bool editMode: false
   property bool autoSaveEnabled: true
   property string lastSavedText: ""
-  property string lastLandStarSyncText: ""
   property bool gpsActive: false
   property bool gpsPositionValid: false
+  property bool gpsSignalStale: false
   property real gpsAccuracy: -1
   property string gpsDeviceName: ""
   property string gpsQualityText: ""
@@ -36,7 +36,7 @@ Item {
   property bool moreExpanded: false
   readonly property real dockHorizontalMargin: 12
   readonly property real actionSpacing: 8
-  readonly property real actionButtonHeight: 70
+  readonly property real actionButtonHeight: 80
   readonly property int actionColumns: width >= 600 ? 4 : (width >= 420 ? 3 : 2)
   readonly property real reservedBottom: workDock.height
   readonly property real reservedTop: fieldHeader.height
@@ -55,8 +55,6 @@ Item {
   signal manualSaveRequested
   signal autoSaveToggled(bool enabled)
   signal exportRequested
-  signal landStarSyncRequested
-  signal cadTextExportRequested
 
   visible: projectLoaded
   enabled: visible
@@ -161,7 +159,7 @@ Item {
           }
           Label {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: root.vworldReady ? "영상 준비" : "확인 중"
+            text: root.vworldReady ? "영상 준비" : "선택 가능"
             color: root.vworldReady ? "#18784a" : "#9a6500"
             font.pixelSize: 9
           }
@@ -175,20 +173,30 @@ Item {
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.bottom: parent.bottom
-    height: dockColumn.implicitHeight + 20 + mainWindow.sceneBottomMargin
+    readonly property real contentHeight: dockColumn.implicitHeight + 20 + mainWindow.sceneBottomMargin
+    height: Math.min(contentHeight, Math.max(0, root.height - fieldHeader.height - 4))
     color: "#f7f9fc"
     radius: 22
     border.color: "#d3dce6"
 
-    ColumnLayout {
-      id: dockColumn
-      anchors.left: parent.left
-      anchors.right: parent.right
-      anchors.top: parent.top
-      anchors.leftMargin: root.dockHorizontalMargin + mainWindow.sceneLeftMargin
-      anchors.rightMargin: root.dockHorizontalMargin + mainWindow.sceneRightMargin
-      anchors.topMargin: 10
-      spacing: root.actionSpacing
+    Flickable {
+      id: dockFlickable
+      anchors.fill: parent
+      clip: true
+      contentWidth: width
+      contentHeight: workDock.contentHeight
+      interactive: contentHeight > height
+      boundsBehavior: Flickable.StopAtBounds
+      ScrollBar.vertical: ScrollBar {
+        policy: dockFlickable.interactive ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff
+      }
+
+      ColumnLayout {
+        id: dockColumn
+        x: root.dockHorizontalMargin + mainWindow.sceneLeftMargin
+        y: 10
+        width: Math.max(0, dockFlickable.width - root.dockHorizontalMargin * 2 - mainWindow.sceneLeftMargin - mainWindow.sceneRightMargin)
+        spacing: root.actionSpacing
 
       RowLayout {
         Layout.fillWidth: true
@@ -198,7 +206,7 @@ Item {
           Layout.preferredWidth: 9
           Layout.preferredHeight: 9
           radius: 5
-          color: root.gpsPositionValid ? "#20a569" : root.gpsActive ? "#e5a11a" : "#a4afb9"
+          color: root.gpsPositionValid ? "#20a569" : root.gpsSignalStale ? "#c74444" : root.gpsActive ? "#e5a11a" : "#a4afb9"
         }
         Label {
           Layout.fillWidth: true
@@ -217,6 +225,8 @@ Item {
                 parts.push("±" + root.gpsAccuracy.toFixed(2) + " m");
               return parts.join(" · ");
             }
+            if (root.gpsSignalStale)
+              return deviceName + " 수신 끊김 · 이전 위치 사용 금지";
             return root.gpsActive ? deviceName + " 위치 수신 중" : "GNSS 꺼짐 · 외부 수신기 연결 가능";
           }
           color: "#516476"
@@ -284,7 +294,7 @@ Item {
         Layout.preferredHeight: root.actionButtonHeight
         text: root.existingPointSelectionPending ? "지점 선택 취소" : "지점 사진·속성"
         compact: true
-        detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "맨홀·LandStar 점의 근경·원경·기타 촬영"
+        detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "기존 지점의 근경·원경·기타·추가사진"
         iconSource: Theme.getThemeVectorIcon(root.existingPointSelectionPending ? "ic_clear_white_24dp" : "ic_create_white_24dp")
         enabled: root.canEditExistingPoint && !root.geometryInProgress
         emphasized: root.existingPointSelectionPending
@@ -344,25 +354,6 @@ Item {
           onClicked: root.exportRequested()
         }
 
-        SungsanActionButton {
-          Layout.fillWidth: true
-          Layout.preferredHeight: root.actionButtonHeight
-          text: "LandStar 측점 받기"
-          compact: true
-          detailText: root.lastLandStarSyncText.length > 0 ? "최근 반영 " + root.lastLandStarSyncText : "LandStar 공유·내보내기 파일 반영"
-          iconSource: Theme.getThemeVectorIcon("ic_bluetooth_receiver_black_24dp")
-          onClicked: root.landStarSyncRequested()
-        }
-
-        SungsanActionButton {
-          Layout.fillWidth: true
-          Layout.preferredHeight: root.actionButtonHeight
-          text: "CAD TXT 생성"
-          compact: true
-          detailText: "측점명,N,E,Z,코드"
-          iconSource: Theme.getThemeVectorIcon("ic_file_black_24dp")
-          onClicked: root.cadTextExportRequested()
-        }
       }
 
       GridLayout {
@@ -414,6 +405,7 @@ Item {
           accentColor: "#a53535"
           onClicked: root.cancelGeometryRequested()
         }
+      }
       }
     }
   }

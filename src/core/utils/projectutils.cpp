@@ -27,11 +27,14 @@
 #include <qgsmaplayer.h>
 #include <qgsprojectdisplaysettings.h>
 #include <qgsrasterlayer.h>
+#include <qgsrelation.h>
 #include <qgsrelationcontext.h>
 #include <qgsvectorfilewriter.h>
 #include <qgsvectorlayer.h>
 #include <qgsvectortilelayer.h>
 #include <qgsvectortileutils.h>
+
+#include <QJsonDocument>
 
 ProjectUtils::ProjectUtils( QObject *parent )
   : QObject( parent )
@@ -130,6 +133,7 @@ QString ProjectUtils::title( QgsProject *project )
 
 QString ProjectUtils::createProject( const QVariantMap &options, const GnssPositionInformation &positionInformation )
 {
+  const bool sungsanFieldTemplate = options.value( QStringLiteral( "sungsan_field_template" ) ).toBool();
   QString projectTitle = options.value( QStringLiteral( "title" ), tr( "Created Project" ) ).toString();
   QString projectFilename = projectTitle.normalized( QString::NormalizationForm_KD );
   projectFilename.replace( QRegularExpression( "[^A-Za-z0-9_]" ), QStringLiteral( "_" ) );
@@ -154,9 +158,288 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
   createdProject->setMetadata( projectMetadata );
 
   // Basic project settings
-  createdProject->setCrs( QgsCoordinateReferenceSystem( "EPSG:3857" ) );
+  const QgsCoordinateReferenceSystem defaultProjectCrs( QStringLiteral( "EPSG:3857" ) );
+  createdProject->setCrs( defaultProjectCrs );
   createdProject->displaySettings()->setCoordinateType( Qgis::CoordinateDisplayType::CustomCrs );
   createdProject->displaySettings()->setCoordinateCustomCrs( QgsCoordinateReferenceSystem( "EPSG:4326" ) );
+
+  if ( sungsanFieldTemplate )
+  {
+    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/fieldPackage" ), QStringLiteral( "kr.co.sungsan.mobilegis.field-package/1" ) );
+    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/template" ), QStringLiteral( "field-landstar" ) );
+    // A newly created generic project cannot know the coordinate system used
+    // by a LandStar job.  Projected N/E imports stay locked until a desktop
+    // field package records an explicit CRS confirmation.
+    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/landstarCrsConfirmed" ), false );
+    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/landstarCrsAuthId" ), defaultProjectCrs.authid() );
+    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/landstarCrsNotice" ), QStringLiteral( "LandStar 좌표계는 현재 프로젝트 좌표계와 일치해야 합니다. 다르면 QGIS에서 확인 후 변환하세요." ) );
+    createdProject->writeEntry( QStringLiteral( "qfieldsync" ), QStringLiteral( "initialMapMode" ), QStringLiteral( "digitize" ) );
+  }
+
+  QgsVectorLayer *sungsanFieldObjectsLayer = nullptr;
+  QgsVectorLayer *sungsanFieldPhotosLayer = nullptr;
+
+  if ( sungsanFieldTemplate )
+  {
+    const QString fieldFilepath = QStringLiteral( "%1/sungsan_field.gpkg" ).arg( createdProjectDir );
+
+    QgsFields objectFields;
+    objectFields.append( QgsField( QStringLiteral( "object_id" ), QMetaType::QString, QString(), 40 ) );
+    objectFields.append( QgsField( QStringLiteral( "name" ), QMetaType::QString, QString(), 100 ) );
+    objectFields.append( QgsField( QStringLiteral( "category" ), QMetaType::QString, QString(), 40 ) );
+    objectFields.append( QgsField( QStringLiteral( "memo" ), QMetaType::QString, QString(), 500 ) );
+    objectFields.append( QgsField( QStringLiteral( "color" ), QMetaType::QString, QString(), 20 ) );
+    objectFields.append( QgsField( QStringLiteral( "created_at" ), QMetaType::QDateTime ) );
+    objectFields.append( QgsField( QStringLiteral( "gps_accuracy_m" ), QMetaType::Double, QString(), 12, 2 ) );
+    objectFields.append( QgsField( QStringLiteral( "landstar_id" ), QMetaType::QString, QString(), 80 ) );
+    objectFields.append( QgsField( QStringLiteral( "landstar_code" ), QMetaType::QString, QString(), 80 ) );
+    objectFields.append( QgsField( QStringLiteral( "northing" ), QMetaType::Double, QString(), 18, 4 ) );
+    objectFields.append( QgsField( QStringLiteral( "easting" ), QMetaType::Double, QString(), 18, 4 ) );
+    objectFields.append( QgsField( QStringLiteral( "elevation" ), QMetaType::Double, QString(), 14, 4 ) );
+    objectFields.append( QgsField( QStringLiteral( "fix_status" ), QMetaType::QString, QString(), 30 ) );
+    objectFields.append( QgsField( QStringLiteral( "surveyed_at" ), QMetaType::QDateTime ) );
+    objectFields.append( QgsField( QStringLiteral( "source_device" ), QMetaType::QString, QString(), 40 ) );
+    // Kept for compatibility with existing packages and the LandStar bridge.
+    // New captures use the relation-backed table below so their count is unlimited.
+    objectFields.append( QgsField( QStringLiteral( "photo_near" ), QMetaType::QString, QString(), 500 ) );
+    objectFields.append( QgsField( QStringLiteral( "photo_far" ), QMetaType::QString, QString(), 500 ) );
+    objectFields.append( QgsField( QStringLiteral( "photo_other" ), QMetaType::QString, QString(), 500 ) );
+
+    QgsVectorFileWriter::SaveVectorOptions objectWriterOptions;
+    objectWriterOptions.driverName = QStringLiteral( "GPKG" );
+    objectWriterOptions.layerName = QStringLiteral( "sungsan_field_objects" );
+    QgsVectorFileWriter *objectWriter = QgsVectorFileWriter::create( fieldFilepath, objectFields, Qgis::WkbType::PointZ, defaultProjectCrs, createdProject->transformContext(), objectWriterOptions );
+    delete objectWriter;
+
+    const QString objectUri = QStringLiteral( "%1|layername=%2" ).arg( fieldFilepath, objectWriterOptions.layerName );
+    sungsanFieldObjectsLayer = new QgsVectorLayer( objectUri, QStringLiteral( "성산_현장객체" ) );
+    if ( !sungsanFieldObjectsLayer->isValid() )
+    {
+      delete sungsanFieldObjectsLayer;
+      delete createdProject;
+      return QString();
+    }
+
+    const QMap<QString, QString> objectAliases = {
+      { QStringLiteral( "object_id" ), QStringLiteral( "객체 ID" ) },
+      { QStringLiteral( "name" ), QStringLiteral( "객체명" ) },
+      { QStringLiteral( "category" ), QStringLiteral( "종류" ) },
+      { QStringLiteral( "memo" ), QStringLiteral( "메모" ) },
+      { QStringLiteral( "color" ), QStringLiteral( "표시 색상" ) },
+      { QStringLiteral( "created_at" ), QStringLiteral( "작성 시간" ) },
+      { QStringLiteral( "gps_accuracy_m" ), QStringLiteral( "GPS 정확도(m)" ) },
+      { QStringLiteral( "landstar_id" ), QStringLiteral( "LandStar 측점명" ) },
+      { QStringLiteral( "landstar_code" ), QStringLiteral( "LandStar 코드" ) },
+      { QStringLiteral( "northing" ), QStringLiteral( "북ing(N)" ) },
+      { QStringLiteral( "easting" ), QStringLiteral( "동ing(E)" ) },
+      { QStringLiteral( "elevation" ), QStringLiteral( "표고(Z)" ) },
+      { QStringLiteral( "fix_status" ), QStringLiteral( "측량 고정상태" ) },
+      { QStringLiteral( "surveyed_at" ), QStringLiteral( "측량 시간" ) },
+      { QStringLiteral( "source_device" ), QStringLiteral( "측량 장비" ) },
+      { QStringLiteral( "photo_near" ), QStringLiteral( "근경 사진" ) },
+      { QStringLiteral( "photo_far" ), QStringLiteral( "원경 사진" ) },
+      { QStringLiteral( "photo_other" ), QStringLiteral( "기타 사진" ) },
+    };
+    for ( auto aliasIterator = objectAliases.constBegin(); aliasIterator != objectAliases.constEnd(); ++aliasIterator )
+    {
+      const int fieldIndex = sungsanFieldObjectsLayer->fields().indexOf( aliasIterator.key() );
+      if ( fieldIndex >= 0 )
+        sungsanFieldObjectsLayer->setFieldAlias( fieldIndex, aliasIterator.value() );
+    }
+
+    const int objectIdIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "object_id" ) );
+    const int createdAtIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "created_at" ) );
+    const int colorIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "color" ) );
+    const int accuracyIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "gps_accuracy_m" ) );
+    const int sourceDeviceIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "source_device" ) );
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( objectIdIndex, QgsDefaultValue( QStringLiteral( "uuid()" ), false ) );
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( createdAtIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( colorIndex, QgsDefaultValue( QStringLiteral( "'#1f5aa6'" ), false ) );
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( accuracyIndex, QgsDefaultValue( QStringLiteral( "@gnss_horizontal_accuracy" ), false ) );
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( sourceDeviceIndex, QgsDefaultValue( QStringLiteral( "'성산 GIS'" ), false ) );
+
+    QVariantMap emptyWidgetOptions;
+    const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ), QStringLiteral( "photo_near" ), QStringLiteral( "photo_far" ), QStringLiteral( "photo_other" ) };
+    for ( const QString &fieldName : hiddenObjectFields )
+    {
+      const int fieldIndex = sungsanFieldObjectsLayer->fields().indexOf( fieldName );
+      if ( fieldIndex >= 0 )
+        sungsanFieldObjectsLayer->setEditorWidgetSetup( fieldIndex, QgsEditorWidgetSetup( QStringLiteral( "Hidden" ), emptyWidgetOptions ) );
+    }
+
+    QVariantMap categoryOptions;
+    categoryOptions.insert( QStringLiteral( "map" ), QVariantList{
+                                                       QVariantMap{ { QStringLiteral( "확인 지점" ), QStringLiteral( "확인" ) } },
+                                                       QVariantMap{ { QStringLiteral( "시설물" ), QStringLiteral( "시설물" ) } },
+                                                       QVariantMap{ { QStringLiteral( "위험·주의" ), QStringLiteral( "위험" ) } },
+                                                       QVariantMap{ { QStringLiteral( "보수 필요" ), QStringLiteral( "보수" ) } },
+                                                       QVariantMap{ { QStringLiteral( "기타" ), QStringLiteral( "기타" ) } } } );
+    sungsanFieldObjectsLayer->setEditorWidgetSetup( sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "category" ) ), QgsEditorWidgetSetup( QStringLiteral( "ValueMap" ), categoryOptions ) );
+
+    QVariantMap colorOptions;
+    colorOptions.insert( QStringLiteral( "map" ), QVariantList{
+                                                    QVariantMap{ { QStringLiteral( "파랑" ), QStringLiteral( "#1f5aa6" ) } },
+                                                    QVariantMap{ { QStringLiteral( "빨강" ), QStringLiteral( "#d83b3b" ) } },
+                                                    QVariantMap{ { QStringLiteral( "주황" ), QStringLiteral( "#e67e22" ) } },
+                                                    QVariantMap{ { QStringLiteral( "노랑" ), QStringLiteral( "#d4ac0d" ) } },
+                                                    QVariantMap{ { QStringLiteral( "초록" ), QStringLiteral( "#239b56" ) } },
+                                                    QVariantMap{ { QStringLiteral( "보라" ), QStringLiteral( "#7d3c98" ) } },
+                                                    QVariantMap{ { QStringLiteral( "검정" ), QStringLiteral( "#2c3e50" ) } } } );
+    sungsanFieldObjectsLayer->setEditorWidgetSetup( colorIndex, QgsEditorWidgetSetup( QStringLiteral( "ValueMap" ), colorOptions ) );
+
+    QVariantMap multilineOptions;
+    multilineOptions.insert( QStringLiteral( "IsMultiline" ), true );
+    multilineOptions.insert( QStringLiteral( "UseHtml" ), false );
+    sungsanFieldObjectsLayer->setEditorWidgetSetup( sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "memo" ) ), QgsEditorWidgetSetup( QStringLiteral( "TextEdit" ), multilineOptions ) );
+
+    QVariantMap dateTimeOptions;
+    dateTimeOptions.insert( QStringLiteral( "field_format" ), QStringLiteral( "yyyy-MM-dd HH:mm:ss" ) );
+    sungsanFieldObjectsLayer->setEditorWidgetSetup( createdAtIndex, QgsEditorWidgetSetup( QStringLiteral( "DateTime" ), dateTimeOptions ) );
+    sungsanFieldObjectsLayer->setEditorWidgetSetup( sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "surveyed_at" ) ), QgsEditorWidgetSetup( QStringLiteral( "DateTime" ), dateTimeOptions ) );
+
+    sungsanFieldObjectsLayer->setDisplayExpression( QStringLiteral( "coalesce(nullif(trim(\"landstar_id\"), ''), nullif(trim(\"name\"), ''), \"category\", '현장 객체')" ) );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/landstarImportTarget" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPackage" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "QFieldSync/cloud_action" ), QStringLiteral( "offline" ) );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "QFieldSync/action" ), QStringLiteral( "offline" ) );
+    LayerUtils::setDefaultRenderer( sungsanFieldObjectsLayer, nullptr, QString(), QStringLiteral( "color" ) );
+
+    QgsFields photoFields;
+    photoFields.append( QgsField( QStringLiteral( "photo_id" ), QMetaType::QString, QString(), 40 ) );
+    photoFields.append( QgsField( QStringLiteral( "object_id" ), QMetaType::QString, QString(), 40 ) );
+    photoFields.append( QgsField( QStringLiteral( "point_name" ), QMetaType::QString, QString(), 100 ) );
+    photoFields.append( QgsField( QStringLiteral( "photo_type" ), QMetaType::QString, QString(), 20 ) );
+    photoFields.append( QgsField( QStringLiteral( "sequence" ), QMetaType::Int ) );
+    photoFields.append( QgsField( QStringLiteral( "media" ), QMetaType::QString, QString(), 500 ) );
+    photoFields.append( QgsField( QStringLiteral( "captured_at" ), QMetaType::QDateTime ) );
+    photoFields.append( QgsField( QStringLiteral( "memo" ), QMetaType::QString, QString(), 500 ) );
+
+    QgsVectorFileWriter::SaveVectorOptions photoWriterOptions;
+    photoWriterOptions.driverName = QStringLiteral( "GPKG" );
+    photoWriterOptions.layerName = QStringLiteral( "sungsan_field_photos" );
+    photoWriterOptions.actionOnExistingFile = QgsVectorFileWriter::CreateOrOverwriteLayer;
+    QgsVectorFileWriter *photoWriter = QgsVectorFileWriter::create( fieldFilepath, photoFields, Qgis::WkbType::NoGeometry, QgsCoordinateReferenceSystem(), createdProject->transformContext(), photoWriterOptions );
+    delete photoWriter;
+
+    const QString photoUri = QStringLiteral( "%1|layername=%2" ).arg( fieldFilepath, photoWriterOptions.layerName );
+    sungsanFieldPhotosLayer = new QgsVectorLayer( photoUri, QStringLiteral( "성산_현장사진" ) );
+    if ( !sungsanFieldPhotosLayer->isValid() )
+    {
+      delete sungsanFieldObjectsLayer;
+      delete sungsanFieldPhotosLayer;
+      delete createdProject;
+      return QString();
+    }
+
+    const QMap<QString, QString> photoAliases = {
+      { QStringLiteral( "photo_id" ), QStringLiteral( "사진 ID" ) },
+      { QStringLiteral( "object_id" ), QStringLiteral( "연결 객체 ID" ) },
+      { QStringLiteral( "point_name" ), QStringLiteral( "LandStar 타점명" ) },
+      { QStringLiteral( "photo_type" ), QStringLiteral( "사진 종류" ) },
+      { QStringLiteral( "sequence" ), QStringLiteral( "사진 순번" ) },
+      { QStringLiteral( "media" ), QStringLiteral( "사진" ) },
+      { QStringLiteral( "captured_at" ), QStringLiteral( "촬영 시간" ) },
+      { QStringLiteral( "memo" ), QStringLiteral( "사진 메모" ) },
+    };
+    for ( auto aliasIterator = photoAliases.constBegin(); aliasIterator != photoAliases.constEnd(); ++aliasIterator )
+    {
+      const int fieldIndex = sungsanFieldPhotosLayer->fields().indexOf( aliasIterator.key() );
+      if ( fieldIndex >= 0 )
+        sungsanFieldPhotosLayer->setFieldAlias( fieldIndex, aliasIterator.value() );
+    }
+
+    const int photoIdIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "photo_id" ) );
+    const int photoObjectIdIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "object_id" ) );
+    const int pointNameIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "point_name" ) );
+    const int photoTypeIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "photo_type" ) );
+    const int sequenceIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "sequence" ) );
+    const int mediaIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "media" ) );
+    const int capturedAtIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "captured_at" ) );
+    const int photoMemoIndex = sungsanFieldPhotosLayer->fields().indexOf( QStringLiteral( "memo" ) );
+    sungsanFieldPhotosLayer->setDefaultValueDefinition( photoIdIndex, QgsDefaultValue( QStringLiteral( "uuid()" ), false ) );
+    sungsanFieldPhotosLayer->setDefaultValueDefinition( photoObjectIdIndex, QgsDefaultValue( QStringLiteral( "attribute(@parent, 'object_id')" ), false ) );
+    sungsanFieldPhotosLayer->setDefaultValueDefinition( pointNameIndex, QgsDefaultValue( QStringLiteral( "coalesce(nullif(trim(attribute(@parent, 'landstar_id')), ''), nullif(trim(attribute(@parent, 'name')), ''), nullif(trim(attribute(@parent, 'object_id')), ''), 'POINT')" ), false ) );
+    sungsanFieldPhotosLayer->setDefaultValueDefinition( photoTypeIndex, QgsDefaultValue( QStringLiteral( "'추가'" ), false ) );
+    sungsanFieldPhotosLayer->setDefaultValueDefinition( sequenceIndex, QgsDefaultValue( QStringLiteral( "coalesce(aggregate('성산_현장사진', 'max', \"sequence\", \"object_id\" = attribute(@parent, 'object_id')), 0) + 1" ), false ) );
+    sungsanFieldPhotosLayer->setDefaultValueDefinition( capturedAtIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
+
+    for ( const QString &fieldName : { QStringLiteral( "fid" ), QStringLiteral( "photo_id" ), QStringLiteral( "object_id" ) } )
+    {
+      const int fieldIndex = sungsanFieldPhotosLayer->fields().indexOf( fieldName );
+      if ( fieldIndex >= 0 )
+        sungsanFieldPhotosLayer->setEditorWidgetSetup( fieldIndex, QgsEditorWidgetSetup( QStringLiteral( "Hidden" ), emptyWidgetOptions ) );
+    }
+
+    QVariantMap photoTypeOptions;
+    photoTypeOptions.insert( QStringLiteral( "map" ), QVariantList{
+                                                        QVariantMap{ { QStringLiteral( "근경" ), QStringLiteral( "근경" ) } },
+                                                        QVariantMap{ { QStringLiteral( "원경" ), QStringLiteral( "원경" ) } },
+                                                        QVariantMap{ { QStringLiteral( "기타" ), QStringLiteral( "기타" ) } },
+                                                        QVariantMap{ { QStringLiteral( "추가" ), QStringLiteral( "추가" ) } } } );
+    sungsanFieldPhotosLayer->setEditorWidgetSetup( photoTypeIndex, QgsEditorWidgetSetup( QStringLiteral( "ValueMap" ), photoTypeOptions ) );
+
+    QVariantMap mediaOptions;
+    mediaOptions.insert( QStringLiteral( "DocumentViewer" ), 1 );
+    mediaOptions.insert( QStringLiteral( "FileWidget" ), true );
+    mediaOptions.insert( QStringLiteral( "FileWidgetButton" ), true );
+    mediaOptions.insert( QStringLiteral( "RelativeStorage" ), 1 );
+    mediaOptions.insert( QStringLiteral( "StorageMode" ), 0 );
+    mediaOptions.insert( QStringLiteral( "UseLink" ), false );
+    sungsanFieldPhotosLayer->setEditorWidgetSetup( mediaIndex, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), mediaOptions ) );
+    sungsanFieldPhotosLayer->setEditorWidgetSetup( capturedAtIndex, QgsEditorWidgetSetup( QStringLiteral( "DateTime" ), dateTimeOptions ) );
+    sungsanFieldPhotosLayer->setEditorWidgetSetup( photoMemoIndex, QgsEditorWidgetSetup( QStringLiteral( "TextEdit" ), multilineOptions ) );
+    sungsanFieldPhotosLayer->setDisplayExpression( QStringLiteral( "coalesce(\"point_name\", 'POINT') || ' · ' || coalesce(\"photo_type\", '추가') || ' #' || coalesce(\"sequence\", 1)" ) );
+    sungsanFieldPhotosLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotos" ), true );
+    sungsanFieldPhotosLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPackage" ), true );
+    sungsanFieldPhotosLayer->setCustomProperty( QStringLiteral( "QFieldSync/cloud_action" ), QStringLiteral( "offline" ) );
+    sungsanFieldPhotosLayer->setCustomProperty( QStringLiteral( "QFieldSync/action" ), QStringLiteral( "offline" ) );
+
+    const QString attachmentNamingExpression = QStringLiteral(
+      "with_variable('point_name_safe', "
+      "regexp_replace(coalesce(nullif(trim(\"point_name\"), ''), 'POINT'), '[^0-9A-Za-z가-힣._-]+', '_'), "
+      "with_variable('photo_type_sanitized', "
+      "regexp_replace(coalesce(nullif(trim(\"photo_type\"), ''), '추가'), '[^0-9A-Za-z가-힣._-]+', '_'), "
+      "with_variable('photo_type_safe', "
+      "CASE WHEN @photo_type_sanitized IN ('근경', '원경', '기타', '추가') "
+      "THEN @photo_type_sanitized ELSE '추가' END, "
+      "'photos/' || @photo_type_safe || '/' || "
+      "@point_name_safe || '_' || @photo_type_safe || '_' || "
+      "lpad(to_string(coalesce(\"sequence\", 1)), 3, '0') || '_' || "
+      "left(replace(coalesce(nullif(trim(\"photo_id\"), ''), uuid()), '-', ''), 8) || '.{extension}')))" );
+    QVariantMap attachmentNaming;
+    attachmentNaming.insert( QStringLiteral( "media" ), attachmentNamingExpression );
+    sungsanFieldPhotosLayer->setCustomProperty( QStringLiteral( "QFieldSync/attachment_naming" ), QString::fromUtf8( QJsonDocument::fromVariant( attachmentNaming ).toJson( QJsonDocument::Compact ) ) );
+    sungsanFieldPhotosLayer->setFlags( sungsanFieldPhotosLayer->flags() | QgsMapLayer::Private );
+
+    QgsEditFormConfig objectFormConfig = sungsanFieldObjectsLayer->editFormConfig();
+    objectFormConfig.clearTabs();
+    objectFormConfig.setLayout( Qgis::AttributeFormLayout::DragAndDrop );
+    QgsAttributeEditorContainer *objectFormRoot = objectFormConfig.invisibleRootContainer();
+    const QStringList orderedObjectFields = {
+      QStringLiteral( "name" ), QStringLiteral( "landstar_id" ), QStringLiteral( "landstar_code" ),
+      QStringLiteral( "category" ), QStringLiteral( "memo" ), QStringLiteral( "color" ),
+      QStringLiteral( "northing" ), QStringLiteral( "easting" ), QStringLiteral( "elevation" ),
+      QStringLiteral( "fix_status" ), QStringLiteral( "gps_accuracy_m" ), QStringLiteral( "surveyed_at" ),
+      QStringLiteral( "source_device" ), QStringLiteral( "created_at" ) };
+    for ( const QString &fieldName : orderedObjectFields )
+    {
+      const int fieldIndex = sungsanFieldObjectsLayer->fields().indexOf( fieldName );
+      if ( fieldIndex >= 0 )
+        objectFormRoot->addChildElement( new QgsAttributeEditorField( fieldName, fieldIndex, objectFormRoot ) );
+    }
+    QgsAttributeEditorRelation *photoRelationElement = new QgsAttributeEditorRelation( QStringLiteral( "sungsan_field_photos" ), objectFormRoot );
+    photoRelationElement->setLabel( QStringLiteral( "현장 사진 · 근경/원경/기타/추가" ) );
+    objectFormRoot->addChildElement( photoRelationElement );
+    sungsanFieldObjectsLayer->setEditFormConfig( objectFormConfig );
+
+    QDir( createdProjectDir ).mkpath( QStringLiteral( "photos/근경" ) );
+    QDir( createdProjectDir ).mkpath( QStringLiteral( "photos/원경" ) );
+    QDir( createdProjectDir ).mkpath( QStringLiteral( "photos/기타" ) );
+    QDir( createdProjectDir ).mkpath( QStringLiteral( "photos/추가" ) );
+
+    createdProjectLayers << sungsanFieldObjectsLayer << sungsanFieldPhotosLayer;
+  }
 
   // Notes-related layers
   QgsVectorLayer *notesPointLayer = nullptr;
@@ -575,12 +858,34 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
   }
 
   // Insure attachment directories are populated in preparation for cloud project
-  createdProject->writeEntry( QStringLiteral( "qfieldsync" ), QStringLiteral( "attachmentDirs" ), QStringList() << "DCIM"
-                                                                                                                << "audio"
-                                                                                                                << "video"
-                                                                                                                << "files" );
+  QStringList attachmentDirectories = QStringList() << "DCIM"
+                                                    << "audio"
+                                                    << "video"
+                                                    << "files";
+  if ( sungsanFieldTemplate )
+    attachmentDirectories << "photos";
+  createdProject->writeEntry( QStringLiteral( "qfieldsync" ), QStringLiteral( "attachmentDirs" ), attachmentDirectories );
 
   createdProject->addMapLayers( createdProjectLayers );
+
+  if ( sungsanFieldObjectsLayer && sungsanFieldPhotosLayer )
+  {
+    QgsRelation photoRelation { QgsRelationContext( createdProject ) };
+    photoRelation.setId( QStringLiteral( "sungsan_field_photos" ) );
+    photoRelation.setName( QStringLiteral( "현장 사진" ) );
+    photoRelation.setReferencedLayer( sungsanFieldObjectsLayer->id() );
+    photoRelation.setReferencingLayer( sungsanFieldPhotosLayer->id() );
+    photoRelation.addFieldPair( QStringLiteral( "object_id" ), QStringLiteral( "object_id" ) );
+    photoRelation.setStrength( Qgis::RelationshipStrength::Composition );
+    photoRelation.updateRelationStatus();
+    if ( !photoRelation.isValid() )
+    {
+      createdProject->clear();
+      delete createdProject;
+      return QString();
+    }
+    createdProject->relationManager()->addRelation( photoRelation );
+  }
 
   // Register the notes
   if ( notesPointLayer && attachmentsLayer )

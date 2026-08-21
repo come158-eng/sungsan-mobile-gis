@@ -60,11 +60,17 @@ ApplicationWindow {
   property double sceneLeftMargin: SafeArea.margins.left
   property double sceneRightMargin: SafeArea.margins.right
   property bool sungsanVWorldReady: false
+  // A position can remain in PositioningSource after an external receiver is
+  // disconnected.  Keep a stricter, Sungsan-only freshness flag for field
+  // controls without changing QField's upstream 30-second currentness rule.
+  property bool sungsanGnssFresh: false
   property string sungsanLastSavedText: ""
   property bool sungsanExistingPointEditPending: false
   property string sungsanPendingLandStarPath: ""
-  property string sungsanLastLandStarSyncText: ""
-  property string sungsanLastCadTextPath: ""
+
+  onSungsanPendingLandStarPathChanged: {
+    mainWindowSettings.sungsanPendingLandStarPath = sungsanPendingLandStarPath;
+  }
 
   onSceneLoadedChanged: {
     // This requires the scene to be fully loaded not to crash due to possibility of
@@ -83,8 +89,12 @@ ApplicationWindow {
     property real height: 300
 
     property string screenConfiguration: ''
+    property string sungsanPendingLandStarPath: ''
 
     Component.onCompleted: {
+      if (sungsanPendingLandStarPath.length > 0) {
+        mainWindow.sungsanPendingLandStarPath = sungsanPendingLandStarPath;
+      }
       if (Qt.platform.os !== "ios" && Qt.platform.os !== "android") {
         let currentScreensConfiguration = `${Qt.application.screens.length}`;
         for (let screen of Qt.application.screens) {
@@ -514,17 +524,31 @@ ApplicationWindow {
 
     property bool geocoderLocatorFiltersChecked: false
 
-    interval: 2500
+    interval: 1000
     repeat: true
     running: positionSource.active
     triggeredOnStart: true
     onTriggered: {
       if (positionSource.positionInformation) {
         positionSource.currentness = ((Date.now() - positionSource.positionInformation.utcDateTime.getTime()) / 1000) < 30;
+        const positionTime = positionSource.positionInformation.utcDateTime;
+        const positionTimeMs = positionTime && positionTime.getTime ? positionTime.getTime() : NaN;
+        const ageSeconds = (Date.now() - positionTimeMs) / 1000;
+        // Allow one second of harmless clock skew, but never treat an invalid,
+        // future-dated or older cached fix as a live field position.
+        mainWindow.sungsanGnssFresh = positionSource.active
+          && positionSource.positionInformation.latitudeValid
+          && positionSource.positionInformation.longitudeValid
+          && Number.isFinite(positionTimeMs)
+          && ageSeconds >= -1
+          && ageSeconds <= 5;
         if (!geocoderLocatorFiltersChecked && positionSource.valid) {
           locatorItem.locatorFiltersModel.setGeocoderLocatorFiltersDefaulByPosition(positionSource.positionInformation);
           geocoderLocatorFiltersChecked = true;
         }
+      }
+      else {
+        mainWindow.sungsanGnssFresh = false;
       }
       if (positionSource.ntripState === Positioning.NtripState.Connected) {
         positionSource.ntripCurrentness = ((Date.now() - positionSource.ntripLastBytesReceivedUtcDateTime.getTime()) / 1000) < 10;
@@ -3711,6 +3735,8 @@ ApplicationWindow {
     if (!positionSource.active) {
       positionSource.jumpToPosition = true;
       positioningSettings.positioningActivated = true;
+    } else if (!mainWindow.sungsanGnssFresh) {
+      displayToast("GNSS 수신이 5초 이상 끊겼습니다. 연결과 FIX 상태를 확인해 주세요.", "warning");
     } else if (positionSource.projectedPosition.x) {
       gnssButton.jumpToLocation();
     } else {
@@ -3777,7 +3803,7 @@ ApplicationWindow {
     }
     if (!qgisProject || !qgisProject.fileName) {
       sungsanPendingLandStarPath = filePath;
-      displayToast("측점 파일을 보관했습니다. 먼저 현장 프로젝트를 연 뒤 LandStar 연결을 눌러 주세요.", "warning");
+      displayToast("측점 파일을 보관했습니다. 현장 프로젝트를 열면 자동으로 반영됩니다.", "warning");
       return;
     }
     const preferredLayer = dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point ? dashBoard.activeLayer : null;
@@ -3788,40 +3814,24 @@ ApplicationWindow {
       return;
     }
     sungsanPendingLandStarPath = "";
-    sungsanLastLandStarSyncText = new Date().toLocaleTimeString(Qt.locale(), "hh:mm");
-    displayToast("LandStar 측점을 반영했습니다. 추가 " + result.added + "개 · 갱신 " + result.updated + "개 · 제외 " + result.skipped + "개");
+    const syncTime = new Date().toLocaleTimeString(Qt.locale(), "hh:mm");
+    displayToast("LandStar 측점을 반영했습니다. 추가 " + result.added + "개 · 갱신 " + result.updated + "개 · 제외 " + result.skipped + "개 · " + result.sourceCrs + " → " + result.targetCrs);
+    if (result.unverifiedQuality > 0 || result.rejectedQuality > 0 || result.unverifiedAccuracy > 0) {
+      let qualityText = "";
+      if (result.unverifiedQuality > 0) {
+        qualityText += "FIX 미확인 " + result.unverifiedQuality + "개";
+      }
+      if (result.rejectedQuality > 0) {
+        qualityText += (qualityText.length > 0 ? " · " : "") + "비-FIX 제외 " + result.rejectedQuality + "개";
+      }
+      if (result.unverifiedAccuracy > 0) {
+        qualityText += (qualityText.length > 0 ? " · " : "") + "수평정확도 미기록 " + result.unverifiedAccuracy + "개";
+      }
+      displayToast(qualityText + "입니다. 원본은 " + result.auditPath + "에 보관했습니다. LandStar 기록과 대조해 주세요.", "warning");
+    }
     if (iface.saveProject()) {
-      sungsanLastSavedText = sungsanLastLandStarSyncText;
+      sungsanLastSavedText = syncTime;
     }
-  }
-
-  function sungsanRequestLandStarSync() {
-    if (!qgisProject || !qgisProject.fileName) {
-      displayToast("먼저 현장 프로젝트를 열어 주세요.", "warning");
-      return;
-    }
-    if (sungsanPendingLandStarPath.length > 0) {
-      sungsanImportLandStarFile(sungsanPendingLandStarPath);
-      return;
-    }
-    platformUtilities.importLandStarPoints();
-  }
-
-  function sungsanCreateCadText() {
-    if (!dashBoard.activeLayer || dashBoard.activeLayer.geometryType() !== Qgis.GeometryType.Point) {
-      displayToast("CAD TXT를 만들 점 레이어를 먼저 선택해 주세요.", "warning");
-      return;
-    }
-    if (!sungsanSaveCurrentWork(false)) {
-      return;
-    }
-    const result = sungsanSurveyBridge.exportCadText(dashBoard.activeLayer, qgisProject.homePath);
-    if (!result || !result.ok) {
-      displayToast(result && result.error ? result.error : "CAD TXT를 만들지 못했습니다.", "error");
-      return;
-    }
-    sungsanLastCadTextPath = result.path;
-    displayToast("CAD용 TXT " + result.count + "점을 만들었습니다. 결과 ZIP의 CAD_TXT 폴더에 포함됩니다.");
   }
 
   SungsanSurveyBridge {
@@ -5214,6 +5224,11 @@ ApplicationWindow {
       }
 
       mainWindow.sungsanLastSavedText = "";
+      if (mainWindow.sungsanPendingLandStarPath.length > 0) {
+        Qt.callLater(function() {
+          mainWindow.sungsanImportLandStarFile(mainWindow.sungsanPendingLandStarPath);
+        });
+      }
       Qt.callLater(mainWindow.sungsanRefreshVWorldStatus);
     }
 
@@ -5503,9 +5518,9 @@ ApplicationWindow {
     editMode: stateMachine.state === "digitize"
     autoSaveEnabled: qfieldSettings.autoSave
     lastSavedText: mainWindow.sungsanLastSavedText
-    lastLandStarSyncText: mainWindow.sungsanLastLandStarSyncText
     gpsActive: positionSource.active
-    gpsPositionValid: positionSource.positionInformation && positionSource.positionInformation.latitudeValid
+    gpsPositionValid: positionSource.active && mainWindow.sungsanGnssFresh && positionSource.positionInformation && positionSource.positionInformation.latitudeValid && positionSource.positionInformation.longitudeValid
+    gpsSignalStale: positionSource.active && positionSource.positionInformation && positionSource.positionInformation.latitudeValid && !mainWindow.sungsanGnssFresh
     gpsAccuracy: positionSource.positionInformation && positionSource.positionInformation.haccValid ? positionSource.positionInformation.hacc : -1
     gpsDeviceName: positioningSettings.positioningDeviceName
     gpsQualityText: positionSource.positionInformation ? positionSource.positionInformation.qualityDescription : ""
@@ -5542,6 +5557,10 @@ ApplicationWindow {
     }
 
     onAddFeatureRequested: {
+      if (positionSource.active && coordinateLocator.positionLocked && !mainWindow.sungsanGnssFresh) {
+        displayToast("GNSS 수신이 끊겨 이전 좌표가 남아 있습니다. FIX가 다시 들어온 뒤 지점을 추가해 주세요.", "warning");
+        return;
+      }
       mainWindow.sungsanStartSurvey();
       // A point is complete as soon as its one coordinate is captured.  Let
       // QField confirm it immediately so the attribute form opens without a
@@ -5581,11 +5600,15 @@ ApplicationWindow {
       if (stateMachine.state === "digitize") {
         featureListForm.editExistingAfterSelection = false;
         mainWindow.sungsanExistingPointEditPending = true;
-        displayToast("사진과 속성을 입력할 맨홀·LandStar 점을 지도에서 눌러 주세요.");
+        displayToast("기존 지점의 근경·원경·기타·추가사진과 속성을 입력하려면 지도에서 지점을 눌러 주세요.");
       }
     }
 
     onAddVertexRequested: {
+      if (positionSource.active && coordinateLocator.positionLocked && !mainWindow.sungsanGnssFresh) {
+        displayToast("GNSS 수신이 끊겨 이전 좌표가 남아 있습니다. FIX가 다시 들어온 뒤 꼭짓점을 추가해 주세요.", "warning");
+        return;
+      }
       if (stateMachine.state !== "digitize") {
         mainWindow.sungsanStartSurvey();
       }
@@ -5620,8 +5643,6 @@ ApplicationWindow {
     }
 
     onExportRequested: mainWindow.sungsanExportCurrentProject()
-    onLandStarSyncRequested: mainWindow.sungsanRequestLandStarSync()
-    onCadTextExportRequested: mainWindow.sungsanCreateCadText()
   }
 
   SungsanHomeScreen {
@@ -5651,6 +5672,20 @@ ApplicationWindow {
       qfieldLocalDataPickerScreen.projectFolderView = false;
       qfieldLocalDataPickerScreen.model.resetToRoot();
       qfieldLocalDataPickerScreen.visible = true;
+    }
+
+    onCreateFieldProjectRequested: {
+      const projectTitle = "성산 기본 현장";
+      const projectFilePath = ProjectUtils.createProject({
+        "title": projectTitle,
+        "basemap": "blank",
+        "sungsan_field_template": true
+      }, positionSource.positionInformation);
+      if (!projectFilePath || projectFilePath.length === 0) {
+        displayToast("기본 현장 프로젝트를 만들지 못했습니다.", "error");
+        return;
+      }
+      iface.loadFile(projectFilePath, projectTitle);
     }
 
     onOpenRecentProjectRequested: (path, title, projectType) => {

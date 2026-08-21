@@ -92,6 +92,8 @@ class ProjectUtils : public QObject
      * - camera_capture: set to TRUE to add an image/video capture field to the notes layer
      * - tracks: set to TRUE to add a tracks layer
      * - track_on_launch: set to TRUE to start tracking position on project launch
+     * - sungsan_field_template: set to TRUE to add the Sungsan LandStar point
+     *   layer and its unlimited, relation-backed field photo table
      */
     Q_INVOKABLE static QString createProject( const QVariantMap &options, const GnssPositionInformation &positionInformation = GnssPositionInformation() );
 };
