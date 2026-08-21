@@ -370,6 +370,9 @@ def check_shell_wiring() -> None:
     require(panel, 'text: root.existingPointSelectionPending ? "지점 선택 취소" : "지점 사진·속성"', "existing point photo and attribute workflow is exposed for point layers")
     require(panel, 'text: "LandStar 측점 받기"', "LandStar point exchange is exposed in the field panel")
     require(panel, 'text: "CAD TXT 생성"', "CAD text export is exposed in the field panel")
+    require(panel, 'text: "외부 GNSS 연결"', "generic external GNSS setup is exposed in the field panel")
+    require(panel, "CHCNAV 포함 표준 NMEA", "GNSS setup describes model-independent NMEA compatibility")
+    require(panel, "Bluetooth/BLE · TCP/UDP", "GNSS setup lists the supported receiver transports")
     require(panel, "visible: root.pointLayer", "existing point attribute action is limited to point layers")
     require(
         root,
@@ -409,6 +412,10 @@ def check_shell_wiring() -> None:
     require(root, "qfieldSettings.autoSave", "feature auto-save setting wired")
     require(root, "positioningSettings.positioningActivated", "GNSS activation wired")
     require(root, "gnssButton.jumpToLocation()", "current-location jump wired")
+    require(root, "onGnssSettingsRequested", "field GNSS action is wired to settings")
+    require(root, "qfieldSettings.currentPanel = 1", "GNSS actions open the positioning settings panel directly")
+    require(root, "positionSource.positionInformation.qualityDescription", "NMEA RTK quality is shown on the field panel")
+    require(root, "positionSource.positionInformation.satellitesUsed", "GNSS satellites used are shown on the field panel")
     require(root, 'changeMode("digitize")', "survey mode wired")
     require(root, "dashBoard.ensureEditableLayerSelected()", "editable layer selection wired")
     require_regex(
