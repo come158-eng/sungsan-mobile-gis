@@ -3809,7 +3809,13 @@ ApplicationWindow {
     const preferredLayer = dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point ? dashBoard.activeLayer : null;
     const result = sungsanSurveyBridge.importLandStarFile(filePath, qgisProject, preferredLayer);
     if (!result || !result.ok) {
-      sungsanPendingLandStarPath = filePath;
+      // The pending slot exists only to bridge a cold-start share until a
+      // project is open.  Once an import was attempted, clear it even on
+      // failure so a malformed file or a CRS mismatch does not raise the same
+      // warning every time the project is opened.  After correcting the
+      // project/file, the operator can explicitly share it again from
+      // LandStar.
+      sungsanPendingLandStarPath = "";
       displayToast(result && result.error ? result.error : "LandStar 측점을 반영하지 못했습니다.", "error");
       return;
     }
