@@ -154,7 +154,7 @@ SungsanSurveyBridge::SungsanSurveyBridge( QObject *parent )
 QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, QgsVectorLayer *preferredLayer ) const
 {
   const auto usable = []( QgsVectorLayer *layer ) {
-    return layer && layer->isValid() && QgsWkbTypes::geometryType( layer->wkbType() ) == Qgis::GeometryType::Point && !layer->isReadOnly();
+    return layer && layer->isValid() && QgsWkbTypes::geometryType( layer->wkbType() ) == Qgis::GeometryType::Point && layer->supportsEditing();
   };
 
   if ( usable( preferredLayer ) )
@@ -372,7 +372,8 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
     if ( idField >= 0 && !key.isEmpty() && existingIt != existingByName.constEnd() )
     {
       const QgsFeatureId featureId = existingIt.value();
-      if ( !layer->changeGeometry( featureId, feature.geometry() ) )
+      QgsGeometry updatedGeometry = feature.geometry();
+      if ( !layer->changeGeometry( featureId, updatedGeometry ) )
       {
         ++skipped;
         continue;
