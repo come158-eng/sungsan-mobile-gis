@@ -22,6 +22,9 @@ Item {
   property bool gpsActive: false
   property bool gpsPositionValid: false
   property real gpsAccuracy: -1
+  property string gpsDeviceName: ""
+  property string gpsQualityText: ""
+  property int gpsSatellites: 0
   property bool vworldReady: false
   property bool canAddFeature: false
   property bool canEditExistingPoint: false
@@ -41,6 +44,7 @@ Item {
   signal homeRequested
   signal startSurveyRequested
   signal currentLocationRequested
+  signal gnssSettingsRequested
   signal layersRequested
   signal addFeatureRequested
   signal editExistingPointRequested
@@ -199,12 +203,25 @@ Item {
         Label {
           Layout.fillWidth: true
           text: {
-            if (root.gpsPositionValid)
-              return root.gpsAccuracy >= 0 ? "GPS 연결 · 정확도 ±%1 m".arg(root.gpsAccuracy.toFixed(1)) : "GPS 연결";
-            return root.gpsActive ? "GPS 위치 수신 중" : "GPS 꺼짐";
+            const configuredName = root.gpsDeviceName.trim();
+            const deviceName = configuredName.length === 0 || configuredName === "Internal device"
+              ? "휴대폰 GNSS"
+              : configuredName;
+            if (root.gpsPositionValid) {
+              const parts = [deviceName];
+              if (root.gpsQualityText.length > 0)
+                parts.push(root.gpsQualityText);
+              if (root.gpsSatellites > 0)
+                parts.push("위성 " + root.gpsSatellites);
+              if (root.gpsAccuracy >= 0)
+                parts.push("±" + root.gpsAccuracy.toFixed(2) + " m");
+              return parts.join(" · ");
+            }
+            return root.gpsActive ? deviceName + " 위치 수신 중" : "GNSS 꺼짐 · 외부 수신기 연결 가능";
           }
           color: "#516476"
           font.pixelSize: 11
+          elide: Text.ElideRight
         }
         Label {
           text: root.autoSaveEnabled ? (root.lastSavedText.length > 0 ? "● 자동저장 · " + root.lastSavedText : "● 자동저장 켜짐") : "○ 자동저장 꺼짐"
@@ -296,6 +313,17 @@ Item {
         columns: Math.min(2, root.actionColumns)
         columnSpacing: root.actionSpacing
         rowSpacing: root.actionSpacing
+
+        SungsanActionButton {
+          Layout.fillWidth: true
+          Layout.columnSpan: 2
+          Layout.preferredHeight: root.actionButtonHeight
+          text: "외부 GNSS 연결"
+          compact: true
+          detailText: "CHCNAV 포함 표준 NMEA · Bluetooth/BLE · TCP/UDP"
+          iconSource: Theme.getThemeVectorIcon("ic_bluetooth_receiver_black_24dp")
+          onClicked: root.gnssSettingsRequested()
+        }
 
         SungsanActionButton {
           Layout.fillWidth: true
