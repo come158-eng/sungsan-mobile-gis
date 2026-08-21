@@ -148,6 +148,7 @@
 #include "sensorlistmodel.h"
 #include "snappingresult.h"
 #include "snappingutils.h"
+#include "sungsansurveybridge.h"
 #include "stringutils.h"
 #include "submodel.h"
 #include "theme.h"
@@ -561,6 +562,7 @@ void QgisMobileapp::initDeclarative( QQmlEngine *engine )
   qmlRegisterType<FeatureCheckListModel>( "org.qfield", 1, 0, "FeatureCheckListModel" );
   qmlRegisterType<GeometryEditorsModel>( "org.qfield", 1, 0, "GeometryEditorsModel" );
   qmlRegisterType<ExpressionEvaluator>( "org.qfield", 1, 0, "ExpressionEvaluator" );
+  qmlRegisterType<SungsanSurveyBridge>( "org.qfield", 1, 0, "SungsanSurveyBridge" );
 #ifdef WITH_BLUETOOTH
   qmlRegisterType<BluetoothDeviceModel>( "org.qfield", 1, 0, "BluetoothDeviceModel" );
   qmlRegisterType<BluetoothReceiver>( "org.qfield", 1, 0, "BluetoothReceiver" );

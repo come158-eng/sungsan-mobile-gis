@@ -142,6 +142,7 @@ set(QFIELD_CORE_SRCS
     sensorlistmodel.cpp
     settings.cpp
     snappingresult.cpp
+    sungsansurveybridge.cpp
     submodel.cpp
     theme.cpp
     tracker.cpp
@@ -296,6 +297,7 @@ set(QFIELD_CORE_HDRS
     sensorlistmodel.h
     settings.h
     snappingresult.h
+    sungsansurveybridge.h
     submodel.h
     theme.h
     tracker.h
