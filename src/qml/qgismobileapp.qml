@@ -61,6 +61,7 @@ ApplicationWindow {
   property double sceneRightMargin: SafeArea.margins.right
   property bool sungsanVWorldReady: false
   property string sungsanLastSavedText: ""
+  property bool sungsanExistingPointEditPending: false
 
   onSceneLoadedChanged: {
     // This requires the scene to be fully loaded not to crash due to possibility of
@@ -877,6 +878,12 @@ ApplicationWindow {
           return;
         }
 
+        if (mainWindow.sungsanExistingPointEditPending) {
+          identifyTool.isMenuRequest = false;
+          identifyTool.identify(point);
+          return;
+        }
+
         if (type === "stylus") {
           if (pointHandler.pointInItem(point, digitizingToolbar) || pointHandler.pointInItem(point, zoomToolbar) || pointHandler.pointInItem(point, mainToolbar) || pointHandler.pointInItem(point, mainMenuBar) || pointHandler.pointInItem(point, geometryEditorsToolbar) || pointHandler.pointInItem(point, locationToolbar) || pointHandler.pointInItem(point, digitizingToolbarContainer) || pointHandler.pointInItem(point, locatorItem)) {
             return;
@@ -926,6 +933,11 @@ ApplicationWindow {
           if (!positionLocked) {
             geometryEditorsToolbar.canvasClicked(point, '');
           }
+          return;
+        }
+        if (mainWindow.sungsanExistingPointEditPending) {
+          identifyTool.isMenuRequest = false;
+          identifyTool.identify(point);
           return;
         }
         if (qfieldSettings.fingerTapDigitizing && ((stateMachine.state === "digitize" && digitizingFeature.currentLayer && digitizingToolbar.digitizingAllowed) || stateMachine.state === "measure")) {
@@ -1054,6 +1066,40 @@ ApplicationWindow {
         } else if (isMenuRequest) {
           canvasMenuFeatureListInstantiator.active = true;
         } else {
+          if (mainWindow.sungsanExistingPointEditPending) {
+            const activeLayer = dashBoard.activeLayer;
+            const featureIds = [];
+            if (activeLayer) {
+              for (let i = 0; i < featureListForm.model.count; ++i) {
+                const resultIndex = featureListForm.model.index(i, 0);
+                const resultLayer = featureListForm.model.data(resultIndex, MultiFeatureListModel.LayerRole);
+                if (resultLayer === activeLayer) {
+                  featureIds.push(featureListForm.model.data(resultIndex, MultiFeatureListModel.FeatureIdRole));
+                }
+              }
+            }
+
+            if (featureIds.length === 0) {
+              displayToast("선택한 조사 레이어의 지점을 찾지 못했습니다. 맨홀 점을 다시 눌러 주세요.", "warning");
+              return;
+            }
+
+            const idFilter = featureIds.length === 1 ? "@id = " + featureIds[0] : "@id IN (" + featureIds.join(",") + ")";
+            featureListForm.model.setFeatures(activeLayer, idFilter);
+            featureListForm.multiSelection = false;
+            featureListForm.selection.focusedItem = featureIds.length === 1 ? 0 : -1;
+            featureListForm.editExistingAfterSelection = featureIds.length > 1;
+            mainWindow.sungsanExistingPointEditPending = false;
+
+            if (featureIds.length === 1) {
+              featureListForm.state = "FeatureFormEdit";
+              displayToast("기존 지점의 빈 속성을 입력하거나 값을 수정한 뒤 저장해 주세요.");
+            } else {
+              featureListForm.state = "FeatureList";
+              displayToast("겹친 지점이 여러 개입니다. 수정할 맨홀을 하나 선택해 주세요.");
+            }
+            return;
+          }
           if (qfieldSettings.autoOpenFormSingleIdentify && !featureListForm.multiSelection && featureListForm.model.count === 1) {
             featureListForm.state = "FeatureForm";
             featureListForm.selection.focusedItem = 0;
@@ -5393,10 +5439,12 @@ ApplicationWindow {
     gpsAccuracy: positionSource.positionInformation && positionSource.positionInformation.haccValid ? positionSource.positionInformation.hacc : -1
     vworldReady: mainWindow.sungsanVWorldReady
     canAddFeature: digitizingToolbar.digitizingAllowed
+    canEditExistingPoint: dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point && !dashBoard.activeLayer.readOnly && projectInfo.editRights
     pointLayer: dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point
     multiVertexLayer: dashBoard.activeLayer && (dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Line || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Polygon)
     geometryInProgress: digitizingToolbar.isDigitizing
     geometryValid: digitizingToolbar.geometryValid
+    existingPointSelectionPending: mainWindow.sungsanExistingPointEditPending
 
     onHomeRequested: mainWindow.openWelcomeScreen()
 
@@ -5430,6 +5478,32 @@ ApplicationWindow {
           displayToast("지도 중심이나 GPS 위치를 맞춘 뒤 ‘꼭짓점 추가’를 눌러 도형을 그리세요.");
         }
       });
+    }
+
+    onEditExistingPointRequested: {
+      if (mainWindow.sungsanExistingPointEditPending) {
+        mainWindow.sungsanExistingPointEditPending = false;
+        displayToast("기존 지점 선택을 취소했습니다.");
+        return;
+      }
+      if (!dashBoard.activeLayer || dashBoard.activeLayer.geometryType() !== Qgis.GeometryType.Point) {
+        displayToast("먼저 수정할 맨홀 점 레이어를 선택해 주세요.", "warning");
+        return;
+      }
+      if (dashBoard.activeLayer.readOnly || !projectInfo.editRights) {
+        displayToast("이 레이어는 속성을 수정할 수 없습니다.", "warning");
+        return;
+      }
+      if (digitizingToolbar.isDigitizing) {
+        displayToast("진행 중인 새 객체를 먼저 완료하거나 취소해 주세요.", "warning");
+        return;
+      }
+      mainWindow.sungsanStartSurvey();
+      if (stateMachine.state === "digitize") {
+        featureListForm.editExistingAfterSelection = false;
+        mainWindow.sungsanExistingPointEditPending = true;
+        displayToast("속성을 입력할 기존 맨홀 점을 지도에서 눌러 주세요.");
+      }
     }
 
     onAddVertexRequested: {
@@ -6049,4 +6123,3 @@ ApplicationWindow {
     }
   }
 }
-
