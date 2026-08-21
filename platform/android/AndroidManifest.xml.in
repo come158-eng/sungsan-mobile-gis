@@ -16,7 +16,6 @@
   <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:node="remove" />
   <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
   <uses-permission android:name="android.permission.CAMERA" />
-  <uses-permission android:name="android.permission.RECORD_AUDIO" />
   <uses-permission android:name="android.permission.FLASHLIGHT" />
   <uses-permission android:name="android.permission.VIBRATE" />
   <uses-permission android:name="android.permission.WAKE_LOCK" />
@@ -51,9 +50,11 @@
     android:name="org.qtproject.qt.android.bindings.QtApplication"
     android:label="@APP_NAME@"
     android:icon="@AT@drawable/@APP_ICON@"
-    android:usesCleartextTraffic="true"
+    android:usesCleartextTraffic="false"
     android:networkSecurityConfig="@xml/network_security_config"
     android:requestLegacyExternalStorage="true"
+    android:allowBackup="false"
+    android:fullBackupContent="false"
     android:enableOnBackInvokedCallback="false">
     <activity
       android:name="@APP_PACKAGE_ID@.QFieldActivity"
@@ -101,6 +102,9 @@
         <data android:mimeType="application/vnd.google-earth.kml+xml" />
         <data android:mimeType="application/vnd.google-earth.kmz" />
         <data android:mimeType="application/zip" />
+        <data android:mimeType="text/plain" />
+        <data android:mimeType="text/csv" />
+        <data android:mimeType="application/csv" />
         <data android:mimeType="image/tiff" />
         <data android:mimeType="image/jp2" />
         <data android:mimeType="image/x-jp2" />
