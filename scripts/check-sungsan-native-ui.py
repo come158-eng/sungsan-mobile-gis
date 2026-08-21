@@ -367,6 +367,8 @@ def check_shell_wiring() -> None:
         PASSES.append("Sungsan field UI exposes one non-duplicated layer button")
     require(panel, "visible: root.editMode && root.multiVertexLayer", "line and polygon controls stay hidden for point layers")
     require(panel, 'text: root.pointLayer ? "지점 추가" : "객체 추가"', "point capture has one direct add action")
+    require(panel, 'text: root.existingPointSelectionPending ? "지점 선택 취소" : "기존 지점 속성입력"', "existing point attribute workflow is exposed for point layers")
+    require(panel, "visible: root.pointLayer", "existing point attribute action is limited to point layers")
     require(
         root,
         "projectLoaded: !welcomeScreen.visible",
@@ -425,6 +427,27 @@ def check_shell_wiring() -> None:
         r"geometryType\s*\(\s*\)\s*===\s*Qgis\.GeometryType\.Point.*?"
         r"digitizingToolbar\.triggerAddVertex\s*\(\s*\)",
         "Sungsan point add captures once and opens the attribute workflow directly",
+    )
+    require_regex(
+        root,
+        r"onEditExistingPointRequested\s*:\s*\{.*?"
+        r"sungsanExistingPointEditPending\s*=\s*true.*?"
+        r"속성을 입력할 기존 맨홀 점",
+        "existing point workflow waits for a map selection without creating geometry",
+    )
+    require_regex(
+        root,
+        r"onIdentifyFinished\s*:\s*\{.*?"
+        r"sungsanExistingPointEditPending.*?"
+        r"MultiFeatureListModel\.LayerRole.*?"
+        r"featureListForm\.state\s*=\s*\"FeatureFormEdit\"",
+        "identified features from the active layer open directly in attribute edit mode",
+    )
+    require_regex(
+        "src/qml/FeatureListForm.qml",
+        r"editExistingAfterSelection.*?"
+        r"featureFormList\.state\s*=\s*featureFormList\.editExistingAfterSelection\s*\?\s*\"FeatureFormEdit\"",
+        "overlapping identified points enter edit mode after the user chooses one",
     )
     require_regex(
         root,
@@ -823,4 +846,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
