@@ -12,7 +12,7 @@
 - LandStar 공유: PXY/KOF/TXT/CSV 자동 수신, 확인된 좌표계에서 측점명 기준 추가·갱신
 - 지점 사진: 근경·원경·기타·추가 무제한 관계 사진과 타점명 기반 파일명
 - 성산 브랜드: 로고, 테마, Android 알림, 한국어 기본 문구
-- VWorld 위성영상: 빌드 시 키 주입, 프로젝트의 맨 아래에 자동 추가
+- VWorld 위성영상: PC 플러그인에서 사용자가 선택한 경우에만 프로젝트에 추가되며, 앱은 기존 프로젝트의 배경지도 설정을 그대로 유지
 
 빌드 순서와 제품 기준은
 [`branding/sungsan/README.ko.md`](branding/sungsan/README.ko.md)와

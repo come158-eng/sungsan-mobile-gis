@@ -117,9 +117,11 @@ older beta1 artifact name.
   thread and requires a complete synchronous WAL checkpoint before a project
   directory is exported or replaced, preventing the base database and WAL from
   being copied on opposite sides of a delayed checkpoint.
-- `src/core/pluginmanager.cpp`: the exact bundled `sungsan_vworld` plugin is
-  mandatory in Sungsan builds and recovers from stale disabled settings without
-  changing any other bundled or upstream plugin.
+- `src/core/pluginmanager.cpp`: the bundled `sungsan_vworld` plugin is not
+  forced on during first run. An explicit saved user preference is preserved,
+  while projects exported by the PC plugin retain whichever VWorld/background
+  layer choice the operator made without changing any other bundled or
+  upstream plugin.
 - `src/core/localfilesmodel.cpp`, `src/core/recentprojectlistmodel.cpp`,
   `src/core/locator/locatormodelsuperbridge.cpp`, `src/core/utils/fileutils.cpp`:
   Sungsan file-folder/photo metadata labels, no upstream sample/cloud recent
