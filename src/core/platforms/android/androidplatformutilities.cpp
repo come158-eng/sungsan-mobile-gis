@@ -256,6 +256,20 @@ void AndroidPlatformUtilities::importDatasets() const
   }
 }
 
+void AndroidPlatformUtilities::importLandStarPoints() const
+{
+  if ( mActivity.isValid() )
+  {
+    runOnAndroidMainThread( [] {
+      auto activity = qtAndroidContext();
+      if ( activity.isValid() )
+      {
+        activity.callMethod<void>( "triggerImportLandStarPoints" );
+      }
+    } );
+  }
+}
+
 void AndroidPlatformUtilities::updateProjectFromArchive( const QString &projectPath ) const
 {
   if ( mActivity.isValid() )
@@ -629,7 +643,10 @@ bool AndroidPlatformUtilities::checkCameraPermissions() const
 
 bool AndroidPlatformUtilities::checkMicrophonePermissions() const
 {
-  return checkAndAcquirePermissions( { QStringLiteral( "android.permission.RECORD_AUDIO" ) } );
+  // Sungsan field builds do not record audio. Keep the inherited API surface,
+  // but never prompt for a microphone permission that is not declared in the
+  // hardened Android manifest.
+  return false;
 }
 
 bool AndroidPlatformUtilities::checkAndAcquirePermissions( QStringList permissions, bool forceAsk ) const
@@ -931,6 +948,17 @@ JNIEXPORT void JNICALL JNI_FUNCTION_NAME( APP_PACKAGE_JNI_NAME, QFieldActivity, 
     const char *messageStr = env->GetStringUTFChars( message, NULL );
     emit PlatformUtilities::instance()->resourceCanceled( QString( messageStr ) );
     env->ReleaseStringUTFChars( message, messageStr );
+  }
+  return;
+}
+
+JNIEXPORT void JNICALL JNI_FUNCTION_NAME( APP_PACKAGE_JNI_NAME, QFieldActivity, landStarFileReceived )( JNIEnv *env, jobject obj, jstring path )
+{
+  if ( PlatformUtilities::instance() )
+  {
+    const char *pathStr = env->GetStringUTFChars( path, NULL );
+    emit PlatformUtilities::instance()->landStarFileReceived( QString::fromUtf8( pathStr ) );
+    env->ReleaseStringUTFChars( path, pathStr );
   }
   return;
 }
