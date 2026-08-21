@@ -50,6 +50,9 @@ Pane {
   property bool allowDelete
 
   property bool multiSelection: false
+  // The Sungsan existing-point workflow can ask the next identified feature
+  // selected from a candidate list to open directly in attribute edit mode.
+  property bool editExistingAfterSelection: false
   property bool fullScreenView: qfieldSettings.fullScreenIdentifyView
   property bool isVertical: parent.width < parent.height || parent.width < 300
 
@@ -391,9 +394,10 @@ Pane {
             featureFormList.selection.focusedItem = featureFormList.selection.model.selectedCount > 0 ? index : -1;
           } else {
             featureForm.model.featureModel.modelMode = FeatureModel.SingleFeatureModel;
-            featureFormList.state = "FeatureForm";
             featureFormList.selection.focusedItem = index;
             featureFormList.multiSelection = false;
+            featureFormList.state = featureFormList.editExistingAfterSelection ? "FeatureFormEdit" : "FeatureForm";
+            featureFormList.editExistingAfterSelection = false;
           }
           featureForm.model.applyFeatureModel();
         }
