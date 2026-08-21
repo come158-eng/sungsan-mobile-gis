@@ -217,7 +217,9 @@ jobs:
           apk=/tmp/sungsan.apk
 
           badging="$(${build_tools}/aapt dump badging "${apk}")"
-          grep -Fq "package: name='kr.co.sungsan.mobilegis'  versionName='1.0.0'" <<<"${badging}"
+          grep -Fq "package: name='kr.co.sungsan.mobilegis'" <<<"${badging}"
+          grep -Fq "versionName='1.0.0'" <<<"${badging}"
+          grep -Fq "versionCode='10000004'" <<<"${badging}"
           native_code="$(grep '^native-code:' <<<"${badging}")"
           [[ "${native_code}" == "native-code: 'arm64-v8a'" ]]
 
@@ -384,7 +386,9 @@ jobs:
           done
           apk_path="${INPUT_DIR}/${apk_name}"
           badging="$(${build_tools}/aapt dump badging "${apk_path}")"
-          grep -Fq "package: name='kr.co.sungsan.mobilegis'  versionName='1.0.0'" <<<"${badging}"
+          grep -Fq "package: name='kr.co.sungsan.mobilegis'" <<<"${badging}"
+          grep -Fq "versionName='1.0.0'" <<<"${badging}"
+          grep -Fq "versionCode='10000004'" <<<"${badging}"
           [[ "$(grep '^native-code:' <<<"${badging}")" == "native-code: 'arm64-v8a'" ]]
           if ${build_tools}/apksigner verify "${apk_path}" >/dev/null 2>&1; then
             echo "Signing input must be unsigned." >&2
@@ -515,7 +519,9 @@ jobs:
           rm -f -- "${report}"
 
           badging="$(${aapt} dump badging "${signed_apk}")"
-          grep -Fq "package: name='kr.co.sungsan.mobilegis'  versionName='1.0.0'" <<<"${badging}"
+          grep -Fq "package: name='kr.co.sungsan.mobilegis'" <<<"${badging}"
+          grep -Fq "versionName='1.0.0'" <<<"${badging}"
+          grep -Fq "versionCode='10000004'" <<<"${badging}"
           [[ "$(grep '^native-code:' <<<"${badging}")" == "native-code: 'arm64-v8a'" ]]
 
           chmod 0644 "${signed_apk}"
