@@ -42,6 +42,8 @@ import android.app.Application;
 import android.app.Dialog;
 import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -69,6 +71,8 @@ import android.os.Vibrator;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.text.Html;
+import android.text.InputType;
+import android.util.Base64;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.DisplayCutout;
@@ -79,6 +83,10 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowManager;
 import android.view.WindowManager.LayoutParams;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -87,6 +95,7 @@ import ch.opengis.qfield.QFieldUtils;
 import ch.opengis.qfield.R;
 import io.sentry.android.core.SentryAndroid;
 import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
@@ -95,6 +104,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.Thread;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.Charset;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -113,6 +132,7 @@ public class QFieldActivity extends QtActivity {
     private static final int IMPORT_DATASET = 300;
     private static final int IMPORT_PROJECT_FOLDER = 301;
     private static final int IMPORT_PROJECT_ARCHIVE = 302;
+    private static final int IMPORT_LANDSTAR_POINTS = 303;
 
     private static final int UPDATE_PROJECT_FROM_ARCHIVE = 400;
 
@@ -135,6 +155,16 @@ public class QFieldActivity extends QtActivity {
     public static native void resourceReceived(String path);
     public static native void resourceOpened(String path);
     public static native void resourceCanceled(String message);
+    public static native void landStarFileReceived(String path);
+
+    private static final String SUNGSAN_PACKAGE_ID = "kr.co.sungsan.mobilegis";
+    private static final String SUNGSAN_ACTIVATION_PREFERENCES =
+        "sungsan_activation_v1";
+    private static final String SUNGSAN_ACTIVATION_TOKEN = "activation_token";
+    private static final String SUNGSAN_ACTIVATION_PUBLIC_KEY =
+        "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE6lgfKMb/3AOh3sC8xCFtOj7bhBOkY72HBOEeMgfTE2zaAWVvtrrCFuWSBLTA6C8REECtBzDBo28G/Imb7fbT4A==";
+
+    private AlertDialog sungsanActivationDialog;
 
     private Intent projectIntent;
     private Intent qfieldIntent;
@@ -176,6 +206,15 @@ public class QFieldActivity extends QtActivity {
                     }
                 }
             });
+
+        if (requiresSungsanActivation() && !hasValidSungsanActivation()) {
+            decorView.post(new Runnable() {
+                @Override
+                public void run() {
+                    showSungsanActivationDialog();
+                }
+            });
+        }
     }
 
     @Override
@@ -185,6 +224,11 @@ public class QFieldActivity extends QtActivity {
                         ~(Intent.FLAG_ACTIVITY_NEW_TASK |
                           Intent.FLAG_ACTIVITY_NEW_DOCUMENT));
         super.onNewIntent(intent);
+
+        if (requiresSungsanActivation() && !hasValidSungsanActivation()) {
+            showSungsanActivationDialog();
+            return;
+        }
 
         if (intent.getAction() == Intent.ACTION_VIEW ||
             intent.getAction() == Intent.ACTION_SEND) {
@@ -249,11 +293,19 @@ public class QFieldActivity extends QtActivity {
     }
 
     private void processQFieldIntent() {
+        if (requiresSungsanActivation() && !hasValidSungsanActivation()) {
+            showSungsanActivationDialog();
+            return;
+        }
         String data = qfieldIntent.getDataString();
         executeAction(data);
     }
 
     private void processProjectIntent() {
+        if (requiresSungsanActivation() && !hasValidSungsanActivation()) {
+            showSungsanActivationDialog();
+            return;
+        }
         showBlockingProgressDialog(getString(R.string.processing_message));
 
         executorService.execute(new Runnable() {
@@ -265,7 +317,7 @@ public class QFieldActivity extends QtActivity {
                 Context context = getApplication().getApplicationContext();
 
                 Uri uri = null;
-                if (action.compareTo(Intent.ACTION_SEND) == 0) {
+                if (Intent.ACTION_SEND.equals(action)) {
                     uri = (Uri)projectIntent.getParcelableExtra(
                         Intent.EXTRA_STREAM);
                     scheme = "";
@@ -286,8 +338,8 @@ public class QFieldActivity extends QtActivity {
                     new File(importProjectPath).mkdir();
                 }
 
-                if ((scheme.compareTo(ContentResolver.SCHEME_CONTENT) == 0 ||
-                     action.compareTo(Intent.ACTION_SEND) == 0) &&
+                if ((ContentResolver.SCHEME_CONTENT.equals(scheme) ||
+                     Intent.ACTION_SEND.equals(action)) &&
                     importDatasetPath != "") {
                     DocumentFile documentFile =
                         DocumentFile.fromSingleUri(context, uri);
@@ -304,7 +356,20 @@ public class QFieldActivity extends QtActivity {
                         }
                     }
 
+                    fileName = safeLeafName(fileName);
+
                     if (fileName != null) {
+                        if (isLandStarPointFile(fileName)) {
+                            final Uri landStarUri = uri;
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    dismissBlockingProgressDialog();
+                                    importLandStarUri(landStarUri);
+                                }
+                            });
+                            return;
+                        }
                         String fileBaseName = fileName;
                         String fileExtension = "";
                         if (fileName.lastIndexOf(".") > -1) {
@@ -444,7 +509,369 @@ public class QFieldActivity extends QtActivity {
 
                 Log.v("QField", "Opening document file path: " + filePath);
                 dismissBlockingProgressDialog();
+                if (isLandStarPointFile(filePath)) {
+                    landStarFileReceived(filePath);
+                    return;
+                }
                 openProject(filePath);
+            }
+        });
+    }
+
+    private boolean requiresSungsanActivation() {
+        return SUNGSAN_PACKAGE_ID.equals(getPackageName());
+    }
+
+    private String sungsanRequestCode() {
+        try {
+            String androidId = Settings.Secure.getString(
+                getContentResolver(), Settings.Secure.ANDROID_ID);
+            if (androidId == null || androidId.trim().isEmpty()) {
+                androidId = "unknown-device";
+            }
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] value = digest.digest(
+                (getPackageName() + "|" + androidId)
+                    .getBytes(StandardCharsets.UTF_8));
+            StringBuilder result = new StringBuilder("SS");
+            for (int i = 0; i < 10; i++) {
+                if (i % 2 == 0) {
+                    result.append('-');
+                }
+                result.append(String.format("%02X", value[i] & 0xff));
+            }
+            return result.toString();
+        } catch (Exception error) {
+            Log.e("SungsanActivation",
+                  "Could not create device request code.", error);
+            return "SS-REQUEST-CODE-ERROR";
+        }
+    }
+
+    private boolean hasValidSungsanActivation() {
+        String token = getSharedPreferences(
+                           SUNGSAN_ACTIVATION_PREFERENCES,
+                           Context.MODE_PRIVATE)
+                           .getString(SUNGSAN_ACTIVATION_TOKEN, "");
+        return verifySungsanActivation(token);
+    }
+
+    private boolean verifySungsanActivation(String token) {
+        try {
+            if (token == null) {
+                return false;
+            }
+            String compact = token.replaceAll("\\s+", "");
+            String[] tokenParts = compact.split("\\.", -1);
+            if (tokenParts.length != 2 || tokenParts[0].isEmpty() ||
+                tokenParts[1].isEmpty()) {
+                return false;
+            }
+
+            byte[] payload = Base64.decode(
+                tokenParts[0],
+                Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+            byte[] signatureBytes = Base64.decode(
+                tokenParts[1],
+                Base64.URL_SAFE | Base64.NO_WRAP | Base64.NO_PADDING);
+            String[] payloadParts =
+                new String(payload, StandardCharsets.UTF_8).split("\\|", -1);
+            if (payloadParts.length != 5 ||
+                !"SS1".equals(payloadParts[0]) ||
+                !sungsanRequestCode().equals(payloadParts[1])) {
+                return false;
+            }
+
+            long issuedAt = Long.parseLong(payloadParts[2]);
+            long expiresAt = Long.parseLong(payloadParts[3]);
+            long now = System.currentTimeMillis() / 1000L;
+            if (issuedAt <= 0 || issuedAt > now + 86400L ||
+                (expiresAt != 0L && expiresAt < now)) {
+                return false;
+            }
+
+            byte[] publicKeyBytes =
+                Base64.decode(SUNGSAN_ACTIVATION_PUBLIC_KEY, Base64.DEFAULT);
+            KeyFactory keyFactory = KeyFactory.getInstance("EC");
+            Signature verifier = Signature.getInstance("SHA256withECDSA");
+            verifier.initVerify(keyFactory.generatePublic(
+                new X509EncodedKeySpec(publicKeyBytes)));
+            verifier.update(payload);
+            return verifier.verify(signatureBytes);
+        } catch (Exception error) {
+            Log.w("SungsanActivation", "Activation token rejected.", error);
+            return false;
+        }
+    }
+
+    private void showSungsanActivationDialog() {
+        if (!requiresSungsanActivation() || hasValidSungsanActivation() ||
+            isFinishing()) {
+            return;
+        }
+        if (sungsanActivationDialog != null &&
+            sungsanActivationDialog.isShowing()) {
+            return;
+        }
+
+        final String requestCode = sungsanRequestCode();
+        final int padding =
+            (int)(20 * getResources().getDisplayMetrics().density);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(padding, padding / 2, padding, 0);
+
+        TextView instructions = new TextView(this);
+        instructions.setText(
+            "이 휴대폰은 최초 1회 관리자 승인이 필요합니다.\n" +
+            "아래 설치 요청번호를 관리자에게 보내고 승인번호를 받으세요.\n\n" +
+            "관리자: 공도원\n문의: come158@naver.com");
+        instructions.setTextSize(15);
+        content.addView(instructions);
+
+        TextView requestView = new TextView(this);
+        requestView.setText("\n설치 요청번호\n" + requestCode);
+        requestView.setTextSize(18);
+        requestView.setTextIsSelectable(true);
+        requestView.setPadding(0, padding / 2, 0, padding / 2);
+        content.addView(requestView);
+
+        Button copyButton = new Button(this);
+        copyButton.setText("설치 요청번호 복사");
+        copyButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                ClipboardManager clipboard = (ClipboardManager)getSystemService(
+                    Context.CLIPBOARD_SERVICE);
+                if (clipboard != null) {
+                    clipboard.setPrimaryClip(
+                        ClipData.newPlainText("성산 GIS 설치 요청번호",
+                                              requestCode));
+                }
+            }
+        });
+        content.addView(copyButton);
+
+        final EditText tokenInput = new EditText(this);
+        tokenInput.setHint("관리자에게 받은 활성화 번호 붙여넣기");
+        tokenInput.setInputType(InputType.TYPE_CLASS_TEXT |
+                                InputType.TYPE_TEXT_FLAG_MULTI_LINE |
+                                InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        tokenInput.setMinLines(3);
+        tokenInput.setSelectAllOnFocus(true);
+        content.addView(tokenInput);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("성산 모바일 GIS 사용 승인");
+        builder.setView(content);
+        builder.setCancelable(false);
+        builder.setPositiveButton("사용 승인", null);
+        builder.setNegativeButton(
+            "앱 종료", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    finishAffinity();
+                }
+            });
+        sungsanActivationDialog = builder.create();
+        sungsanActivationDialog.setCanceledOnTouchOutside(false);
+        sungsanActivationDialog.setOnShowListener(
+            new DialogInterface.OnShowListener() {
+                @Override
+                public void onShow(DialogInterface ignored) {
+                    Button approve = sungsanActivationDialog.getButton(
+                        AlertDialog.BUTTON_POSITIVE);
+                    approve.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View view) {
+                            String token = tokenInput.getText().toString().trim();
+                            if (!verifySungsanActivation(token)) {
+                                tokenInput.setError(
+                                    "승인번호가 이 휴대폰과 일치하지 않거나 만료됐습니다.");
+                                return;
+                            }
+                            getSharedPreferences(
+                                SUNGSAN_ACTIVATION_PREFERENCES,
+                                Context.MODE_PRIVATE)
+                                .edit()
+                                .putString(SUNGSAN_ACTIVATION_TOKEN,
+                                           token.replaceAll("\\s+", ""))
+                                .apply();
+                            sungsanActivationDialog.dismiss();
+                        }
+                    });
+                }
+            });
+        sungsanActivationDialog.show();
+        if (sungsanActivationDialog.getWindow() != null) {
+            sungsanActivationDialog.getWindow().addFlags(
+                WindowManager.LayoutParams.FLAG_SECURE);
+        }
+    }
+
+    private static boolean isLandStarPointFile(String pathOrName) {
+        if (pathOrName == null) {
+            return false;
+        }
+        String name = pathOrName.toLowerCase();
+        return name.endsWith(".txt") || name.endsWith(".csv") ||
+               name.endsWith(".pxy") || name.endsWith(".kof");
+    }
+
+    private static String safeLeafName(String fileName) {
+        String leaf = fileName == null ? "" : new File(fileName).getName();
+        leaf = leaf.replaceAll("[\\x00-\\x1f<>:\"/\\\\|?*]", "_")
+                   .trim();
+        if (leaf.isEmpty() || leaf.equals(".") || leaf.equals("..")) {
+            leaf = "landstar_points.txt";
+        }
+        if (leaf.length() > 180) {
+            int dot = leaf.lastIndexOf('.');
+            String extension = dot >= 0 ? leaf.substring(dot) : "";
+            leaf = leaf.substring(0, Math.min(160, dot >= 0 ? dot : leaf.length())) +
+                   extension;
+        }
+        return leaf;
+    }
+
+    private File uniqueLandStarInboxFile(String fileName) {
+        File applicationDir = getApplicationDir();
+        if (applicationDir == null) {
+            return null;
+        }
+        File inbox = new File(applicationDir, "LandStar Inbox");
+        if (!inbox.exists() && !inbox.mkdirs()) {
+            return null;
+        }
+        String safeName = safeLeafName(fileName);
+        int dot = safeName.lastIndexOf('.');
+        String base = dot > 0 ? safeName.substring(0, dot) : safeName;
+        String extension = dot > 0 ? safeName.substring(dot) : "";
+        File destination = new File(inbox, safeName);
+        int suffix = 1;
+        while (destination.exists()) {
+            destination = new File(
+                inbox, base + "_" + suffix + extension);
+            suffix++;
+        }
+        return destination;
+    }
+
+    /**
+     * Copies one bounded LandStar text file and normalizes Korean Windows-949
+     * input to UTF-8. C++ receives only a private, validated UTF-8 file.
+     */
+    private boolean copyLandStarPointFile(InputStream input, File destination,
+                                          long declaredLength) {
+        final int maximumBytes = 25 * 1024 * 1024;
+        if (input == null || destination == null || declaredLength <= 0 ||
+            declaredLength > maximumBytes) {
+            return false;
+        }
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream(
+                (int)Math.min(declaredLength, 1024L * 1024L));
+            byte[] chunk = new byte[64 * 1024];
+            int total = 0;
+            int read;
+            while ((read = input.read(chunk)) != -1) {
+                total += read;
+                if (total > maximumBytes) {
+                    return false;
+                }
+                buffer.write(chunk, 0, read);
+            }
+            if (total == 0) {
+                return false;
+            }
+            byte[] raw = buffer.toByteArray();
+            CharsetDecoder utf8 = StandardCharsets.UTF_8.newDecoder()
+                                      .onMalformedInput(CodingErrorAction.REPORT)
+                                      .onUnmappableCharacter(CodingErrorAction.REPORT);
+            String text;
+            try {
+                text = utf8.decode(ByteBuffer.wrap(raw)).toString();
+            } catch (CharacterCodingException invalidUtf8) {
+                CharsetDecoder cp949 = Charset.forName("MS949")
+                                           .newDecoder()
+                                           .onMalformedInput(CodingErrorAction.REPORT)
+                                           .onUnmappableCharacter(CodingErrorAction.REPORT);
+                text = cp949.decode(ByteBuffer.wrap(raw)).toString();
+            }
+            if (text.indexOf('\u0000') >= 0) {
+                return false;
+            }
+            if (text.startsWith("\uFEFF")) {
+                text = text.substring(1);
+            }
+            try (FileOutputStream output = new FileOutputStream(destination)) {
+                output.write(text.getBytes(StandardCharsets.UTF_8));
+                output.flush();
+                output.getFD().sync();
+            }
+            return destination.isFile() && destination.length() > 0;
+        } catch (Exception error) {
+            Log.e("SungsanLandStar",
+                  "Could not validate LandStar point file.", error);
+            return false;
+        }
+    }
+
+    private void importLandStarUri(final Uri uri) {
+        if (uri == null) {
+            return;
+        }
+        final Context context = getApplication().getApplicationContext();
+        final ContentResolver resolver = getContentResolver();
+        final DocumentFile documentFile =
+            DocumentFile.fromSingleUri(context, uri);
+        if (documentFile == null || !isLandStarPointFile(documentFile.getName()) ||
+            documentFile.length() <= 0 ||
+            documentFile.length() > 25L * 1024L * 1024L) {
+            displayAlertDialog(
+                "LandStar 측점 연결 실패",
+                "TXT, CSV, PXY 또는 KOF 측점 파일(최대 25 MB)을 선택해 주세요.");
+            return;
+        }
+
+        final File destination = uniqueLandStarInboxFile(documentFile.getName());
+        if (destination == null) {
+            displayAlertDialog("LandStar 측점 연결 실패",
+                               "앱의 LandStar 수신 폴더를 만들지 못했습니다.");
+            return;
+        }
+        final ProgressDialog wait = new ProgressDialog(this);
+        wait.setMessage("LandStar 측점을 확인하는 중입니다…");
+        wait.setIndeterminate(true);
+        wait.setCancelable(false);
+        wait.show();
+
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                boolean imported = false;
+                try (InputStream input = resolver.openInputStream(uri)) {
+                    imported = copyLandStarPointFile(
+                        input, destination, documentFile.length());
+                } catch (Exception error) {
+                    Log.e("SungsanLandStar",
+                          "Could not copy LandStar point file.", error);
+                }
+                final boolean succeeded = imported;
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        wait.dismiss();
+                        if (succeeded) {
+                            landStarFileReceived(destination.getAbsolutePath());
+                        } else {
+                            destination.delete();
+                            displayAlertDialog(
+                                "LandStar 측점 연결 실패",
+                                "선택한 측점 파일을 앱으로 안전하게 복사하지 못했습니다.");
+                        }
+                    }
+                });
             }
         });
     }
@@ -728,6 +1155,30 @@ public class QFieldActivity extends QtActivity {
             Log.w("QField", "No activity found for ACTION_OPEN_DOCUMENT.");
         }
         return;
+    }
+
+    private void triggerImportLandStarPoints() {
+        if (requiresSungsanActivation() && !hasValidSungsanActivation()) {
+            showSungsanActivationDialog();
+            return;
+        }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        intent.putExtra(Intent.EXTRA_MIME_TYPES,
+                        new String[] {"text/plain", "text/csv",
+                                      "application/csv",
+                                      "application/octet-stream"});
+        intent.setType("*/*");
+        try {
+            startActivityForResult(intent, IMPORT_LANDSTAR_POINTS);
+        } catch (ActivityNotFoundException e) {
+            displayAlertDialog(
+                getString(R.string.operation_unsupported),
+                "LandStar 측점 파일을 선택할 수 있는 파일 앱이 없습니다.");
+            Log.w("Sungsan", "No activity found for LandStar file selection.");
+        }
     }
 
     private void triggerImportProjectFolder() {
@@ -1743,8 +2194,13 @@ public class QFieldActivity extends QtActivity {
     }
 
     protected void onActivityResult(int requestCode, int resultCode,
-                                    Intent data) {
-        if (requestCode == CAMERA_RESOURCE) {
+                                     Intent data) {
+        if (requestCode == IMPORT_LANDSTAR_POINTS) {
+            if (resultCode == Activity.RESULT_OK && data != null) {
+                importLandStarUri(data.getData());
+            }
+            return;
+        } else if (requestCode == CAMERA_RESOURCE) {
             if (resultCode == RESULT_OK && resourceTempFilePath != null) {
                 File file = new File(resourceTempFilePath);
                 String finalFilePath = QFieldUtils.replaceFilenameTags(
