@@ -41,6 +41,14 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
     Q_INVOKABLE QVariantMap importLandStarFile( const QString &filePath, QgsProject *project, QgsVectorLayer *preferredLayer = nullptr );
 
     /**
+     * Reads only metadata from a LandStar file without touching project layers.
+     *
+     * Returns ok/error and parsed project metadata keys:
+     * project_region, project_site, project_name, work_date, and method.
+     */
+    Q_INVOKABLE QVariantMap queryLandStarMetadata( const QString &filePath ) const;
+
+    /**
      * Writes all point features in a layer as
      * point-name,northing,easting,elevation,code.
      * The returned map contains ok, path, count and error values.

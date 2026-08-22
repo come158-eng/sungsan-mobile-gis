@@ -45,6 +45,7 @@ Item {
   signal startSurveyRequested
   signal currentLocationRequested
   signal gnssSettingsRequested
+  signal vworldRequested
   signal layersRequested
   signal addFeatureRequested
   signal editExistingPointRequested
@@ -163,6 +164,13 @@ Item {
             color: root.vworldReady ? "#18784a" : "#9a6500"
             font.pixelSize: 9
           }
+        }
+
+        MouseArea {
+          anchors.fill: parent
+          cursorShape: Qt.PointingHandCursor
+          Accessible.name: root.vworldReady ? "VWorld 위성영상 준비됨" : "VWorld 위성영상 선택"
+          onClicked: root.vworldRequested()
         }
       }
     }

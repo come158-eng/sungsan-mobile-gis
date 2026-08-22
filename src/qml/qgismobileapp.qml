@@ -1107,7 +1107,7 @@ ApplicationWindow {
             }
 
             if (featureIds.length === 0) {
-              displayToast("선택한 조사 레이어의 지점을 찾지 못했습니다. 맨홀 점을 다시 눌러 주세요.", "warning");
+              displayToast("선택한 조사 레이어의 지점을 찾지 못했습니다. 측량점을 다시 눌러 주세요.", "warning");
               return;
             }
 
@@ -1123,7 +1123,7 @@ ApplicationWindow {
               displayToast("기존 지점의 빈 속성을 입력하거나 값을 수정한 뒤 저장해 주세요.");
             } else {
               featureListForm.state = "FeatureList";
-              displayToast("겹친 지점이 여러 개입니다. 수정할 맨홀을 하나 선택해 주세요.");
+              displayToast("겹친 지점이 여러 개입니다. 수정할 측량점을 하나 선택해 주세요.");
             }
             return;
           }
@@ -3793,7 +3793,64 @@ ApplicationWindow {
       displayToast("GeoPackage 데이터를 정리하지 못해 내보내기를 중단했습니다.", "error");
       return;
     }
+    if (!ProjectUtils.exportFieldSurveyComparisonReport(qgisProject, projectDirectory)) {
+      displayToast("내보내기 비교 리포트를 만들지 못했습니다.", "warning");
+    }
     platformUtilities.sendCompressedFolderTo(projectDirectory);
+  }
+
+  function sungsanNormalizeProjectDate(rawDate) {
+    const trimmed = typeof rawDate === "string" ? rawDate.trim() : "";
+    if (/^\d{8}$/.test(trimmed)) {
+      return trimmed;
+    }
+    const now = new Date();
+    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  }
+
+  function sungsanInferProjectFromLandStarPath(filePath) {
+    const normalizedPath = typeof filePath === "string" ? filePath.replace(/\\/g, "/") : "";
+    const fileNameWithExt = normalizedPath.split("/").pop();
+    const fileName = typeof fileNameWithExt === "string" ? fileNameWithExt : "";
+    const stem = fileName.replace(/\.[^/.]+$/, "");
+    const tokens = stem
+      .replace(/[()\[\]]/g, " ")
+      .replace(/^(?:landstar|landstar[_-]?point|landstar[_-]?point[_-]?file|sungsan|작업방|작업반|작업방명)\s*/i, "")
+      .split(/[\s_-]+/)
+      .filter(Boolean);
+
+    let date = "";
+    const dateIndex = tokens.findIndex(token => /^\d{8}$/.test(token));
+    if (dateIndex >= 0) {
+      date = tokens.splice(dateIndex, 1)[0];
+    } else {
+      const matchedDate = stem.match(/\b(\d{8})\b/);
+      if (matchedDate) {
+        date = matchedDate[1];
+      }
+    }
+
+    let site = tokens.join(" ").trim();
+    let region = "경상남도";
+    if (!site || site === ".") {
+      site = fileName.length > 0 ? fileName.replace(/\.[^/.]+$/, "") : "성산 기본 현장";
+    }
+
+    const knownParts = site.split(/\s+/);
+    if (knownParts.length >= 2 && /[도도군군읍면동]/.test(knownParts[0])) {
+      region = knownParts[0];
+      site = knownParts.slice(1).join(" ").trim();
+    }
+
+    if (!site) {
+      site = "성산 기본 현장";
+    }
+
+    return {
+      regionName: region,
+      siteName: site,
+      workDate: sungsanNormalizeProjectDate(date)
+    };
   }
 
   function sungsanImportLandStarFile(filePath) {
@@ -3802,8 +3859,48 @@ ApplicationWindow {
       return;
     }
     if (!qgisProject || !qgisProject.fileName) {
+      const inferred = sungsanInferProjectFromLandStarPath(filePath);
+      const metadataResponse = sungsanSurveyBridge.queryLandStarMetadata(filePath);
+      const hasMetadata = metadataResponse && metadataResponse.ok === true;
+      const parsedRegion = typeof hasMetadata === "boolean" && metadataResponse.project_region ? String(metadataResponse.project_region).trim() : "";
+      const parsedSite = typeof hasMetadata === "boolean" && metadataResponse.project_site ? String(metadataResponse.project_site).trim() : "";
+      const parsedProjectName = typeof hasMetadata === "boolean" && metadataResponse.project_name ? String(metadataResponse.project_name).trim() : "";
+      const parsedDate = typeof hasMetadata === "boolean" && metadataResponse.work_date ? String(metadataResponse.work_date).trim() : "";
+      const metadataSource = typeof hasMetadata === "boolean" && metadataResponse.source ? String(metadataResponse.source) : "none";
+
+      const projectName = parsedProjectName.length > 0 ? parsedProjectName : "";
+      const regionName = parsedRegion.length > 0 ? parsedRegion : "";
+      const siteName = projectName.length > 0 ? projectName : parsedSite;
+      const inferredRegion = inferred.regionName && inferred.regionName.trim().length > 0 ? inferred.regionName.trim() : "경상남도";
+      const inferredSite = inferred.siteName && inferred.siteName.trim().length > 0 ? inferred.siteName.trim() : "성산 기본 현장";
+      const safeRegion = regionName.length > 0 ? regionName : inferredRegion;
+      const safeSite = siteName.length > 0 ? siteName : inferredSite;
+      const safeDate = sungsanNormalizeProjectDate(parsedDate || inferred.workDate);
+
+      const canAutoCreate = hasMetadata && metadataSource === "metadata" && safeRegion.length > 0 && safeSite.length > 0 && safeDate.length > 0;
+      if (!canAutoCreate) {
+        displayToast("수신 파일에서 작업방명(현장명/지역/날짜)을 자동으로 추출하지 못해, 프로젝트 정보를 입력해 주세요.", "info");
+        welcomeScreen.openProjectCreationDialog(safeRegion, safeSite, safeDate, filePath);
+        return;
+      }
+
+      const resolvedTitle = `${safeSite} ${safeDate}`.trim();
+      const projectFilePath = ProjectUtils.createProject({
+        title: resolvedTitle,
+        region_name: safeRegion,
+        site_name: safeSite,
+        work_date: safeDate,
+        basemap: "blank",
+        sungsan_field_template: true
+      }, positionSource.positionInformation);
+      if (!projectFilePath || projectFilePath.length === 0) {
+        sungsanPendingLandStarPath = filePath;
+        displayToast("작업방명으로 프로젝트를 만들지 못했습니다. 현장 프로젝트를 열면 수동으로 반영됩니다.", "error");
+        return;
+      }
       sungsanPendingLandStarPath = filePath;
-      displayToast("측점 파일을 보관했습니다. 현장 프로젝트를 열면 자동으로 반영됩니다.", "warning");
+      displayToast(`작업방명 기반으로 프로젝트를 생성했습니다. (${safeSite})`, "info");
+      iface.loadFile(projectFilePath, resolvedTitle);
       return;
     }
     const preferredLayer = dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point ? dashBoard.activeLayer : null;
@@ -5558,6 +5655,15 @@ ApplicationWindow {
       qfieldSettings.visible = true;
     }
 
+    onVworldRequested: {
+      if (mainWindow.sungsanVWorldReady) {
+        displayToast("VWorld 위성영상이 현재 프로젝트에 적용되어 있습니다.");
+        return;
+      }
+      pluginManagerSettings.open();
+      displayToast("‘성산 VWorld 기본지도’를 켜면 위성영상이 자동으로 추가됩니다.", "info");
+    }
+
     onLayersRequested: {
       dashBoard.open();
     }
@@ -5591,7 +5697,7 @@ ApplicationWindow {
         return;
       }
       if (!dashBoard.activeLayer || dashBoard.activeLayer.geometryType() !== Qgis.GeometryType.Point) {
-        displayToast("먼저 수정할 맨홀 점 레이어를 선택해 주세요.", "warning");
+        displayToast("먼저 수정할 측량점 레이어를 선택해 주세요.", "warning");
         return;
       }
       if (dashBoard.activeLayer.readOnly || !projectInfo.editRights) {
@@ -5680,18 +5786,52 @@ ApplicationWindow {
       qfieldLocalDataPickerScreen.visible = true;
     }
 
-    onCreateFieldProjectRequested: {
-      const projectTitle = "성산 기본 현장";
+    onCreateFieldProjectRequested: (regionName, siteName, workDate) => {
+      const safeRegion = typeof regionName === "string" && regionName.trim().length > 0 ? regionName.trim() : "경상남도";
+      const safeSite = typeof siteName === "string" && siteName.trim().length > 0 ? siteName.trim() : "성산 기본 현장";
+      const safeDate = typeof workDate === "string" && workDate.trim().length > 0 ? workDate.trim() : "";
+      const resolvedTitle = `${safeSite} ${safeDate}`.trim();
+      const queuedImportPath = welcomeScreen.pendingLandStarProjectPath || "";
       const projectFilePath = ProjectUtils.createProject({
-        "title": projectTitle,
+        "title": resolvedTitle,
+        "region_name": safeRegion,
+        "site_name": safeSite,
+        "work_date": safeDate,
         "basemap": "blank",
         "sungsan_field_template": true
       }, positionSource.positionInformation);
       if (!projectFilePath || projectFilePath.length === 0) {
         displayToast("기본 현장 프로젝트를 만들지 못했습니다.", "error");
+        if (queuedImportPath.length > 0) {
+          mainWindow.sungsanPendingLandStarPath = "";
+          welcomeScreen.pendingLandStarProjectPath = "";
+        }
         return;
       }
-      iface.loadFile(projectFilePath, projectTitle);
+      if (queuedImportPath.length > 0) {
+        mainWindow.sungsanPendingLandStarPath = queuedImportPath;
+        welcomeScreen.pendingLandStarProjectPath = "";
+      }
+      iface.loadFile(projectFilePath, resolvedTitle);
+    }
+
+    onDeleteRecentProjectRequested: (path, projectType, title) => {
+      if (qgisProject && qgisProject.fileName === path) {
+        iface.clearProject();
+      }
+      welcomeScreen.model.removeRecentProject(path);
+      if (projectType !== RecentProjectListModel.LinkProject && path.length > 0 && path.indexOf("://") === -1) {
+        const projectFolder = FileUtils.absolutePath(path);
+        if (projectFolder.length > 0) {
+          platformUtilities.removeFolder(projectFolder);
+          displayToast(`프로젝트가 삭제 요청되었습니다. '${title.length > 0 ? title : "이름 없는 프로젝트"}'`, "info");
+        } else {
+          displayToast(`최근 목록에서 제거했습니다. '${title.length > 0 ? title : "이름 없는 프로젝트"}'`, "info");
+        }
+      } else {
+        displayToast(`최근 목록에서 제거했습니다. '${title.length > 0 ? title : "이름 없는 프로젝트"}'`, "info");
+      }
+      welcomeScreen.model.reloadModel();
     }
 
     onOpenRecentProjectRequested: (path, title, projectType) => {

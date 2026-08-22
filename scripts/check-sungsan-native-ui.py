@@ -469,6 +469,14 @@ def check_shell_wiring() -> None:
     require(panel, "Flickable {", "short screens can scroll the bottom action panel")
     require(panel, "mainWindow.sceneBottomMargin", "bottom action panel includes the system safe area")
     require(panel, 'root.vworldReady ? "영상 준비" : "선택 가능"', "disabled VWorld is presented as an option, not a pending forced layer")
+    require(panel, "signal vworldRequested", "VWorld status badge exposes a real selection action")
+    require(panel, "onClicked: root.vworldRequested()", "VWorld status badge is clickable")
+    require(root, "onVworldRequested", "VWorld selection action is handled by the app")
+    require(root, "pluginManagerSettings.open()", "VWorld selection opens the plugin activation screen")
+    if "맨홀" in root:
+        FAILURES.append("legacy manhole-only wording remains in the generic survey-point workflow")
+    else:
+        PASSES.append("generic survey-point workflow no longer uses manhole-only wording")
     require(root, 'changeMode("digitize")', "survey mode wired")
     require(root, "dashBoard.ensureEditableLayerSelected()", "editable layer selection wired")
     require_regex(

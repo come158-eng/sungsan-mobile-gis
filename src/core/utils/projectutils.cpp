@@ -17,6 +17,7 @@
 
 #include "layerutils.h"
 #include "platformutilities.h"
+#include "fileutils.h"
 #include "positioningutils.h"
 #include "projectutils.h"
 
@@ -30,11 +31,16 @@
 #include <qgsrelation.h>
 #include <qgsrelationcontext.h>
 #include <qgsvectorfilewriter.h>
-#include <qgsvectorlayer.h>
 #include <qgsvectortilelayer.h>
 #include <qgsvectortileutils.h>
+#include <qgsvectorlayer.h>
 
+#include <QDateTime>
 #include <QJsonDocument>
+#include <QRegularExpression>
+#include <QUrl>
+#include <QTextStream>
+
 
 ProjectUtils::ProjectUtils( QObject *parent )
   : QObject( parent )
@@ -131,19 +137,301 @@ QString ProjectUtils::title( QgsProject *project )
   return !title.isEmpty() ? title : QFileInfo( project->fileName() ).completeBaseName();
 }
 
+bool ProjectUtils::exportFieldSurveyComparisonReport( QgsProject *project, const QString &projectDirectory )
+{
+  if ( !project || projectDirectory.trimmed().isEmpty() )
+  {
+    return false;
+  }
+
+  QString objectLayerId;
+  QString photoLayerId;
+  QStringList sourceTextFiles;
+  const auto layers = project->mapLayers();
+
+  for ( auto it = layers.constBegin(); it != layers.constEnd(); ++it )
+  {
+    auto *layer = qobject_cast<QgsVectorLayer *>( it.value() );
+    if ( !layer || !layer->isValid() )
+    {
+      continue;
+    }
+    if ( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/landstarImportTarget" ) ).toBool()
+         || layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ) ).toBool()
+         || layer->name() == QStringLiteral( "성산_현장객체" ) )
+    {
+      objectLayerId = it.key();
+      continue;
+    }
+    if ( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotos" ) ).toBool()
+         || layer->name() == QStringLiteral( "성산_현장사진" ) )
+    {
+      photoLayerId = it.key();
+    }
+  }
+
+  if ( objectLayerId.isEmpty() )
+  {
+    return false;
+  }
+
+  auto *objectLayer = qobject_cast<QgsVectorLayer *>( layers.value( objectLayerId ) );
+  if ( !objectLayer )
+  {
+    return false;
+  }
+
+  auto normalizeRelativePath = [&]( const QString &path ) -> QString
+  {
+    const QString trimmedPath = path.trimmed();
+    if ( trimmedPath.isEmpty() )
+    {
+      return QString();
+    }
+
+    QString candidate = trimmedPath;
+    if ( candidate.startsWith( QStringLiteral( "file://" ) ) )
+    {
+      candidate = QUrl( candidate ).toLocalFile();
+    }
+    const QFileInfo candidateInfo( candidate );
+    if ( candidateInfo.isAbsolute() )
+    {
+      return candidateInfo.absoluteFilePath();
+    }
+
+    if ( candidate.contains( QLatin1String( "/" ) ) || candidate.contains( QLatin1String( "\\" ) ) )
+    {
+      return QDir( projectDirectory ).filePath( candidate );
+    }
+    return QDir( projectDirectory ).filePath( QStringLiteral( "LandStar/원본" ) + QDir::separator() + candidate );
+  };
+
+  auto sourceTextFilter = []( const QString &filePath ) -> bool
+  {
+    const QString suffix = QFileInfo( filePath ).suffix().toLower();
+    return suffix == QStringLiteral( "txt" )
+           || suffix == QStringLiteral( "csv" )
+           || suffix == QStringLiteral( "pxy" )
+           || suffix == QStringLiteral( "kof" );
+  };
+
+  auto quoteCsv = []( const QString &value ) -> QString
+  {
+    QString escaped = value;
+    if ( escaped.contains( '\n' ) || escaped.contains( '\r' ) || escaped.contains( '\"' ) || escaped.contains( ',' ) )
+    {
+      escaped.replace( QStringLiteral( "\"" ), QStringLiteral( "\"\"" ) );
+      return QStringLiteral( "\"%1\"" ).arg( escaped );
+    }
+    escaped.replace( QStringLiteral( "\"" ), QStringLiteral( "\"\"" ) );
+    return QStringLiteral( "\"%1\"" ).arg( escaped );
+  };
+
+  const QString projectTitle = project->title();
+  const QString regionName = project->readEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/regionName" ), QString() );
+  const QString siteName = project->readEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/siteName" ), QString() );
+  const QString workDate = project->readEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/workDate" ), QString() );
+  const QString objectLayerName = objectLayerId.isEmpty() ? QString() : layers.value( objectLayerId )->name();
+  const QString reportPath = QStringLiteral( "%1/survey_compare_%2.txt" ).arg( projectDirectory, QDateTime::currentDateTime().toString( QStringLiteral( "yyyyMMdd_HHmmss" ) ) );
+
+  const QString reportHeader = QStringLiteral( "project_title,region_name,site_name,work_date,layer_name,object_id,landstar_id,landstar_code,easting,northing,elevation,name,category,color,fix_status,gps_accuracy_m,surveyed_at,source_device,source_text_file,photo_count,photo_list\n" );
+  QString reportBody;
+  QHash<QString, QStringList> photoByObject;
+  QHash<QString, int> photoCountByObject;
+
+  if ( !photoLayerId.isEmpty() )
+  {
+    auto *photoLayer = qobject_cast<QgsVectorLayer *>( layers.value( photoLayerId ) );
+    if ( photoLayer )
+    {
+      const QgsFields photoFields = photoLayer->fields();
+      const int objectIdIdx = photoFields.indexOf( QStringLiteral( "object_id" ) );
+      const int mediaIdx = photoFields.indexOf( QStringLiteral( "media" ) );
+      const int photoTypeIdx = photoFields.indexOf( QStringLiteral( "photo_type" ) );
+      const int seqIdx = photoFields.indexOf( QStringLiteral( "sequence" ) );
+
+      if ( objectIdIdx >= 0 )
+      {
+        QgsFeatureIterator photoIterator = photoLayer->getFeatures();
+        QgsFeature photoFeature;
+        while ( photoIterator.nextFeature( photoFeature ) )
+        {
+          const QString objectId = photoFeature.attribute( objectIdIdx ).toString().trimmed();
+          if ( objectId.isEmpty() )
+          {
+            continue;
+          }
+          const QString media = mediaIdx >= 0 ? photoFeature.attribute( mediaIdx ).toString().trimmed() : QString();
+          const QString type = photoTypeIdx >= 0 ? photoFeature.attribute( photoTypeIdx ).toString().trimmed() : QString();
+          const QString seqRaw = seqIdx >= 0 ? photoFeature.attribute( seqIdx ).toString().trimmed() : QString();
+          const QString typeNormalized = type.isEmpty() ? QStringLiteral( "기타" ) : type;
+          const QString seqLabel = seqRaw.isEmpty() ? QStringLiteral( "1" ) : seqRaw;
+          photoByObject[objectId].append( QStringList() << typeNormalized << seqLabel << media );
+          photoCountByObject[objectId] += 1;
+        }
+      }
+    }
+  }
+
+  const auto gatherLandstarSources = [&]( const QString &fileOrPath )
+  {
+    if ( fileOrPath.isEmpty() )
+    {
+      return;
+    }
+    const QString normalized = normalizeRelativePath( fileOrPath );
+    if ( !normalized.isEmpty() && QFileInfo::exists( normalized ) && sourceTextFilter( normalized ) )
+    {
+      sourceTextFiles << normalized;
+    }
+  };
+
+  const auto objectLayerFields = objectLayer->fields();
+  const int sourceIdx = objectLayerFields.indexOf( QStringLiteral( "source_file" ) );
+  const int landstarIdIdx = objectLayerFields.indexOf( QStringLiteral( "landstar_id" ) );
+  const int objectIdIdx = objectLayerFields.indexOf( QStringLiteral( "object_id" ) );
+  const int nameIdx = objectLayerFields.indexOf( QStringLiteral( "name" ) );
+  const int codeIdx = objectLayerFields.indexOf( QStringLiteral( "landstar_code" ) );
+  const int categoryIdx = objectLayerFields.indexOf( QStringLiteral( "category" ) );
+  const int colorIdx = objectLayerFields.indexOf( QStringLiteral( "color" ) );
+  const int nIdx = objectLayerFields.indexOf( QStringLiteral( "northing" ) );
+  const int eIdx = objectLayerFields.indexOf( QStringLiteral( "easting" ) );
+  const int zIdx = objectLayerFields.indexOf( QStringLiteral( "elevation" ) );
+  const int fixIdx = objectLayerFields.indexOf( QStringLiteral( "fix_status" ) );
+  const int accIdx = objectLayerFields.indexOf( QStringLiteral( "gps_accuracy_m" ) );
+  const int surveyedAtIdx = objectLayerFields.indexOf( QStringLiteral( "surveyed_at" ) );
+  const int sourceDeviceIdx = objectLayerFields.indexOf( QStringLiteral( "source_device" ) );
+
+  QgsFeatureIterator featureIterator = objectLayer->getFeatures();
+  QgsFeature feature;
+  while ( featureIterator.nextFeature( feature ) )
+  {
+    const QString landstarId = landstarIdIdx >= 0 ? feature.attribute( landstarIdIdx ).toString().trimmed() : QString();
+    const QString objectId = objectIdIdx >= 0 ? feature.attribute( objectIdIdx ).toString().trimmed() : QString();
+    const QString pointName = nameIdx >= 0 ? feature.attribute( nameIdx ).toString().trimmed() : QString();
+    const QString code = codeIdx >= 0 ? feature.attribute( codeIdx ).toString().trimmed() : QString();
+    const QString category = categoryIdx >= 0 ? feature.attribute( categoryIdx ).toString().trimmed() : QString();
+    const QString color = colorIdx >= 0 ? feature.attribute( colorIdx ).toString().trimmed() : QString();
+    const QString fixStatus = fixIdx >= 0 ? feature.attribute( fixIdx ).toString().trimmed() : QString();
+    const QString accuracy = accIdx >= 0 ? feature.attribute( accIdx ).toString().trimmed() : QString();
+    const QString surveyedAt = surveyedAtIdx >= 0 && !feature.attribute( surveyedAtIdx ).isNull() ? feature.attribute( surveyedAtIdx ).toDateTime().toString( QStringLiteral( "yyyy-MM-dd HH:mm:ss" ) ) : QString();
+    const QString sourceDevice = sourceDeviceIdx >= 0 ? feature.attribute( sourceDeviceIdx ).toString().trimmed() : QString();
+    const QString sourceFile = sourceIdx >= 0 ? feature.attribute( sourceIdx ).toString().trimmed() : QString();
+    gatherLandstarSources( sourceFile );
+
+    QString pointN = nIdx >= 0 ? feature.attribute( nIdx ).toString().trimmed() : QString();
+    QString pointE = eIdx >= 0 ? feature.attribute( eIdx ).toString().trimmed() : QString();
+    QString pointZ = zIdx >= 0 ? feature.attribute( zIdx ).toString().trimmed() : QString();
+    if ( pointN.isEmpty() || pointE.isEmpty() )
+    {
+      const QgsGeometry geometry = feature.geometry();
+      if ( !geometry.isNull() )
+      {
+        const QgsPointXY point2d = geometry.asPoint();
+        pointE = point2d.isEmpty() ? QString() : QString::number( point2d.x(), 'f', 4 );
+        pointN = point2d.isEmpty() ? QString() : QString::number( point2d.y(), 'f', 4 );
+      }
+    }
+
+    const QString objectKey = objectId.isEmpty() ? landstarId : objectId;
+    const QStringList photos = photoByObject.value( objectKey );
+    QStringList photoInfo;
+    photoInfo.reserve( photos.size() );
+    for ( const QString &photo : photos )
+    {
+      const QStringList fields = photo.split( QStringLiteral( "|" ) );
+      const QString type = fields.value( 0 );
+      const QString seq = fields.value( 1 );
+      const QString media = fields.value( 2 );
+      photoInfo.append( QStringLiteral( "%1#%2=%3" ).arg( type, seq, media ) );
+    }
+
+    reportBody += QStringLiteral( "%1,%2,%3,%4,%5,%6,%7,%8,%9,%10,%11,%12,%13,%14,%15,%16,%17,%18,%19,%20,%21\n" )
+      .arg( quoteCsv( projectTitle ),
+            quoteCsv( regionName ),
+            quoteCsv( siteName ),
+            quoteCsv( workDate ),
+            quoteCsv( objectLayerName ),
+            quoteCsv( objectKey ),
+            quoteCsv( landstarId ),
+            quoteCsv( code ),
+            quoteCsv( pointE ),
+            quoteCsv( pointN ),
+            quoteCsv( pointZ ),
+            quoteCsv( pointName ),
+            quoteCsv( category ),
+            quoteCsv( color ),
+            quoteCsv( fixStatus ),
+            quoteCsv( accuracy ),
+            quoteCsv( surveyedAt ),
+            quoteCsv( sourceDevice ),
+            quoteCsv( sourceFile ),
+            quoteCsv( QString::number( photoCountByObject.value( objectKey ) ) ),
+            quoteCsv( photoInfo.join( QStringLiteral( "|" ) ) ) );
+  }
+
+  if ( sourceTextFiles.isEmpty() )
+  {
+    const QDir sourceDir = QDir( QStringLiteral( "%1/LandStar/원본" ).arg( projectDirectory ) );
+    const QFileInfoList sourceCandidates = sourceDir.entryInfoList( QStringList() << "*.txt" << "*.pxy" << "*.kof" << "*.csv", QDir::Files | QDir::Readable );
+    for ( const QFileInfo &sourceFile : sourceCandidates )
+    {
+      sourceTextFiles << sourceFile.fileName();
+    }
+  }
+
+  sourceTextFiles.removeDuplicates();
+  sourceTextFiles.sort();
+
+  const QString reportComment = QStringLiteral( "# project=%1\n# layer=%2\n# exported=%3\n" )
+                                  .arg( projectTitle.isEmpty() ? QObject::tr( "Unnamed" ) : projectTitle )
+                                  .arg( objectLayerName.isEmpty() ? QStringLiteral( "N/A" ) : objectLayerName )
+                                  .arg( QDateTime::currentDateTime().toString( Qt::ISODate ) );
+  QString reportContent = QStringLiteral( "\ufeff" ) + reportComment + reportHeader + reportBody;
+  if ( !sourceTextFiles.isEmpty() )
+  {
+    QStringList sourceLines;
+    sourceLines << QStringLiteral( "# source_text_files" );
+    for ( const QString &sourceFile : sourceTextFiles )
+    {
+      sourceLines << QStringLiteral( "# source=%1" ).arg( sourceFile );
+    }
+    sourceLines << QStringLiteral( "# ---\n" );
+    reportContent.append( sourceLines.join( QStringLiteral( "\n" ) ) );
+  }
+  return FileUtils::writeFileContent( reportPath, reportContent.toUtf8() );
+}
+
 QString ProjectUtils::createProject( const QVariantMap &options, const GnssPositionInformation &positionInformation )
 {
   const bool sungsanFieldTemplate = options.value( QStringLiteral( "sungsan_field_template" ) ).toBool();
   QString projectTitle = options.value( QStringLiteral( "title" ), tr( "Created Project" ) ).toString();
-  QString projectFilename = projectTitle.normalized( QString::NormalizationForm_KD );
-  projectFilename.replace( QRegularExpression( "[^A-Za-z0-9_]" ), QStringLiteral( "_" ) );
+  QString regionName = options.value( QStringLiteral( "region_name" ), QString() ).toString();
+  QString siteName = options.value( QStringLiteral( "site_name" ), QString() ).toString();
+  QString workDate = options.value( QStringLiteral( "work_date" ), QString() ).toString();
+  QString projectFilename = FileUtils::sanitizeFilePathPart( projectTitle );
+  if ( projectFilename.isEmpty() )
+  {
+    projectFilename = tr( "Created_Project" );
+  }
+
+  const QString safeRegion = FileUtils::sanitizeFilePathPart( regionName.trimmed().isEmpty() ? QStringLiteral( "지역" ) : regionName.trimmed() );
+  const QString safeSite = FileUtils::sanitizeFilePathPart( siteName.trimmed().isEmpty() ? projectFilename : siteName.trimmed() );
+  QString safeDate = workDate.trimmed();
+  const QRegularExpression validDate( QStringLiteral( "^\\d{8}$" ) );
+  if ( safeDate.isEmpty() || !validDate.match( safeDate ).hasMatch() )
+  {
+    const QDate today = QDate::currentDate();
+    safeDate = QStringLiteral( "%1%2%3" ).arg( today.year(), 4, 10, QLatin1Char( '0' ) ).arg( today.month(), 2, 10, QLatin1Char( '0' ) ).arg( today.day(), 2, 10, QLatin1Char( '0' ) );
+  }
 
   QDir createdProjectsDir( QStringLiteral( "%1/Created Projects/" ).arg( PlatformUtilities::instance()->applicationDirectory() ) );
-  QString createdProjectDir = createdProjectsDir.filePath( projectFilename );
+  QString createdProjectDir = createdProjectsDir.filePath( QStringLiteral( "%1/%2/%3" ).arg( safeRegion, safeSite, QStringLiteral( "%1_%2" ).arg( safeDate, safeSite ) ) );
   int uniqueSuffix = 2;
   while ( QFileInfo::exists( createdProjectDir ) )
   {
-    createdProjectDir = QStringLiteral( "%1_%2" ).arg( createdProjectsDir.filePath( projectFilename ), QString::number( uniqueSuffix++ ) );
+    createdProjectDir = QStringLiteral( "%1_%2" ).arg( createdProjectsDir.filePath( QStringLiteral( "%1/%2/%3" ).arg( safeRegion, safeSite, QStringLiteral( "%1_%2" ).arg( safeDate, safeSite ) ) ), QString::number( uniqueSuffix++ ) );
   }
   createdProjectDir = QDir::cleanPath( createdProjectDir );
   createdProjectsDir.mkpath( createdProjectDir );
@@ -156,6 +444,9 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
   QgsProjectMetadata projectMetadata = createdProject->metadata();
   projectMetadata.setTitle( projectTitle );
   createdProject->setMetadata( projectMetadata );
+  createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/regionName" ), regionName );
+  createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/siteName" ), siteName );
+  createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/workDate" ), safeDate );
 
   // Basic project settings
   const QgsCoordinateReferenceSystem defaultProjectCrs( QStringLiteral( "EPSG:3857" ) );

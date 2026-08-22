@@ -16,15 +16,21 @@ Page {
   property bool hasCurrentProject: false
   property string currentProjectName: ""
   property bool projectImportAvailable: true
+  property string pendingLandStarProjectPath: ""
 
   signal importProjectRequested
   signal browseProjectsRequested
-  signal createFieldProjectRequested
+  signal createFieldProjectRequested(string regionName, string siteName, string workDate)
+  signal deleteRecentProjectRequested(string path, int projectType, string title)
   signal openRecentProjectRequested(string path, string title, int projectType)
   signal continueSurveyRequested
   signal settingsRequested
   signal openSourceInformationRequested
   signal closeApplicationRequested
+
+  function openProjectCreationDialog(regionName, siteName, workDate, importPath) {
+    projectCreationDialog.openWithDefaults(regionName, siteName, workDate, importPath);
+  }
 
   visible: false
   focus: visible
@@ -216,7 +222,7 @@ Page {
           text: "기본 현장 프로젝트 만들기"
           detailText: "LandStar 측점과 현장 사진을 바로 기록"
           iconSource: Theme.getThemeVectorIcon("ic_add_white_24dp")
-          onClicked: root.createFieldProjectRequested()
+          onClicked: projectCreationDialog.open()
         }
       }
 
@@ -250,20 +256,32 @@ Page {
         model: root.model
         interactive: contentHeight > height
 
-        delegate: Button {
+        delegate: Item {
           id: recentButton
           property string projectPath: ProjectPath
           property string projectTitle: ProjectTitle
           property int projectType: ProjectType
           width: recentProjects.width
           height: 72
-          leftPadding: 14
-          rightPadding: 14
 
-          onClicked: root.openRecentProjectRequested(projectPath, projectTitle, projectType)
+          MouseArea {
+            id: recentButtonMouseArea
+            anchors.fill: parent
+            onClicked: root.openRecentProjectRequested(projectPath, projectTitle, projectType)
+          }
 
-          contentItem: RowLayout {
+          Rectangle {
+            anchors.fill: parent
+            radius: 15
+            color: recentButtonMouseArea.pressed ? "#e9f0f8" : "#ffffff"
+            border.color: "#d9e1e9"
+          }
+
+          RowLayout {
             spacing: 12
+            anchors.fill: parent
+            anchors.leftMargin: 14
+            anchors.rightMargin: 14
             Rectangle {
               Layout.preferredWidth: 40
               Layout.preferredHeight: 40
@@ -302,12 +320,35 @@ Page {
               font.pixelSize: 13
               font.bold: true
             }
-          }
+            Button {
+              id: deleteRecentButton
+              Layout.preferredWidth: 44
+              Layout.preferredHeight: 44
+              icon.source: Theme.getThemeVectorIcon("ic_delete_forever_white_24dp")
+              text: ""
+              display: AbstractButton.TextOnly
+              highlighted: false
+              flat: true
+              focusPolicy: Qt.NoFocus
+              onClicked: {
+                root.deleteRecentProjectRequested(projectPath, projectType, projectTitle);
+              }
+              background: Rectangle {
+                anchors.fill: parent
+                color: deleteRecentButton.pressed ? "#fff0f0" : "transparent"
+                radius: 12
+              }
 
-          background: Rectangle {
-            radius: 15
-            color: recentButton.down ? "#e9f0f8" : "#ffffff"
-            border.color: "#d9e1e9"
+              contentItem: Item {
+                Image {
+                  anchors.centerIn: parent
+                  width: 20
+                  height: 20
+                  source: deleteRecentButton.icon.source
+                }
+              }
+              Layout.alignment: Qt.AlignVCenter
+            }
           }
         }
       }
@@ -387,4 +428,104 @@ Page {
       font: parent.font
     }
   }
+  Dialog {
+    id: projectCreationDialog
+    modal: true
+    focus: true
+    anchors.centerIn: parent
+    title: "기본 현장 프로젝트 만들기"
+    standardButtons: Dialog.Ok | Dialog.Cancel
+    width: Math.min(420, parent.width - 48)
+    x: Math.max(mainWindow.sceneLeftMargin, (parent.width - width) / 2)
+    y: Math.max(mainWindow.sceneTopMargin, (parent.height - height) / 2)
+
+    property string defaultRegionLabel: "경상남도"
+    property string defaultSiteLabel: "성산 기본 현장"
+    property string siteName: ""
+    property string regionName: ""
+    property string surveyDate: ""
+
+    function openWithDefaults(regionName, siteName, workDate, importPath) {
+      this.regionName = regionName || "";
+      this.siteName = siteName || "";
+      this.surveyDate = workDate || "";
+      root.pendingLandStarProjectPath = importPath || "";
+      regionNameField.text = this.regionName;
+      projectTitleField.text = this.siteName;
+      projectDateField.text = this.surveyDate;
+      open();
+    }
+
+    onAccepted: {
+      const safe = v => v.replace(/[\\\/:*?\x22<>|]/g, "_").trim();
+      const rawRegion = safe(regionName.trim().length > 0 ? regionName.trim() : defaultRegionLabel);
+      const rawSite = safe(siteName.trim().length > 0 ? siteName.trim() : defaultSiteLabel);
+      const now = new Date();
+      const safeDate = safe(surveyDate.trim().length > 0
+        ? surveyDate.trim()
+        : `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`);
+      root.createFieldProjectRequested(rawRegion, rawSite, safeDate);
+      // pending path remains for import flow; it will be consumed by the
+      // main app when the created project finishes loading.
+      siteName = "";
+      regionName = "";
+      surveyDate = "";
+    }
+
+    onRejected: {
+      root.pendingLandStarProjectPath = "";
+      siteName = "";
+      regionName = "";
+      surveyDate = "";
+    }
+
+    ColumnLayout {
+      anchors.fill: parent
+      anchors.margins: 16
+      spacing: 10
+
+      Label {
+        Layout.fillWidth: true
+        text: "지역명/현장명을 입력해 주세요."
+        wrapMode: Text.WordWrap
+        color: "#17324d"
+        font.pixelSize: 15
+      }
+
+      Label {
+        Layout.fillWidth: true
+        text: "예시: 경상남도 / 창녕군 OOO 현장 / 20260821"
+        color: "#6e7e8e"
+        font.pixelSize: 12
+      }
+
+      TextField {
+        id: regionNameField
+        Layout.fillWidth: true
+        text: projectCreationDialog.regionName
+        placeholderText: "지역명 (예: 경상남도 창녕군)"
+        inputMethodHints: Qt.ImhPreferUppercase | Qt.ImhNoPredictiveText
+        onTextChanged: projectCreationDialog.regionName = text
+      }
+
+      TextField {
+        id: projectTitleField
+        Layout.fillWidth: true
+        text: projectCreationDialog.siteName
+        placeholderText: projectCreationDialog.defaultSiteLabel
+        inputMethodHints: Qt.ImhPreferUppercase | Qt.ImhNoPredictiveText
+        onTextChanged: projectCreationDialog.siteName = text
+      }
+
+      TextField {
+        id: projectDateField
+        Layout.fillWidth: true
+        text: projectCreationDialog.surveyDate
+        placeholderText: "측량일 YYYYMMDD · 기본값은 오늘"
+        inputMethodHints: Qt.ImhDigitsOnly
+        onTextChanged: projectCreationDialog.surveyDate = text
+      }
+    }
+  }
+
 }

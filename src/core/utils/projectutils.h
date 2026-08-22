@@ -96,6 +96,15 @@ class ProjectUtils : public QObject
      *   layer and its unlimited, relation-backed field photo table
      */
     Q_INVOKABLE static QString createProject( const QVariantMap &options, const GnssPositionInformation &positionInformation = GnssPositionInformation() );
+
+    /**
+     * Exports a comparison snapshot (CSV/텍스트) in the project folder.
+     * The export includes all field survey points and attached photos for quick
+     * field validation against GPS/텍스트 coordinate source data.
+     *
+     * Returns false if the file cannot be written.
+     */
+    Q_INVOKABLE static bool exportFieldSurveyComparisonReport( QgsProject *project, const QString &projectDirectory );
 };
 
 #endif // PROJECTUTILS_H

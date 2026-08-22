@@ -19,6 +19,7 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QTextStream>
+#include <QTextCodec>
 #include <QUuid>
 #include <QStringConverter>
 #include <QStringDecoder>
@@ -57,6 +58,15 @@ namespace
     bool horizontalAccuracyValid = false;
   };
 
+  struct LandStarMetadata
+  {
+    QString region;
+    QString site;
+    QString workDate;
+    QString projectName;
+    QString source = QStringLiteral( "none" );
+  };
+
   enum class FixQuality
   {
     Fixed,
@@ -69,6 +79,140 @@ namespace
     QString result = value.trimmed().toLower();
     result.remove( QRegularExpression( QStringLiteral( "[\\s_\\-()\\[\\].]" ) ) );
     return result;
+  }
+
+  bool matchesAnyAlias( const QString &value, const QStringList &aliases )
+  {
+    const QString candidate = normalized( value );
+    for ( const QString &alias : aliases )
+    {
+      if ( candidate == normalized( alias ) )
+        return true;
+    }
+    return false;
+  }
+
+  void setMetadataValue( QString &target, const QString &value )
+  {
+    const QString cleaned = value.trimmed();
+    if ( target.trimmed().isEmpty() && !cleaned.isEmpty() )
+      target = cleaned;
+  }
+
+  QString normalizeDateToken( const QString &rawValue )
+  {
+    QString value = rawValue.trimmed();
+    static const QRegularExpression datePattern( QStringLiteral( "(\\d{4})[-/.]?(\\d{1,2})[-/.]?(\\d{1,2})" ) );
+    const QRegularExpressionMatch match = datePattern.match( value );
+    if ( !match.hasMatch() )
+      return QString();
+    const int year = match.captured( 1 ).toInt();
+    const int month = match.captured( 2 ).toInt();
+    const int day = match.captured( 3 ).toInt();
+    if ( year < 2000 || year > 2100 || month < 1 || month > 12 || day < 1 || day > 31 )
+      return QString();
+
+    return QStringLiteral( "%1%2%3" )
+      .arg( year, 4, 10, QLatin1Char( '0' ) )
+      .arg( month, 2, 10, QLatin1Char( '0' ) )
+      .arg( day, 2, 10, QLatin1Char( '0' ) );
+  }
+
+  void parseMetadataLine( const QString &line, LandStarMetadata &metadata )
+  {
+    QString entry = line.trimmed();
+    if ( entry.isEmpty() )
+      return;
+
+    if ( entry.startsWith( QLatin1Char( '#' ) ) )
+      entry = entry.mid( 1 ).trimmed();
+    else if ( entry.startsWith( QStringLiteral( "//" ) ) )
+      entry = entry.mid( 2 ).trimmed();
+
+    if ( entry.isEmpty() )
+      return;
+
+    QString key;
+    QString value;
+
+    if ( entry.contains( QLatin1Char( ':' ) ) )
+    {
+      const int idx = entry.indexOf( QLatin1Char( ':' ) );
+      key = entry.left( idx );
+      value = entry.mid( idx + 1 );
+    }
+    else if ( entry.contains( QLatin1Char( '=' ) ) )
+    {
+      const int idx = entry.indexOf( QLatin1Char( '=' ) );
+      key = entry.left( idx );
+      value = entry.mid( idx + 1 );
+    }
+    else if ( entry.contains( QLatin1Char( ',' ) ) )
+    {
+      const int idx = entry.indexOf( QLatin1Char( ',' ) );
+      key = entry.left( idx );
+      value = entry.mid( idx + 1 );
+    }
+    else if ( entry.contains( QLatin1Char( '\t' ) ) )
+    {
+      const int idx = entry.indexOf( QLatin1Char( '\t' ) );
+      key = entry.left( idx );
+      value = entry.mid( idx + 1 );
+    }
+
+    if ( key.isEmpty() || value.isEmpty() )
+      return;
+    value = value.trimmed();
+    if ( value.startsWith( QLatin1Char( '\"' ) ) && value.endsWith( QLatin1Char( '\"' ) ) && value.size() > 1 )
+      value = value.mid( 1, value.size() - 2 );
+
+    if ( matchesAnyAlias( key, { QStringLiteral( "작업방명" ), QStringLiteral( "작업방" ), QStringLiteral( "작업명" ), QStringLiteral( "작업명칭" ),
+                               QStringLiteral( "project" ), QStringLiteral( "project_name" ), QStringLiteral( "프로젝트명" ), QStringLiteral( "작업대상" ) } ) )
+    {
+      setMetadataValue( metadata.projectName, value );
+      metadata.source = QStringLiteral( "metadata" );
+      return;
+    }
+
+    if ( matchesAnyAlias( key, { QStringLiteral( "지역" ), QStringLiteral( "지역명" ), QStringLiteral( "도" ), QStringLiteral( "도명" ),
+                               QStringLiteral( "province" ), QStringLiteral( "sido" ), QStringLiteral( "region" ), QStringLiteral( "region_name" ) } ) )
+    {
+      setMetadataValue( metadata.region, value );
+      metadata.source = QStringLiteral( "metadata" );
+      return;
+    }
+
+    if ( matchesAnyAlias( key, { QStringLiteral( "현장" ), QStringLiteral( "현장명" ), QStringLiteral( "site" ), QStringLiteral( "site_name" ), QStringLiteral( "작업장" ), QStringLiteral( "작업현장" ), QStringLiteral( "포인트" ) } ) )
+    {
+      setMetadataValue( metadata.site, value );
+      metadata.source = QStringLiteral( "metadata" );
+      return;
+    }
+
+    if ( matchesAnyAlias( key, { QStringLiteral( "측량일" ), QStringLiteral( "작업일" ), QStringLiteral( "측량일자" ), QStringLiteral( "측량날짜" ),
+                               QStringLiteral( "date" ), QStringLiteral( "work_date" ), QStringLiteral( "workdate" ) } ) )
+    {
+      const QString normalizedDate = normalizeDateToken( value );
+      setMetadataValue( metadata.workDate, normalizedDate );
+      metadata.source = QStringLiteral( "metadata" );
+      return;
+    }
+  }
+
+  LandStarMetadata detectLandStarMetadata( const QString &text, const QString &filePath )
+  {
+    LandStarMetadata metadata;
+    const QStringList allLines = text.split( QRegularExpression( QStringLiteral( "\\r?\\n" ) ), Qt::SkipEmptyParts );
+    for ( const QString &line : allLines )
+    {
+      parseMetadataLine( line, metadata );
+      if ( !metadata.projectName.isEmpty() && !metadata.region.isEmpty() && !metadata.workDate.isEmpty() )
+        break;
+    }
+    Q_UNUSED( filePath )
+    if ( !metadata.region.isEmpty() && !metadata.site.isEmpty() )
+      metadata.source = QStringLiteral( "metadata" );
+    return metadata;
   }
 
   QStringList parseCsvLine( const QString &line, const QChar delimiter )
@@ -219,6 +363,51 @@ namespace
 SungsanSurveyBridge::SungsanSurveyBridge( QObject *parent )
   : QObject( parent )
 {}
+
+QVariantMap SungsanSurveyBridge::queryLandStarMetadata( const QString &filePath ) const
+{
+  const QFileInfo info( filePath );
+  if ( !info.isFile() || info.size() <= 0 )
+    return errorResult( tr( "LandStar 측점 파일을 찾지 못했습니다." ) );
+  if ( info.size() > MAX_POINT_FILE_BYTES )
+    return errorResult( tr( "LandStar 측점 파일이 안전 제한(25 MB)을 초과했습니다." ) );
+
+  QFile file( filePath );
+  if ( !file.open( QIODevice::ReadOnly ) )
+    return errorResult( tr( "LandStar 측점 파일을 읽지 못했습니다." ) );
+
+  const QByteArray bytes = file.readAll();
+  file.close();
+  if ( bytes.size() > MAX_POINT_FILE_BYTES )
+    return errorResult( tr( "LandStar 측점 파일이 안전 제한(25 MB)을 초과했습니다." ) );
+  const QByteArray normalized = bytes.startsWith( QByteArrayLiteral( "\xEF\xBB\xBF" ) ) ? bytes.mid( 3 ) : bytes;
+
+  QStringDecoder decoder( QStringConverter::Utf8 );
+  QString text = decoder.decode( normalized );
+  if ( decoder.hasError() )
+  {
+    const QTextCodec *fallbackCodec = QTextCodec::codecForName( "CP949" );
+    if ( fallbackCodec )
+    {
+      text = fallbackCodec->toUnicode( normalized );
+    }
+    else
+    {
+      text = QString::fromLocal8Bit( normalized );
+    }
+  }
+
+  const LandStarMetadata metadata = detectLandStarMetadata( text, filePath );
+  return QVariantMap{
+    { QStringLiteral( "ok" ), true },
+    { QStringLiteral( "error" ), QString() },
+    { QStringLiteral( "project_region" ), metadata.region },
+    { QStringLiteral( "project_site" ), metadata.site },
+    { QStringLiteral( "project_name" ), metadata.projectName },
+    { QStringLiteral( "work_date" ), metadata.workDate },
+    { QStringLiteral( "source" ), metadata.source },
+  };
+}
 
 QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, QgsVectorLayer *preferredLayer, QString *error ) const
 {
