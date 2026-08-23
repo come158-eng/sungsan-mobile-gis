@@ -90,6 +90,8 @@ ApplicationWindow {
 
     property string screenConfiguration: ''
     property string sungsanPendingLandStarPath: ''
+    property string sungsanExternalPositioningDevice: ''
+    property string sungsanExternalPositioningDeviceName: ''
 
     Component.onCompleted: {
       if (sungsanPendingLandStarPath.length > 0) {
@@ -508,6 +510,13 @@ ApplicationWindow {
           gnssButton.autoRefollow = false;
           positionSource.active = false;
         }
+      }
+    }
+
+    onPositioningDeviceChanged: {
+      if (positioningDevice && positioningDevice.length > 0) {
+        mainWindowSettings.sungsanExternalPositioningDevice = positioningDevice;
+        mainWindowSettings.sungsanExternalPositioningDeviceName = positioningDeviceName;
       }
     }
 
@@ -3732,19 +3741,49 @@ ApplicationWindow {
   }
 
   function sungsanShowCurrentLocation(source) {
+    let selectedDevice = positioningSettings.positioningDevice || "";
+    let selectedName = positioningSettings.positioningDeviceName || "";
+    let restartRequired = false;
+
     if (source === "phone") {
+      if (selectedDevice.length > 0) {
+        mainWindowSettings.sungsanExternalPositioningDevice = selectedDevice;
+        mainWindowSettings.sungsanExternalPositioningDeviceName = selectedName;
+        restartRequired = true;
+      }
       positioningSettings.positioningDevice = "";
       positioningSettings.positioningDeviceName = qsTr("Internal device");
       displayToast("휴대폰 GPS를 선택했습니다.");
     } else if (source === "external") {
-      if (!positioningSettings.positioningDevice || positioningSettings.positioningDevice.length === 0) {
+      const externalDevice = selectedDevice.length > 0
+        ? selectedDevice
+        : mainWindowSettings.sungsanExternalPositioningDevice;
+      const externalName = selectedDevice.length > 0
+        ? selectedName
+        : mainWindowSettings.sungsanExternalPositioningDeviceName;
+      if (!externalDevice || externalDevice.length === 0) {
         qfieldSettings.reset();
         qfieldSettings.currentPanel = 1;
         qfieldSettings.visible = true;
         displayToast("외부 GNSS 장치를 먼저 Bluetooth 설정에서 선택해 주세요.", "info");
         return;
       }
-      displayToast("외부 GNSS: " + positioningSettings.positioningDeviceName);
+      if (positioningSettings.positioningDevice !== externalDevice) {
+        restartRequired = true;
+        positioningSettings.positioningDevice = externalDevice;
+        positioningSettings.positioningDeviceName = externalName;
+      }
+      displayToast("외부 GNSS: " + (externalName.length > 0 ? externalName : "저장된 장치"));
+    }
+
+    if (restartRequired) {
+      positionSource.active = false;
+      positionSource.jumpToPosition = true;
+      Qt.callLater(function() {
+        positioningSettings.positioningActivated = true;
+        positionSource.active = true;
+      });
+      return;
     }
     if (!positionSource.active) {
       positionSource.jumpToPosition = true;
