@@ -43,7 +43,7 @@ Item {
 
   signal homeRequested
   signal startSurveyRequested
-  signal currentLocationRequested
+  signal currentLocationRequested(string source)
   signal gnssSettingsRequested
   signal vworldRequested
   signal layersRequested
@@ -261,7 +261,7 @@ Item {
           text: "현재 위치"
           compact: true
           iconSource: Theme.getThemeVectorIcon("ic_location_white_24dp")
-          onClicked: root.currentLocationRequested()
+          onClicked: locationSourceDialog.open()
         }
 
         SungsanActionButton {
@@ -414,6 +414,55 @@ Item {
           onClicked: root.cancelGeometryRequested()
         }
       }
+      }
+    }
+  }
+
+  Dialog {
+    id: locationSourceDialog
+    modal: true
+    title: "현재 위치 소스 선택"
+    standardButtons: Dialog.Cancel
+    width: Math.min(380, root.width - 32)
+    anchors.centerIn: parent
+
+    ColumnLayout {
+      anchors.fill: parent
+      anchors.margins: 16
+      spacing: 10
+
+      Label {
+        Layout.fillWidth: true
+        text: "어느 장치의 위치를 사용할까요?"
+        color: "#17324d"
+        font.pixelSize: 15
+        font.bold: true
+      }
+
+      Button {
+        Layout.fillWidth: true
+        text: "휴대폰 GPS 사용"
+        onClicked: {
+          locationSourceDialog.close();
+          root.currentLocationRequested("phone");
+        }
+      }
+
+      Button {
+        Layout.fillWidth: true
+        text: "외부 GNSS 사용 (CHCNAV / Bluetooth)"
+        onClicked: {
+          locationSourceDialog.close();
+          root.currentLocationRequested("external");
+        }
+      }
+
+      Label {
+        Layout.fillWidth: true
+        text: "외부 GNSS는 장치·Bluetooth 설정이 먼저 저장되어 있어야 합니다."
+        wrapMode: Text.WordWrap
+        color: "#6e7e8e"
+        font.pixelSize: 12
       }
     }
   }

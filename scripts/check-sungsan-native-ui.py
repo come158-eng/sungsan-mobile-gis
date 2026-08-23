@@ -831,20 +831,20 @@ def check_vworld() -> None:
         PASSES.append("no real-looking VWorld key in production source")
 
 
-def check_opt_in_vworld_plugin_restore() -> None:
+def check_vworld_plugin_restore() -> None:
     plugin_manager = "src/core/pluginmanager.cpp"
     require(plugin_manager, '#include "qfield.h"', "plugin manager reads Sungsan build identity")
     require(
         plugin_manager,
         'QStringLiteral( "sungsan_vworld" )',
-        "opt-in plugin uses the exact bundled-directory UUID",
+        "bundled plugin uses the exact bundled-directory UUID",
     )
     require_regex(
         plugin_manager,
         r"isOptInSungsanVWorldPlugin.*?qfield::isSungsanBuild\s*&&\s*"
         r"pluginInformation\.bundled\s*&&\s*pluginInformation\.uuid\s*==\s*"
         r"sungsanVWorldPluginUuid",
-        "opt-in VWorld predicate is limited to Sungsan, bundled and exact UUID",
+        "VWorld predicate is limited to Sungsan, bundled and exact UUID",
     )
     forbid(
         plugin_manager,
@@ -856,18 +856,16 @@ def check_opt_in_vworld_plugin_restore() -> None:
     restore_start = source.find("void PluginManager::restoreAppPlugins()")
     enable_start = source.find("void PluginManager::enableAppPlugin", restore_start)
     restore_body = source[restore_start:enable_start]
-    opt_in_restore_pattern = re.compile(
-        r"if\s*\(\s*isOptInSungsanVWorldPlugin\s*\(\s*plugin\s*\)\s*\)\s*"
-        r"\{\s*continue\s*;\s*\}",
+    auto_load_pattern = re.compile(
+        r"loadPlugin\(\s*plugin\.path\s*,\s*plugin\.name\s*,\s*true\s*\)",
         re.DOTALL,
     )
-    if restore_start < 0 or enable_start < 0 or not opt_in_restore_pattern.search(restore_body):
+    if restore_start < 0 or enable_start < 0 or not auto_load_pattern.search(restore_body):
         FAILURES.append(
-            "src/core/pluginmanager.cpp: first-run bundled VWorld must remain disabled "
-            "until the user explicitly enables it"
+            "src/core/pluginmanager.cpp: bundled VWorld is not auto-loaded for new projects"
         )
     else:
-        PASSES.append("bundled VWorld is opt-in on first run")
+        PASSES.append("bundled VWorld is auto-loaded and idempotent")
 
     plugin_dir = ROOT / "branding/sungsan/plugins/sungsan_vworld"
     if plugin_dir.name != "sungsan_vworld" or not (plugin_dir / "main.qml.in").is_file():
@@ -895,7 +893,7 @@ def main() -> int:
     check_save_api()
     check_android_bridge()
     check_vworld()
-    check_opt_in_vworld_plugin_restore()
+    check_vworld_plugin_restore()
 
     if FAILURES:
         print(f"FAIL: {len(FAILURES)} issue(s); {len(PASSES)} static checks passed")

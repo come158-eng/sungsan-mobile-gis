@@ -3731,7 +3731,21 @@ ApplicationWindow {
     changeMode("digitize");
   }
 
-  function sungsanShowCurrentLocation() {
+  function sungsanShowCurrentLocation(source) {
+    if (source === "phone") {
+      positioningSettings.positioningDevice = "";
+      positioningSettings.positioningDeviceName = qsTr("Internal device");
+      displayToast("휴대폰 GPS를 선택했습니다.");
+    } else if (source === "external") {
+      if (!positioningSettings.positioningDevice || positioningSettings.positioningDevice.length === 0) {
+        qfieldSettings.reset();
+        qfieldSettings.currentPanel = 1;
+        qfieldSettings.visible = true;
+        displayToast("외부 GNSS 장치를 먼저 Bluetooth 설정에서 선택해 주세요.", "info");
+        return;
+      }
+      displayToast("외부 GNSS: " + positioningSettings.positioningDeviceName);
+    }
     if (!positionSource.active) {
       positionSource.jumpToPosition = true;
       positioningSettings.positioningActivated = true;
@@ -5647,7 +5661,7 @@ ApplicationWindow {
       }
     }
 
-    onCurrentLocationRequested: mainWindow.sungsanShowCurrentLocation()
+    onCurrentLocationRequested: mainWindow.sungsanShowCurrentLocation(source)
 
     onGnssSettingsRequested: {
       qfieldSettings.reset();

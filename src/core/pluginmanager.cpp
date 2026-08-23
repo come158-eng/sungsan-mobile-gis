@@ -281,12 +281,10 @@ void PluginManager::restoreAppPlugins()
   {
     if ( plugin.bundled && !checkedPluginUUids.contains( plugin.uuid ) )
     {
-      // VWorld performs a network request and changes the project layer tree.
-      // Ship it with the app, but wait until the user enables it in Plugins.
-      if ( isOptInSungsanVWorldPlugin( plugin ) )
-      {
-        continue;
-      }
+      // Sungsan projects require a visible satellite base map from the first
+      // frame.  The bundled plugin still checks for an existing layer before
+      // adding anything, so loading it here is idempotent and avoids a
+      // disappearing "선택 가능" control on newly created projects.
       loadPlugin( plugin.path, plugin.name, true );
     }
   }
