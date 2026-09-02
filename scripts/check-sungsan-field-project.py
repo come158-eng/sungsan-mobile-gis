@@ -12,6 +12,12 @@ HOME = (ROOT / "src/qml/sungsan/SungsanHomeScreen.qml").read_text(encoding="utf-
 APP = (ROOT / "src/qml/qgismobileapp.qml").read_text(encoding="utf-8")
 UTILS = (ROOT / "src/core/utils/projectutils.cpp").read_text(encoding="utf-8")
 HEADER = (ROOT / "src/core/utils/projectutils.h").read_text(encoding="utf-8")
+ANDROID_ACTIVITY = (
+    ROOT / "platform/android/src/ch/opengis/qfield/QFieldActivity.java"
+).read_text(encoding="utf-8")
+EXTERNAL_RESOURCE = (
+    ROOT / "src/qml/editorwidgets/ExternalResource.qml"
+).read_text(encoding="utf-8")
 
 
 CHECKS: list[tuple[str, bool]] = []
@@ -71,6 +77,7 @@ parent_fields = (
     "photo_near",
     "photo_far",
     "photo_other",
+    "photo_other_2",
 )
 for field_name in parent_fields:
     check(f"parent field {field_name}", f'QStringLiteral( "{field_name}" )' in UTILS)
@@ -78,40 +85,41 @@ for field_name in parent_fields:
 check("PointZ field layer", "Qgis::WkbType::PointZ, defaultProjectCrs" in UTILS)
 check("field object marker", "kr.co.sungsan.mobilegis/fieldObjects" in UTILS)
 check("LandStar target marker", "kr.co.sungsan.mobilegis/landstarImportTarget" in UTILS)
-check("legacy photo fields hidden", all(name in UTILS for name in ('QStringLiteral( "photo_near" )', 'QStringLiteral( "photo_far" )', 'QStringLiteral( "photo_other" )')))
-
-photo_fields = (
-    "photo_id",
-    "object_id",
-    "point_name",
-    "photo_type",
-    "sequence",
-    "media",
-    "captured_at",
-    "memo",
+check(
+    "only technical parent fields hidden",
+    'const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ) }'
+    in UTILS,
 )
-for field_name in photo_fields:
-    check(f"photo field {field_name}", f'QStringLiteral( "{field_name}" )' in UTILS)
-
-check("no-geometry photo table", "Qgis::WkbType::NoGeometry" in UTILS)
-check("photo layer marker", "kr.co.sungsan.mobilegis/fieldPhotos" in UTILS)
-check("unlimited photo types", all(f'QStringLiteral( "{value}" )' in UTILS for value in ("근경", "원경", "기타", "추가")))
 check("external resource editor", 'QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" )' in UTILS)
-check("project-relative photo storage", 'mediaOptions.insert( QStringLiteral( "RelativeStorage" ), 1 )' in UTILS)
-check("photo naming supplies its own category path", "'photos/' || @photo_type_safe || '/'" in UTILS)
-check("no conflicting external-resource root", 'mediaOptions.insert( QStringLiteral( "DefaultRoot" )' not in UTILS)
+check("project-relative photo storage", 'fieldPhotoOptions.insert( QStringLiteral( "RelativeStorage" ), 1 )' in UTILS)
+check("single field-photo directory", "'photos/현장사진/' || @object_name_safe" in UTILS)
+check("no conflicting external-resource root", 'fieldPhotoOptions.insert( QStringLiteral( "DefaultRoot" )' not in UTILS)
 check("photos included as attachment directory", 'attachmentDirectories << "photos"' in UTILS)
 check("QField attachment naming", "QFieldSync/attachment_naming" in UTILS)
 check(
-    "point-based unique attachment name",
-    all(token in UTILS for token in ('point_name_safe', 'photo_type_safe', '\\"sequence\\"', '\\"photo_id\\"', '.{extension}')),
+    "object-based fixed attachment names",
+    all(
+        token in UTILS
+        for token in (
+            'fixedPhotoNaming.insert( QStringLiteral( "photo_near" ), photoNameBaseExpression.arg( 1 ) )',
+            'fixedPhotoNaming.insert( QStringLiteral( "photo_far" ), photoNameBaseExpression.arg( 2 ) )',
+            'fixedPhotoNaming.insert( QStringLiteral( "photo_other" ), photoNameBaseExpression.arg( 3 ) )',
+            'fixedPhotoNaming.insert( QStringLiteral( "photo_other_2" ), photoNameBaseExpression.arg( 4 ) )',
+            ".{extension}",
+        )
+    ),
 )
-check("relation id", "sungsan_field_photos" in UTILS)
-check("relation parent", "setReferencedLayer( sungsanFieldObjectsLayer->id() )" in UTILS)
-check("relation child", "setReferencingLayer( sungsanFieldPhotosLayer->id() )" in UTILS)
-check("relation key", 'addFieldPair( QStringLiteral( "object_id" ), QStringLiteral( "object_id" ) )' in UTILS)
-check("composition relation", "Qgis::RelationshipStrength::Composition" in UTILS)
-check("relation shown in parent form", "현장 사진 · 근경/원경/기타/추가" in UTILS)
+check("photo section follows object name", UTILS.index('QStringLiteral( "name" ), nameFieldIndex') < UTILS.index('QStringLiteral( "현장사진" )'))
+check("no plus-button photo relation", "현장 사진 · 근경/원경/기타/추가" not in UTILS)
+check("single photo directory created", 'mkpath( QStringLiteral( "photos/현장사진" ) )' in UTILS)
+check("legacy split photo directories removed", all(f'photos/{name}' not in UTILS for name in ("근경", "원경", "기타", "추가")))
+check("fixed photos included in export", 'QStringLiteral( "photo_other_2" ), QStringLiteral( "기타" )' in UTILS)
+check("gallery copy restricted to Sungsan fixed photos", 'startsWith("photos/현장사진/")' in ANDROID_ACTIVITY)
+check("gallery copy uses Android MediaStore", "MediaStore.Images.Media.RELATIVE_PATH" in ANDROID_ACTIVITY)
+check("gallery album", '"/성산 GIS/"' in ANDROID_ACTIVITY)
+check("camera publishes gallery copy", "publishSungsanFieldPhotoToGallery(result);" in ANDROID_ACTIVITY)
+check("photo capture requires object name", "사진을 찍기 전에 객체명을 먼저 입력해 주세요." in EXTERNAL_RESOURCE)
+check("name guard covers all fixed slots", all(name in EXTERNAL_RESOURCE for name in ("photo_near", "photo_far", "photo_other", "photo_other_2")))
 
 failed = [name for name, ok in CHECKS if not ok]
 if failed:
