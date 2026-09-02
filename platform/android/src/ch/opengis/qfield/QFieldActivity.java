@@ -44,6 +44,7 @@ import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ContentValues;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -185,6 +186,7 @@ public class QFieldActivity extends QtActivity {
     private File resourceFile;
     private File resourceCacheFile;
     private boolean resourceIsEditing;
+    private boolean resourceIsVideo;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -1723,6 +1725,7 @@ public class QFieldActivity extends QtActivity {
         resourcePrefix = prefix;
         resourceFilePath = filePath;
         resourceSuffix = suffix;
+        resourceIsVideo = isVideo;
 
         String timeStamp =
             new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
@@ -1766,6 +1769,106 @@ public class QFieldActivity extends QtActivity {
             resourceCanceled("");
         }
         return;
+    }
+
+    /**
+     * Keeps a second copy of fixed Sungsan field photos in the Android
+     * Pictures collection. The project-relative original remains the source
+     * of truth and is included in the exported field ZIP.
+     */
+    private void publishSungsanFieldPhotoToGallery(File sourceFile) {
+        if (!SUNGSAN_PACKAGE_ID.equals(getPackageName()) || resourceIsVideo ||
+            sourceFile == null || !sourceFile.isFile() ||
+            resourceFilePath == null) {
+            return;
+        }
+
+        String normalizedResourcePath = resourceFilePath.replace('\\', '/');
+        if (!normalizedResourcePath.startsWith("photos/현장사진/")) {
+            return;
+        }
+
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentResolver resolver = getContentResolver();
+                    ContentValues values = new ContentValues();
+                    values.put(MediaStore.Images.Media.DISPLAY_NAME,
+                               sourceFile.getName());
+                    values.put(MediaStore.Images.Media.MIME_TYPE,
+                               "image/jpeg");
+                    values.put(MediaStore.Images.Media.DATE_TAKEN,
+                               System.currentTimeMillis());
+                    values.put(MediaStore.Images.Media.RELATIVE_PATH,
+                               Environment.DIRECTORY_PICTURES +
+                                   "/성산 GIS/");
+                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
+
+                    Uri galleryUri = null;
+                    try {
+                        galleryUri = resolver.insert(
+                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                            values);
+                        if (galleryUri == null) {
+                            throw new IOException(
+                                "Unable to create the gallery image");
+                        }
+                        try (InputStream input =
+                                 new FileInputStream(sourceFile);
+                             OutputStream output =
+                                 resolver.openOutputStream(galleryUri, "w")) {
+                            if (output == null) {
+                                throw new IOException(
+                                    "Unable to open the gallery image");
+                            }
+                            byte[] buffer = new byte[64 * 1024];
+                            int count;
+                            while ((count = input.read(buffer)) != -1) {
+                                output.write(buffer, 0, count);
+                            }
+                        }
+                        values.clear();
+                        values.put(MediaStore.Images.Media.IS_PENDING, 0);
+                        resolver.update(galleryUri, values, null, null);
+                    } catch (Exception exception) {
+                        Log.e("QField", "Sungsan gallery copy failed",
+                              exception);
+                        if (galleryUri != null) {
+                            resolver.delete(galleryUri, null, null);
+                        }
+                    }
+                    return;
+                }
+
+                if (ContextCompat.checkSelfPermission(
+                        QFieldActivity.this,
+                        Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
+                    PackageManager.PERMISSION_GRANTED) {
+                    Log.w("QField",
+                          "Gallery copy skipped: storage permission missing");
+                    return;
+                }
+
+                File galleryDirectory = new File(
+                    Environment.getExternalStoragePublicDirectory(
+                        Environment.DIRECTORY_PICTURES),
+                    "성산 GIS");
+                if (!galleryDirectory.exists() &&
+                    !galleryDirectory.mkdirs()) {
+                    Log.w("QField", "Unable to create Sungsan gallery folder");
+                    return;
+                }
+                File galleryFile =
+                    new File(galleryDirectory, sourceFile.getName());
+                if (QFieldUtils.copyFile(sourceFile, galleryFile)) {
+                    MediaScannerConnection.scanFile(
+                        QFieldActivity.this,
+                        new String[] {galleryFile.getAbsolutePath()},
+                        new String[] {"image/jpeg"}, null);
+                }
+            }
+        });
     }
 
     private void getGalleryResource(String prefix, String filePath,
@@ -2336,6 +2439,7 @@ public class QFieldActivity extends QtActivity {
                 MediaScannerConnection.scanFile(
                     this, new String[] {result.getParentFile().toString()},
                     null, null);
+                publishSungsanFieldPhotoToGallery(result);
                 resourceReceived(finalFilePath);
             } else {
                 resourceCanceled("");
