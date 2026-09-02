@@ -209,6 +209,15 @@ EditorWidgetBase {
     expressionText: ExternalResourceUtils.getAttachmentNaming(currentLayer, field.name)
   }
 
+  ExpressionEvaluator {
+    id: sungsanObjectNameEvaluator
+    feature: currentFeature
+    layer: currentLayer
+    project: qgisProject
+    appExpressionContextScopesGenerator: appScopesGenerator
+    expressionText: '"name"'
+  }
+
   AudioAnalyzer {
     id: audioAnalyzer
     barCount: 80
@@ -816,6 +825,17 @@ EditorWidgetBase {
 
   function capturePhoto() {
     Qt.inputMethod.hide();
+    const isSungsanFieldPhoto = appIsSungsan && currentLayer &&
+        currentLayer.customProperty('kr.co.sungsan.mobilegis/saveFieldPhotosToGallery') &&
+        ['photo_near', 'photo_far', 'photo_other', 'photo_other_2'].indexOf(field.name) !== -1;
+    if (isSungsanFieldPhoto) {
+      const sungsanObjectName = sungsanObjectNameEvaluator.evaluate();
+      if (sungsanObjectName === undefined || sungsanObjectName === null ||
+          FeatureUtils.attributeIsNull(sungsanObjectName) || String(sungsanObjectName).trim().length === 0) {
+        mainWindow.displayToast("사진을 찍기 전에 객체명을 먼저 입력해 주세요.", "warning");
+        return;
+      }
+    }
     if (platformUtilities.capabilities & PlatformUtilities.NativeCamera && settings.valueBool("nativeCamera2", true)) {
       let filepath = getResourceFilePath();
       // Pictures taken by cameras will always be JPG
