@@ -61,6 +61,7 @@ jobs:
           python3 scripts/check-sungsan-android-workflow.py
           python3 scripts/check-sungsan-android-signing.py
           python3 scripts/check-sungsan-field-security.py
+          python3 scripts/check-sungsan-field-project.py
           python3 scripts/check-sungsan-native-ui.py
           python3 scripts/check-android-compressed-export.py
           python3 scripts/check-android-project-archive-import.py
