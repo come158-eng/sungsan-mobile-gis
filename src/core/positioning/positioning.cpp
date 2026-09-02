@@ -192,7 +192,10 @@ bool Positioning::active() const
 void Positioning::setActive( bool active )
 {
   const QString devId = deviceId();
-  if ( devId.isEmpty() )
+  // Permission prompts are only required when starting a receiver. Asking
+  // while stopping can asynchronously turn it back on from the callback,
+  // making an internal/external switch race with itself.
+  if ( active && devId.isEmpty() )
   {
     // Handle internal receiver permission
     if ( !mInternalPermissionChecked )
@@ -224,7 +227,7 @@ void Positioning::setActive( bool active )
       mInternalPermissionChecked = true;
     }
   }
-  else
+  else if ( active )
   {
     // Handle external receiver permission
     if (
