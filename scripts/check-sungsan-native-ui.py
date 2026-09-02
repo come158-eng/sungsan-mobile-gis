@@ -463,9 +463,26 @@ def check_shell_wiring() -> None:
     require(root, "positionSource.positionInformation.qualityDescription", "NMEA RTK quality is shown on the field panel")
     require(root, "positionSource.positionInformation.satellitesUsed", "GNSS satellites used are shown on the field panel")
     require(root, "property bool sungsanGnssFresh: false", "stale GNSS state defaults to unsafe")
-    require(root, "ageSeconds <= 5", "field GNSS position expires after five seconds")
-    require(root, "Number.isFinite(positionTimeMs)", "invalid GNSS timestamps stay invalid")
+    require(root, "property double sungsanLastGnssReceiptMs: 0", "GNSS freshness records local receipt time")
+    require(root, "receiptAgeSeconds <= 5", "field GNSS position expires five seconds after its last received update")
+    require(root, "mainWindow.sungsanLastGnssReceiptMs = Date.now()", "phone and external fixes refresh on actual receipt")
+    forbid(root, "ageSeconds <= 5", "receiver UTC clock is not used as the Sungsan freshness clock")
+    require(root, "positionSource.jumpToPosition = true", "current-location requests stay armed until the first fix")
+    require(root, "sungsanPositionDeviceSwitchTimer.restart()", "phone and external receivers switch after disconnect")
+    require(root, "positionSource.triggerConnectDevice()", "disconnected external GNSS can reconnect from the location action")
+    require(
+        "src/core/positioning/positioning.cpp",
+        "if ( active && devId.isEmpty() )",
+        "stopping phone GPS never opens an asynchronous permission prompt",
+    )
+    require(
+        "src/core/positioning/positioning.cpp",
+        "else if ( active )",
+        "stopping external GNSS never opens an asynchronous Bluetooth permission prompt",
+    )
     require(panel, "이전 위치 사용 금지", "stale GNSS is explicitly rejected in the field status bar")
+    require(panel, 'text: (root.gpsExternal ? "" : "✓ ") + "휴대폰 GPS 사용"', "location dialog marks phone GPS selection")
+    require(panel, 'text: (root.gpsExternal ? "✓ " : "") + "외부 GNSS 사용 (CHCNAV / Bluetooth)"', "location dialog marks external GNSS selection")
     require(panel, "Flickable {", "short screens can scroll the bottom action panel")
     require(panel, "mainWindow.sceneBottomMargin", "bottom action panel includes the system safe area")
     require(panel, 'root.vworldReady ? "영상 준비" : "선택 가능"', "disabled VWorld is presented as an option, not a pending forced layer")
