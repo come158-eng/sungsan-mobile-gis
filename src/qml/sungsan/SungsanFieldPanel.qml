@@ -25,6 +25,10 @@ Item {
   property string gpsDeviceName: ""
   property string gpsQualityText: ""
   property int gpsSatellites: 0
+  property bool gpsExternal: false
+  property bool gpsSwitching: false
+  property string gpsConnectionText: ""
+  property string gpsLastError: ""
   property bool vworldReady: false
   property bool canAddFeature: false
   property bool canEditExistingPoint: false
@@ -223,6 +227,8 @@ Item {
             const deviceName = configuredName.length === 0 || configuredName === "Internal device"
               ? "휴대폰 GNSS"
               : configuredName;
+            if (root.gpsSwitching)
+              return "위치 장치를 전환하고 있습니다…";
             if (root.gpsPositionValid) {
               const parts = [deviceName];
               if (root.gpsQualityText.length > 0)
@@ -235,7 +241,11 @@ Item {
             }
             if (root.gpsSignalStale)
               return deviceName + " 수신 끊김 · 이전 위치 사용 금지";
-            return root.gpsActive ? deviceName + " 위치 수신 중" : "GNSS 꺼짐 · 외부 수신기 연결 가능";
+            if (root.gpsExternal && root.gpsLastError.length > 0)
+              return deviceName + " 연결 오류 · 외부 GNSS 설정 확인";
+            if (root.gpsExternal && root.gpsConnectionText.length > 0)
+              return deviceName + " · " + root.gpsConnectionText + " · FIX 대기";
+            return root.gpsActive ? deviceName + " 위치 수신 중 · FIX 대기" : "GNSS 꺼짐 · 외부 수신기 연결 가능";
           }
           color: "#516476"
           font.pixelSize: 11
@@ -441,7 +451,7 @@ Item {
 
       Button {
         Layout.fillWidth: true
-        text: "휴대폰 GPS 사용"
+        text: (root.gpsExternal ? "" : "✓ ") + "휴대폰 GPS 사용"
         onClicked: {
           locationSourceDialog.close();
           root.currentLocationRequested("phone");
@@ -450,7 +460,7 @@ Item {
 
       Button {
         Layout.fillWidth: true
-        text: "외부 GNSS 사용 (CHCNAV / Bluetooth)"
+        text: (root.gpsExternal ? "✓ " : "") + "외부 GNSS 사용 (CHCNAV / Bluetooth)"
         onClicked: {
           locationSourceDialog.close();
           root.currentLocationRequested("external");
@@ -459,7 +469,9 @@ Item {
 
       Label {
         Layout.fillWidth: true
-        text: "외부 GNSS는 장치·Bluetooth 설정이 먼저 저장되어 있어야 합니다."
+        text: root.gpsLastError.length > 0
+          ? "최근 연결 오류: " + root.gpsLastError
+          : "외부 GNSS는 장치 설정에서 BT/BLE 방식과 수신기를 먼저 저장해야 합니다. 연결 후 NMEA 좌표가 들어오면 지도가 자동으로 현재 위치로 이동합니다."
         wrapMode: Text.WordWrap
         color: "#6e7e8e"
         font.pixelSize: 12
