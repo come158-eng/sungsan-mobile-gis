@@ -64,6 +64,13 @@ ApplicationWindow {
   // disconnected.  Keep a stricter, Sungsan-only freshness flag for field
   // controls without changing QField's upstream 30-second currentness rule.
   property bool sungsanGnssFresh: false
+  // Freshness is based on when this app received a location update. A GNSS
+  // receiver clock can be offset or incomplete and must not make a live fix
+  // look stale.
+  property double sungsanLastGnssReceiptMs: 0
+  property bool sungsanPositionSwitchPending: false
+  property string sungsanPendingPositioningDevice: ""
+  property string sungsanPendingPositioningDeviceName: ""
   property string sungsanLastSavedText: ""
   property bool sungsanExistingPointEditPending: false
   property string sungsanPendingLandStarPath: ""
@@ -426,6 +433,10 @@ ApplicationWindow {
 
     onPositionInformationChanged: {
       if (active) {
+        mainWindow.sungsanLastGnssReceiptMs = Date.now();
+        mainWindow.sungsanGnssFresh = !!positionSource.positionInformation
+          && positionSource.positionInformation.latitudeValid
+          && positionSource.positionInformation.longitudeValid;
         if (jumpToPosition && positionSource.projectedPosition.x) {
           jumpToPosition = false;
           gnssButton.jumpToLocation();
@@ -465,6 +476,12 @@ ApplicationWindow {
 
     onDeviceLastErrorChanged: {
       displayToast(qsTr('Positioning device error: %1').arg(positionSource.deviceLastError), 'error');
+    }
+
+    onDeviceIdChanged: {
+      // Never carry a cached coordinate across a phone/external switch.
+      mainWindow.sungsanLastGnssReceiptMs = 0;
+      mainWindow.sungsanGnssFresh = false;
     }
 
     onBackgroundModeChanged: {
@@ -540,17 +557,16 @@ ApplicationWindow {
     onTriggered: {
       if (positionSource.positionInformation) {
         positionSource.currentness = ((Date.now() - positionSource.positionInformation.utcDateTime.getTime()) / 1000) < 30;
-        const positionTime = positionSource.positionInformation.utcDateTime;
-        const positionTimeMs = positionTime && positionTime.getTime ? positionTime.getTime() : NaN;
-        const ageSeconds = (Date.now() - positionTimeMs) / 1000;
-        // Allow one second of harmless clock skew, but never treat an invalid,
-        // future-dated or older cached fix as a live field position.
+        const receiptAgeSeconds = (Date.now() - mainWindow.sungsanLastGnssReceiptMs) / 1000;
+        // Use local receipt time for both Android locations and external NMEA.
+        // Receiver UTC values can legitimately be incomplete or offset.
         mainWindow.sungsanGnssFresh = positionSource.active
           && positionSource.positionInformation.latitudeValid
           && positionSource.positionInformation.longitudeValid
-          && Number.isFinite(positionTimeMs)
-          && ageSeconds >= -1
-          && ageSeconds <= 5;
+          && Number.isFinite(mainWindow.sungsanLastGnssReceiptMs)
+          && mainWindow.sungsanLastGnssReceiptMs > 0
+          && receiptAgeSeconds >= 0
+          && receiptAgeSeconds <= 5;
         if (!geocoderLocatorFiltersChecked && positionSource.valid) {
           locatorItem.locatorFiltersModel.setGeocoderLocatorFiltersDefaulByPosition(positionSource.positionInformation);
           geocoderLocatorFiltersChecked = true;
@@ -3743,16 +3759,16 @@ ApplicationWindow {
   function sungsanShowCurrentLocation(source) {
     let selectedDevice = positioningSettings.positioningDevice || "";
     let selectedName = positioningSettings.positioningDeviceName || "";
-    let restartRequired = false;
+    let targetDevice = selectedDevice;
+    let targetName = selectedName;
 
     if (source === "phone") {
       if (selectedDevice.length > 0) {
         mainWindowSettings.sungsanExternalPositioningDevice = selectedDevice;
         mainWindowSettings.sungsanExternalPositioningDeviceName = selectedName;
-        restartRequired = true;
       }
-      positioningSettings.positioningDevice = "";
-      positioningSettings.positioningDeviceName = qsTr("Internal device");
+      targetDevice = "";
+      targetName = qsTr("Internal device");
       displayToast("휴대폰 GPS를 선택했습니다.");
     } else if (source === "external") {
       const externalDevice = selectedDevice.length > 0
@@ -3768,32 +3784,71 @@ ApplicationWindow {
         displayToast("외부 GNSS 장치를 먼저 Bluetooth 설정에서 선택해 주세요.", "info");
         return;
       }
-      if (positioningSettings.positioningDevice !== externalDevice) {
-        restartRequired = true;
-        positioningSettings.positioningDevice = externalDevice;
-        positioningSettings.positioningDeviceName = externalName;
-      }
+      targetDevice = externalDevice;
+      targetName = externalName;
       displayToast("외부 GNSS: " + (externalName.length > 0 ? externalName : "저장된 장치"));
     }
 
-    if (restartRequired) {
+    // Keep the one-shot jump armed while waiting. Previously an already
+    // active receiver could obtain its first fix later without revealing it.
+    positionSource.jumpToPosition = true;
+
+    if (positioningSettings.positioningDevice !== targetDevice) {
+      // Release the old receiver before changing its ID. This prevents the
+      // outgoing and incoming Bluetooth sockets from overlapping.
+      mainWindow.sungsanPositionSwitchPending = true;
+      mainWindow.sungsanPendingPositioningDevice = targetDevice;
+      mainWindow.sungsanPendingPositioningDeviceName = targetName;
+      positioningSettings.positioningActivated = false;
       positionSource.active = false;
-      positionSource.jumpToPosition = true;
-      Qt.callLater(function() {
-        positioningSettings.positioningActivated = true;
-        positionSource.active = true;
-      });
+      sungsanPositionDeviceSwitchTimer.restart();
       return;
     }
     if (!positionSource.active) {
-      positionSource.jumpToPosition = true;
       positioningSettings.positioningActivated = true;
+      positionSource.active = true;
     } else if (!mainWindow.sungsanGnssFresh) {
-      displayToast("GNSS 수신이 5초 이상 끊겼습니다. 연결과 FIX 상태를 확인해 주세요.", "warning");
+      if (targetDevice.length > 0 && positionSource.deviceSocketState === QAbstractSocket.UnconnectedState) {
+        positionSource.triggerConnectDevice();
+        displayToast("외부 GNSS에 다시 연결하고 첫 FIX를 기다립니다.", "info");
+      } else {
+        displayToast("선택한 위치 장치의 첫 FIX를 기다립니다.", "info");
+      }
     } else if (positionSource.projectedPosition.x) {
+      positionSource.jumpToPosition = false;
       gnssButton.jumpToLocation();
     } else {
       displayToast("GPS 위치를 수신하고 있습니다.");
+    }
+  }
+
+  Timer {
+    id: sungsanPositionDeviceSwitchTimer
+    interval: 350
+    repeat: false
+    onTriggered: {
+      positioningSettings.positioningDevice = mainWindow.sungsanPendingPositioningDevice;
+      positioningSettings.positioningDeviceName = mainWindow.sungsanPendingPositioningDeviceName;
+      mainWindow.sungsanLastGnssReceiptMs = 0;
+      mainWindow.sungsanGnssFresh = false;
+      sungsanPositionDeviceActivateTimer.restart();
+    }
+  }
+
+  Timer {
+    id: sungsanPositionDeviceActivateTimer
+    interval: 350
+    repeat: false
+    onTriggered: {
+      positionSource.jumpToPosition = true;
+      positioningSettings.positioningActivated = true;
+      positionSource.active = true;
+      mainWindow.sungsanPositionSwitchPending = false;
+      if (positioningSettings.positioningDevice.length > 0) {
+        displayToast("외부 GNSS 연결 중 · NMEA FIX를 기다립니다.", "info");
+      } else {
+        displayToast("휴대폰 GPS 위치를 기다립니다.", "info");
+      }
     }
   }
 
@@ -5681,6 +5736,10 @@ ApplicationWindow {
     gpsDeviceName: positioningSettings.positioningDeviceName
     gpsQualityText: positionSource.positionInformation ? positionSource.positionInformation.qualityDescription : ""
     gpsSatellites: positionSource.positionInformation ? positionSource.positionInformation.satellitesUsed : 0
+    gpsExternal: positionSource.deviceId.length > 0
+    gpsSwitching: mainWindow.sungsanPositionSwitchPending
+    gpsConnectionText: positionSource.deviceSocketStateString
+    gpsLastError: positionSource.deviceLastError
     vworldReady: mainWindow.sungsanVWorldReady
     canAddFeature: digitizingToolbar.digitizingAllowed
     canEditExistingPoint: dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point && !dashBoard.activeLayer.readOnly && projectInfo.editRights
