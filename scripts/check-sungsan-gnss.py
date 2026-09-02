@@ -242,10 +242,26 @@ def check_sungsan_ui_contract() -> None:
         require(panel, needle, purpose)
 
     require(app, "property bool sungsanGnssFresh: false", "field freshness state is initialized unsafe")
-    require(app, "ageSeconds <= 5", "field position expires five seconds after its GNSS timestamp")
-    require(app, "ageSeconds >= -1", "future-dated GNSS positions are rejected beyond small clock skew")
-    require(app, "Number.isFinite(positionTimeMs)", "invalid GNSS timestamps cannot be treated as live")
-    require(app, "GNSS 수신이 5초 이상 끊겼습니다", "current-position action warns about stale GNSS")
+    require(app, "property double sungsanLastGnssReceiptMs: 0", "local GNSS receipt clock is initialized unsafe")
+    require(app, "mainWindow.sungsanLastGnssReceiptMs = Date.now()", "every received phone or NMEA fix refreshes the local clock")
+    require(app, "receiptAgeSeconds <= 5", "field position expires five seconds after the last received update")
+    require(app, "sungsanPositionDeviceSwitchTimer.restart()", "phone/external switching releases the previous receiver first")
+    require(app, "positionSource.jumpToPosition = true", "current-position action waits for and reveals the first fix")
+    require(app, "positionSource.triggerConnectDevice()", "current-position action retries a disconnected external receiver")
+    require(app, "gpsConnectionText: positionSource.deviceSocketStateString", "field status exposes external socket state")
+    require(app, "gpsLastError: positionSource.deviceLastError", "field status exposes the external receiver error")
+    require(panel, 'text: (root.gpsExternal ? "" : "✓ ") + "휴대폰 GPS 사용"', "source dialog marks phone selection")
+    require(panel, 'text: (root.gpsExternal ? "✓ " : "") + "외부 GNSS 사용 (CHCNAV / Bluetooth)"', "source dialog marks external selection")
+    require(
+        "src/core/positioning/positioning.cpp",
+        "if ( active && devId.isEmpty() )",
+        "stopping internal GPS cannot reopen it through a permission callback",
+    )
+    require(
+        "src/core/positioning/positioning.cpp",
+        "else if ( active )",
+        "stopping external GNSS cannot reopen it through a permission callback",
+    )
     require_regex(
         app,
         r"onAddFeatureRequested\s*:\s*\{\s*if\s*\(positionSource\.active\s*&&\s*"
