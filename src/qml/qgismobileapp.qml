@@ -72,7 +72,7 @@ ApplicationWindow {
   property string sungsanPendingPositioningDevice: ""
   property string sungsanPendingPositioningDeviceName: ""
   property string sungsanLastSavedText: ""
-  property bool sungsanExistingPointEditPending: false
+  property bool sungsanExistingFeatureEditPending: false
   property string sungsanPendingLandStarPath: ""
 
   onSungsanPendingLandStarPathChanged: {
@@ -930,7 +930,7 @@ ApplicationWindow {
           return;
         }
 
-        if (mainWindow.sungsanExistingPointEditPending) {
+        if (mainWindow.sungsanExistingFeatureEditPending) {
           identifyTool.isMenuRequest = false;
           identifyTool.identify(point);
           return;
@@ -987,7 +987,7 @@ ApplicationWindow {
           }
           return;
         }
-        if (mainWindow.sungsanExistingPointEditPending) {
+        if (mainWindow.sungsanExistingFeatureEditPending) {
           identifyTool.isMenuRequest = false;
           identifyTool.identify(point);
           return;
@@ -1118,7 +1118,7 @@ ApplicationWindow {
         } else if (isMenuRequest) {
           canvasMenuFeatureListInstantiator.active = true;
         } else {
-          if (mainWindow.sungsanExistingPointEditPending) {
+          if (mainWindow.sungsanExistingFeatureEditPending) {
             const activeLayer = dashBoard.activeLayer;
             const featureIds = [];
             if (activeLayer) {
@@ -1132,7 +1132,7 @@ ApplicationWindow {
             }
 
             if (featureIds.length === 0) {
-              displayToast("선택한 조사 레이어의 지점을 찾지 못했습니다. 측량점을 다시 눌러 주세요.", "warning");
+              displayToast("선택한 조사 레이어의 객체를 찾지 못했습니다. 객체를 다시 눌러 주세요.", "warning");
               return;
             }
 
@@ -1141,14 +1141,14 @@ ApplicationWindow {
             featureListForm.multiSelection = false;
             featureListForm.selection.focusedItem = featureIds.length === 1 ? 0 : -1;
             featureListForm.editExistingAfterSelection = featureIds.length > 1;
-            mainWindow.sungsanExistingPointEditPending = false;
+            mainWindow.sungsanExistingFeatureEditPending = false;
 
             if (featureIds.length === 1) {
               featureListForm.state = "FeatureFormEdit";
-              displayToast("기존 지점의 빈 속성을 입력하거나 값을 수정한 뒤 저장해 주세요.");
+              displayToast("기존 객체의 빈 속성을 입력하거나 값을 수정한 뒤 저장해 주세요.");
             } else {
               featureListForm.state = "FeatureList";
-              displayToast("겹친 지점이 여러 개입니다. 수정할 측량점을 하나 선택해 주세요.");
+              displayToast("겹친 객체가 여러 개입니다. 수정할 객체를 하나 선택해 주세요.");
             }
             return;
           }
@@ -3698,29 +3698,41 @@ ApplicationWindow {
     // We will also use `shouldReturnHome` to know that we need to return home as well or not.
     property bool shouldReturnHome: false
 
-    function ensureEditableLayerSelected() {
-      var firstEditableLayer = null;
+    function ensureEditableLayerSelected(requireFeatureAddition) {
+      const additionRequired = requireFeatureAddition === true;
+      var editableLayers = [];
       var activeLayerIsEditable = false;
       for (var i = 0; i < layerTree.rowCount(); i++) {
         var index = layerTree.index(i, 0);
         var vectorLayer = layerTree.data(index, FlatLayerTreeModel.VectorLayerPointer);
-        var layerIsEditable = layerTree.data(index, FlatLayerTreeModel.Type) === FlatLayerTreeModel.Layer && vectorLayer != null && layerTree.data(index, FlatLayerTreeModel.ReadOnly) === false && layerTree.data(index, FlatLayerTreeModel.FeatureAdditionLocked) === false;
-        if (firstEditableLayer === null && layerIsEditable) {
-          firstEditableLayer = vectorLayer;
+        var geometryType = vectorLayer ? vectorLayer.geometryType() : Qgis.GeometryType.Null;
+        var supportedGeometry = geometryType === Qgis.GeometryType.Point || geometryType === Qgis.GeometryType.Line || geometryType === Qgis.GeometryType.Polygon;
+        var layerIsEditable = layerTree.data(index, FlatLayerTreeModel.Type) === FlatLayerTreeModel.Layer
+            && vectorLayer != null
+            && supportedGeometry
+            && layerTree.data(index, FlatLayerTreeModel.ReadOnly) === false
+            && (additionRequired
+                ? layerTree.data(index, FlatLayerTreeModel.FeatureAdditionLocked) === false
+                : layerTree.data(index, FlatLayerTreeModel.AttributeEditingLocked) === false);
+        if (layerIsEditable) {
+          editableLayers.push(vectorLayer);
         }
         if (activeLayer != null && activeLayer === vectorLayer) {
           activeLayerIsEditable = layerIsEditable;
-          if (activeLayerIsEditable) {
-            return;
-          }
-          break;
         }
       }
-      // A raster, stale pointer, read-only vector, or missing active layer must
-      // not prevent survey start when another editable vector layer exists.
-      if (!activeLayerIsEditable && firstEditableLayer !== null) {
-        activeLayer = firstEditableLayer;
+
+      // Never silently switch away from a valid user-selected layer. When no
+      // valid layer is selected, automatic selection is only safe if there is
+      // exactly one candidate; otherwise the surveyor must choose explicitly.
+      if (activeLayerIsEditable) {
+        return { "ok": true, "selectionRequired": false, "candidateCount": editableLayers.length };
       }
+      if (editableLayers.length === 1) {
+        activeLayer = editableLayers[0];
+        return { "ok": true, "selectionRequired": false, "candidateCount": 1 };
+      }
+      return { "ok": false, "selectionRequired": editableLayers.length > 1, "candidateCount": editableLayers.length };
     }
   }
 
@@ -3741,19 +3753,37 @@ ApplicationWindow {
   // Sungsan's primary field workflow intentionally delegates to the proven
   // QGIS/QField engine objects below.  The branded controls never duplicate
   // project loading, positioning, digitizing, or export logic.
-  function sungsanStartSurvey() {
-    if (!qgisProject || !qgisProject.fileName) {
-      displayToast("먼저 현장 프로젝트를 열어 주세요.", "warning");
-      return;
+  function sungsanStartSurvey(requireFeatureAddition) {
+    if (!qgisProject) {
+      displayToast("먼저 QGIS 프로젝트나 조사 데이터를 열어 주세요.", "warning");
+      return false;
     }
     welcomeScreen.visible = false;
     welcomeScreen.focus = false;
-    dashBoard.ensureEditableLayerSelected();
-    if (!dashBoard.activeLayer || !digitizingToolbar.digitizingAllowed) {
-      displayToast("편집할 수 있는 조사 레이어가 없습니다.", "warning");
-      return;
+    const layerSelection = dashBoard.ensureEditableLayerSelected(requireFeatureAddition);
+    if (!layerSelection.ok) {
+      if (layerSelection.selectionRequired) {
+        dashBoard.open();
+        displayToast("편집 가능한 조사 레이어가 여러 개입니다. 사용할 레이어를 선택한 뒤 다시 눌러 주세요.", "warning");
+      } else {
+        displayToast(requireFeatureAddition === true ? "객체를 추가할 수 있는 포인트·선·면 레이어가 없습니다." : "속성을 수정할 수 있는 포인트·선·면 레이어가 없습니다.", "warning");
+      }
+      return false;
+    }
+    if (requireFeatureAddition === true && !digitizingToolbar.digitizingAllowed) {
+      displayToast("선택한 레이어에는 새 객체를 추가할 수 없습니다.", "warning");
+      return false;
+    }
+    if (qgisProject.fileName) {
+      const preparation = sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, dashBoard.activeLayer);
+      if (preparation && preparation.warning) {
+        displayToast(preparation.warning, "warning");
+      }
+    } else {
+      displayToast("조사는 시작할 수 있지만 사진을 상대경로로 저장하려면 프로젝트를 먼저 저장해 주세요.", "warning");
     }
     changeMode("digitize");
+    return stateMachine.state === "digitize";
   }
 
   function sungsanShowCurrentLocation(source) {
@@ -5742,12 +5772,13 @@ ApplicationWindow {
     gpsLastError: positionSource.deviceLastError
     vworldReady: mainWindow.sungsanVWorldReady
     canAddFeature: digitizingToolbar.digitizingAllowed
-    canEditExistingPoint: dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point && !dashBoard.activeLayer.readOnly && projectInfo.editRights
+    canEditExistingFeature: dashBoard.activeLayer && !dashBoard.activeLayer.readOnly && projectInfo.editRights
+    editableVectorLayer: dashBoard.activeLayer && (dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Line || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Polygon)
     pointLayer: dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point
     multiVertexLayer: dashBoard.activeLayer && (dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Line || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Polygon)
     geometryInProgress: digitizingToolbar.isDigitizing
     geometryValid: digitizingToolbar.geometryValid
-    existingPointSelectionPending: mainWindow.sungsanExistingPointEditPending
+    existingFeatureSelectionPending: mainWindow.sungsanExistingFeatureEditPending
 
     onHomeRequested: mainWindow.openWelcomeScreen()
 
@@ -5755,7 +5786,7 @@ ApplicationWindow {
       if (stateMachine.state === "digitize") {
         mainWindow.toggleDigitizeMode();
       } else {
-        mainWindow.sungsanStartSurvey();
+        mainWindow.sungsanStartSurvey(false);
       }
     }
 
@@ -5785,7 +5816,9 @@ ApplicationWindow {
         displayToast("GNSS 수신이 끊겨 이전 좌표가 남아 있습니다. FIX가 다시 들어온 뒤 지점을 추가해 주세요.", "warning");
         return;
       }
-      mainWindow.sungsanStartSurvey();
+      if (!mainWindow.sungsanStartSurvey(true)) {
+        return;
+      }
       // A point is complete as soon as its one coordinate is captured.  Let
       // QField confirm it immediately so the attribute form opens without a
       // redundant vertex/geometry-complete step.  Line and polygon layers
@@ -5802,14 +5835,14 @@ ApplicationWindow {
       });
     }
 
-    onEditExistingPointRequested: {
-      if (mainWindow.sungsanExistingPointEditPending) {
-        mainWindow.sungsanExistingPointEditPending = false;
-        displayToast("기존 지점 선택을 취소했습니다.");
+    onEditExistingFeatureRequested: {
+      if (mainWindow.sungsanExistingFeatureEditPending) {
+        mainWindow.sungsanExistingFeatureEditPending = false;
+        displayToast("기존 객체 선택을 취소했습니다.");
         return;
       }
-      if (!dashBoard.activeLayer || dashBoard.activeLayer.geometryType() !== Qgis.GeometryType.Point) {
-        displayToast("먼저 수정할 측량점 레이어를 선택해 주세요.", "warning");
+      if (!dashBoard.activeLayer || !(dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Line || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Polygon)) {
+        displayToast("먼저 수정할 포인트·선·면 레이어를 선택해 주세요.", "warning");
         return;
       }
       if (dashBoard.activeLayer.readOnly || !projectInfo.editRights) {
@@ -5820,11 +5853,13 @@ ApplicationWindow {
         displayToast("진행 중인 새 객체를 먼저 완료하거나 취소해 주세요.", "warning");
         return;
       }
-      mainWindow.sungsanStartSurvey();
+      if (!mainWindow.sungsanStartSurvey(false)) {
+        return;
+      }
       if (stateMachine.state === "digitize") {
         featureListForm.editExistingAfterSelection = false;
-        mainWindow.sungsanExistingPointEditPending = true;
-        displayToast("기존 지점의 근경·원경·기타·추가사진과 속성을 입력하려면 지도에서 지점을 눌러 주세요.");
+        mainWindow.sungsanExistingFeatureEditPending = true;
+        displayToast("기존 객체의 근경·원경·기타·기타2 사진과 속성을 입력하려면 지도에서 객체를 눌러 주세요.");
       }
     }
 
@@ -5834,7 +5869,9 @@ ApplicationWindow {
         return;
       }
       if (stateMachine.state !== "digitize") {
-        mainWindow.sungsanStartSurvey();
+        if (!mainWindow.sungsanStartSurvey(true)) {
+          return;
+        }
       }
       if (stateMachine.state === "digitize" && digitizingToolbar.digitizingAllowed) {
         digitizingToolbar.triggerAddVertex();

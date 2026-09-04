@@ -31,10 +31,11 @@ Item {
   property string gpsLastError: ""
   property bool vworldReady: false
   property bool canAddFeature: false
-  property bool canEditExistingPoint: false
+  property bool canEditExistingFeature: false
+  property bool editableVectorLayer: false
   property bool pointLayer: false
   property bool multiVertexLayer: false
-  property bool existingPointSelectionPending: false
+  property bool existingFeatureSelectionPending: false
   property bool geometryInProgress: false
   property bool geometryValid: false
   property bool moreExpanded: false
@@ -52,7 +53,7 @@ Item {
   signal vworldRequested
   signal layersRequested
   signal addFeatureRequested
-  signal editExistingPointRequested
+  signal editExistingFeatureRequested
   signal addVertexRequested
   signal removeVertexRequested
   signal confirmGeometryRequested
@@ -307,16 +308,16 @@ Item {
       }
 
       SungsanActionButton {
-        visible: root.pointLayer
+        visible: root.editableVectorLayer
         Layout.fillWidth: true
         Layout.preferredHeight: root.actionButtonHeight
-        text: root.existingPointSelectionPending ? "지점 선택 취소" : "지점 사진·속성"
+        text: root.existingFeatureSelectionPending ? "객체 선택 취소" : "객체 사진·속성"
         compact: true
-        detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "기존 지점의 근경·원경·기타·추가사진"
-        iconSource: Theme.getThemeVectorIcon(root.existingPointSelectionPending ? "ic_clear_white_24dp" : "ic_create_white_24dp")
-        enabled: root.canEditExistingPoint && !root.geometryInProgress
-        emphasized: root.existingPointSelectionPending
-        onClicked: root.editExistingPointRequested()
+        detailText: root.existingFeatureSelectionPending ? "지도 선택 대기 중" : "기존 객체의 근경·원경·기타·기타2"
+        iconSource: Theme.getThemeVectorIcon(root.existingFeatureSelectionPending ? "ic_clear_white_24dp" : "ic_create_white_24dp")
+        enabled: root.canEditExistingFeature && !root.geometryInProgress
+        emphasized: root.existingFeatureSelectionPending
+        onClicked: root.editExistingFeatureRequested()
       }
 
       Button {

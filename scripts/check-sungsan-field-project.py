@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import sys
 
 
@@ -92,9 +93,9 @@ check(
 )
 check("external resource editor", 'QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" )' in UTILS)
 check("project-relative photo storage", 'fieldPhotoOptions.insert( QStringLiteral( "RelativeStorage" ), 1 )' in UTILS)
-check("single field-photo directory", "'photos/현장사진/' || @object_name_safe" in UTILS)
+check("layer-based field-photo directory", "'images/성산_현장객체/' || @object_name_safe" in UTILS)
 check("no conflicting external-resource root", 'fieldPhotoOptions.insert( QStringLiteral( "DefaultRoot" )' not in UTILS)
-check("photos included as attachment directory", 'attachmentDirectories << "photos"' in UTILS)
+check("images included as attachment directory", 'attachmentDirectories << "images"' in UTILS)
 check("QField attachment naming", "QFieldSync/attachment_naming" in UTILS)
 check(
     "object-based fixed attachment names",
@@ -111,15 +112,70 @@ check(
 )
 check("photo section follows object name", UTILS.index('QStringLiteral( "name" ), nameFieldIndex') < UTILS.index('QStringLiteral( "현장사진" )'))
 check("no plus-button photo relation", "현장 사진 · 근경/원경/기타/추가" not in UTILS)
-check("single photo directory created", 'mkpath( QStringLiteral( "photos/현장사진" ) )' in UTILS)
-check("legacy split photo directories removed", all(f'photos/{name}' not in UTILS for name in ("근경", "원경", "기타", "추가")))
-check("fixed photos included in export", 'QStringLiteral( "photo_other_2" ), QStringLiteral( "기타" )' in UTILS)
-check("gallery copy restricted to Sungsan fixed photos", 'startsWith("photos/현장사진/")' in ANDROID_ACTIVITY)
-check("gallery copy uses Android MediaStore", "MediaStore.Images.Media.RELATIVE_PATH" in ANDROID_ACTIVITY)
-check("gallery album", '"/성산 GIS/"' in ANDROID_ACTIVITY)
-check("camera publishes gallery copy", "publishSungsanFieldPhotoToGallery(result);" in ANDROID_ACTIVITY)
-check("photo capture requires object name", "사진을 찍기 전에 객체명을 먼저 입력해 주세요." in EXTERNAL_RESOURCE)
-check("name guard covers all fixed slots", all(name in EXTERNAL_RESOURCE for name in ("photo_near", "photo_far", "photo_other", "photo_other_2")))
+check("layer photo directory created", 'mkpath( QStringLiteral( "images/성산_현장객체" ) )' in UTILS)
+check("legacy photo directories removed", all(path not in UTILS for path in (
+    "photos/현장사진", "photos/근경", "photos/원경", "photos/기타", "photos/추가"
+)))
+check(
+    "fourth fixed photo is labelled 기타2",
+    'QStringLiteral( "photo_other_2" ), QStringLiteral( "기타2 사진" )' in UTILS,
+)
+check("managed photo marker", "kr.co.sungsan.mobilegis/managedFieldPhotos" in UTILS)
+check("managed photo field list", "kr.co.sungsan.mobilegis/fieldPhotoFields" in UTILS)
+check("configured photo object-name field", "kr.co.sungsan.mobilegis/photoObjectNameField" in UTILS)
+check("configured layer photo folder", "kr.co.sungsan.mobilegis/fieldPhotoFolder" in UTILS)
+check("gallery duplicate helper removed", "publishSungsanFieldPhotoToGallery" not in ANDROID_ACTIVITY)
+check("gallery duplicate-copy wording removed", "Keeps a second copy" not in ANDROID_ACTIVITY)
+check("legacy duplicate gallery album removed", '"/성산 GIS/"' not in ANDROID_ACTIVITY)
+check(
+    "no second MediaStore photo is created",
+    "MediaStore.Images.Media.RELATIVE_PATH" not in ANDROID_ACTIVITY
+    and "MediaStore.Images.Media.IS_PENDING" not in ANDROID_ACTIVITY,
+)
+check(
+    "project photo itself is media-scanned",
+    bool(
+        re.search(
+            r"scanCapturedResource\s*\(\s*result\s*,\s*capturedIsVideo\s*\)"
+            r".*?resourceReceived\s*\(",
+            ANDROID_ACTIVITY,
+            re.DOTALL,
+        )
+    )
+    and bool(
+        re.search(
+            r"MediaScannerConnection\.scanFile\s*\(.*?"
+            r"result\.getAbsolutePath\s*\(\s*\)",
+            ANDROID_ACTIVITY,
+            re.DOTALL,
+        )
+    ),
+)
+capture_start = EXTERNAL_RESOURCE.find("function capturePhoto()")
+native_camera_start = EXTERNAL_RESOURCE.find(
+    "PlatformUtilities.NativeCamera", capture_start
+)
+capture_preamble = (
+    EXTERNAL_RESOURCE[capture_start:native_camera_start]
+    if capture_start >= 0 and native_camera_start > capture_start
+    else ""
+)
+check(
+    "managed photo capture resolves the configured object name first",
+    "sungsanObjectNameEvaluator.evaluate()" in capture_preamble
+    and "FeatureUtils.attributeIsNull" in capture_preamble
+    and (
+        "객체명을 먼저 입력" in capture_preamble
+        or "내부 객체 ID" in capture_preamble
+    ),
+)
+check("name guard recognizes managed arbitrary layers", "kr.co.sungsan.mobilegis/managedFieldPhotos" in EXTERNAL_RESOURCE)
+check("name guard reads the managed field list", "kr.co.sungsan.mobilegis/fieldPhotoFields" in EXTERNAL_RESOURCE)
+check(
+    "name guard decodes bridge JSON field lists",
+    "JSON.parse" in EXTERNAL_RESOURCE
+    and "sungsanManagedPhotoFields().indexOf(field.name)" in EXTERNAL_RESOURCE,
+)
 
 failed = [name for name, ok in CHECKS if not ok]
 if failed:

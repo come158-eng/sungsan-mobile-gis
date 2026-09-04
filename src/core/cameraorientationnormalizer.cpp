@@ -20,6 +20,7 @@
 #include <QImage>
 #include <QImageReader>
 #include <QImageWriter>
+#include <QSaveFile>
 #include <QScreen>
 #include <QTransform>
 
@@ -43,19 +44,35 @@ void CameraOrientationNormalizer::recordCaptureOrientation()
 {
   QScreen *screen = QGuiApplication::primaryScreen();
   mCaptureOrientation = screen ? screen->orientation() : Qt::PortraitOrientation;
+  mCaptureOrientationRecorded = true;
 }
 
 bool CameraOrientationNormalizer::normalizeImageOrientation( const QString &path )
 {
-#if defined( Q_OS_IOS ) || defined( Q_OS_WIN )
+#if defined( Q_OS_ANDROID ) || defined( Q_OS_IOS ) || defined( Q_OS_WIN )
   if ( path.isEmpty() )
   {
     return false;
   }
 
+  // Only a normalizer which observed the shutter event may infer orientation
+  // from width/height. This keeps a second validation pass from rotating an
+  // already-normalized landscape photo toward the default portrait state.
+  const bool captureOrientationRecorded = mCaptureOrientationRecorded;
+  mCaptureOrientationRecorded = false;
+
+  // Read the EXIF transform before decoding. When present, let Qt apply it to
+  // the pixels so the rewritten file is oriented correctly even in viewers
+  // which ignore EXIF. The capture-orientation heuristic is only a fallback
+  // for camera backends that write rotated pixels without an EXIF tag.
+  QImageReader metadataReader( path );
+  metadataReader.setAutoTransform( false );
+  const QImageIOHandler::Transformations exifTransform = metadataReader.transformation();
+  const QByteArray imageFormat = metadataReader.format();
+
   QImageReader reader( path );
-  reader.setAutoTransform( false );
-  const QImageIOHandler::Transformations exifTransform = reader.transformation();
+  const bool hasExifTransform = exifTransform != QImageIOHandler::TransformationNone;
+  reader.setAutoTransform( hasExifTransform );
   QImage image = reader.read();
   if ( image.isNull() )
   {
@@ -64,25 +81,37 @@ bool CameraOrientationNormalizer::normalizeImageOrientation( const QString &path
 
   const bool capturedInLandscape = ( mCaptureOrientation == Qt::LandscapeOrientation || mCaptureOrientation == Qt::InvertedLandscapeOrientation );
   const bool pixelsAreLandscape = image.width() > image.height();
-  const bool needsRotation = ( capturedInLandscape != pixelsAreLandscape );
-  const bool hasExifTag = ( exifTransform != QImageIOHandler::TransformationNone );
+  const bool needsFallbackRotation = !hasExifTransform && captureOrientationRecorded && ( capturedInLandscape != pixelsAreLandscape );
 
-  if ( !needsRotation && !hasExifTag )
+  if ( !needsFallbackRotation && !hasExifTransform )
   {
     return false;
   }
 
-  if ( needsRotation )
+  if ( needsFallbackRotation )
   {
     QTransform transform;
     transform.rotate( pixelsAreLandscape ? 90 : 270 );
     image = image.transformed( transform, Qt::SmoothTransformation );
   }
 
-  QImageWriter writer( path );
+  // QSaveFile commits with a same-directory rename, so a failed encode never
+  // truncates the valid camera output that is already on disk.
+  QSaveFile saveFile( path );
+  if ( !saveFile.open( QIODevice::WriteOnly ) )
+  {
+    return false;
+  }
+
+  QImageWriter writer( &saveFile, imageFormat.isEmpty() ? QByteArrayLiteral( "jpg" ) : imageFormat );
   writer.setTransformation( QImageIOHandler::TransformationNone );
   writer.setQuality( 95 );
-  return writer.write( image );
+  if ( !writer.write( image ) )
+  {
+    saveFile.cancelWriting();
+    return false;
+  }
+  return saveFile.commit();
 #else
   Q_UNUSED( path )
   return false;

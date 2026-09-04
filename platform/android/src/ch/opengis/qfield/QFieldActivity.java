@@ -44,7 +44,6 @@ import android.app.ProgressDialog;
 import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
-import android.content.ContentValues;
 import android.content.ContentResolver;
 import android.content.Context;
 import android.content.DialogInterface;
@@ -57,9 +56,13 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.graphics.Matrix;
 import android.media.MediaScannerConnection;
+import android.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
@@ -111,6 +114,9 @@ import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.security.KeyFactory;
 import java.security.MessageDigest;
 import java.security.Signature;
@@ -179,6 +185,24 @@ public class QFieldActivity extends QtActivity {
     private static final int GALLERY_RESOURCE = 601;
     private static final int FILE_PICKER_RESOURCE = 602;
     private static final int OPEN_RESOURCE = 603;
+    // Rotating a JPEG requires a decoded source and destination bitmap. Keep
+    // the operation bounded so a very high resolution camera cannot exhaust
+    // the Android process heap; oversized images retain their valid EXIF tag.
+    private static final long MAX_ORIENTATION_NORMALIZATION_PIXELS =
+        20_000_000L;
+    private static final String[] PRESERVED_JPEG_EXIF_ATTRIBUTES = {
+        "DateTime",          "DateTimeOriginal", "DateTimeDigitized",
+        "SubSecTime",        "SubSecTimeOriginal", "SubSecTimeDigitized",
+        "Make",              "Model",            "Software",
+        "Artist",            "Copyright",        "ImageDescription",
+        "UserComment",       "FNumber",          "ExposureTime",
+        "PhotographicSensitivity", "ISOSpeedRatings", "FocalLength",
+        "Flash",             "WhiteBalance",     "MeteringMode",
+        "ExposureMode",      "ExposureBiasValue", "GPSLatitude",
+        "GPSLatitudeRef",    "GPSLongitude",     "GPSLongitudeRef",
+        "GPSAltitude",       "GPSAltitudeRef",   "GPSTimeStamp",
+        "GPSDateStamp",      "GPSProcessingMethod"
+    };
     private String resourcePrefix;
     private String resourceFilePath;
     private String resourceSuffix;
@@ -1772,103 +1796,327 @@ public class QFieldActivity extends QtActivity {
     }
 
     /**
-     * Keeps a second copy of fixed Sungsan field photos in the Android
-     * Pictures collection. The project-relative original remains the source
-     * of truth and is included in the exported field ZIP.
+     * Registers the actual project-relative capture with Android's media
+     * scanner. No gallery copy is made: the project file remains the single
+     * source of truth used by the form and field ZIP.
+     *
+     * Android 10+ can refuse to index files below an app-specific external
+     * directory. In that case the callback URI is null and the photo remains
+     * safely available to the project, but a public SAF/MediaStore-backed
+     * project location is required for guaranteed gallery visibility without
+     * creating a second physical file.
      */
-    private void publishSungsanFieldPhotoToGallery(File sourceFile) {
-        if (!SUNGSAN_PACKAGE_ID.equals(getPackageName()) || resourceIsVideo ||
-            sourceFile == null || !sourceFile.isFile() ||
-            resourceFilePath == null) {
+    private void scanCapturedResource(File result, boolean isVideo) {
+        if (result == null || !result.isFile()) {
             return;
         }
 
-        String normalizedResourcePath = resourceFilePath.replace('\\', '/');
-        if (!normalizedResourcePath.startsWith("photos/현장사진/")) {
-            return;
-        }
-
-        executorService.execute(new Runnable() {
-            @Override
-            public void run() {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    ContentResolver resolver = getContentResolver();
-                    ContentValues values = new ContentValues();
-                    values.put(MediaStore.Images.Media.DISPLAY_NAME,
-                               sourceFile.getName());
-                    values.put(MediaStore.Images.Media.MIME_TYPE,
-                               "image/jpeg");
-                    values.put(MediaStore.Images.Media.DATE_TAKEN,
-                               System.currentTimeMillis());
-                    values.put(MediaStore.Images.Media.RELATIVE_PATH,
-                               Environment.DIRECTORY_PICTURES +
-                                   "/성산 GIS/");
-                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
-
-                    Uri galleryUri = null;
-                    try {
-                        galleryUri = resolver.insert(
-                            MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                            values);
-                        if (galleryUri == null) {
-                            throw new IOException(
-                                "Unable to create the gallery image");
-                        }
-                        try (InputStream input =
-                                 new FileInputStream(sourceFile);
-                             OutputStream output =
-                                 resolver.openOutputStream(galleryUri, "w")) {
-                            if (output == null) {
-                                throw new IOException(
-                                    "Unable to open the gallery image");
-                            }
-                            byte[] buffer = new byte[64 * 1024];
-                            int count;
-                            while ((count = input.read(buffer)) != -1) {
-                                output.write(buffer, 0, count);
-                            }
-                        }
-                        values.clear();
-                        values.put(MediaStore.Images.Media.IS_PENDING, 0);
-                        resolver.update(galleryUri, values, null, null);
-                    } catch (Exception exception) {
-                        Log.e("QField", "Sungsan gallery copy failed",
-                              exception);
-                        if (galleryUri != null) {
-                            resolver.delete(galleryUri, null, null);
-                        }
+        final String mimeType = isVideo ? "video/mp4" : "image/jpeg";
+        MediaScannerConnection.scanFile(
+            this, new String[] {result.getAbsolutePath()},
+            new String[] {mimeType},
+            new MediaScannerConnection.OnScanCompletedListener() {
+                @Override
+                public void onScanCompleted(String path, Uri uri) {
+                    if (uri == null &&
+                        SUNGSAN_PACKAGE_ID.equals(getPackageName())) {
+                        Log.w("QField",
+                              "Project media was not indexed; Android scoped " +
+                                  "storage may hide app-specific files: " +
+                                  path);
                     }
-                    return;
                 }
+            });
+    }
 
-                if (ContextCompat.checkSelfPermission(
-                        QFieldActivity.this,
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE) !=
-                    PackageManager.PERMISSION_GRANTED) {
-                    Log.w("QField",
-                          "Gallery copy skipped: storage permission missing");
-                    return;
-                }
+    private boolean isValidCapturedResource(File file, boolean isVideo) {
+        if (file == null || !file.isFile() || file.length() <= 0) {
+            return false;
+        }
+        if (isVideo) {
+            return true;
+        }
 
-                File galleryDirectory = new File(
-                    Environment.getExternalStoragePublicDirectory(
-                        Environment.DIRECTORY_PICTURES),
-                    "성산 GIS");
-                if (!galleryDirectory.exists() &&
-                    !galleryDirectory.mkdirs()) {
-                    Log.w("QField", "Unable to create Sungsan gallery folder");
+        BitmapFactory.Options bounds = new BitmapFactory.Options();
+        bounds.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(file.getAbsolutePath(), bounds);
+        return bounds.outWidth > 0 && bounds.outHeight > 0;
+    }
+
+    private boolean durableCopy(File source, File destination) {
+        try (FileInputStream input = new FileInputStream(source);
+             FileOutputStream output = new FileOutputStream(destination)) {
+            if (!QFieldUtils.inputStreamToOutputStream(
+                    input, output, source.length())) {
+                return false;
+            }
+            output.getFD().sync();
+            return destination.length() == source.length();
+        } catch (Exception exception) {
+            Log.e("QField", "Captured resource staging failed", exception);
+            return false;
+        }
+    }
+
+    private Matrix matrixForExifOrientation(int orientation) {
+        Matrix matrix = new Matrix();
+        switch (orientation) {
+        case ExifInterface.ORIENTATION_FLIP_HORIZONTAL:
+            matrix.setScale(-1.0f, 1.0f);
+            break;
+        case ExifInterface.ORIENTATION_ROTATE_180:
+            matrix.setRotate(180.0f);
+            break;
+        case ExifInterface.ORIENTATION_FLIP_VERTICAL:
+            matrix.setScale(1.0f, -1.0f);
+            break;
+        case ExifInterface.ORIENTATION_TRANSPOSE:
+            matrix.setRotate(90.0f);
+            matrix.postScale(-1.0f, 1.0f);
+            break;
+        case ExifInterface.ORIENTATION_ROTATE_90:
+            matrix.setRotate(90.0f);
+            break;
+        case ExifInterface.ORIENTATION_TRANSVERSE:
+            matrix.setRotate(-90.0f);
+            matrix.postScale(-1.0f, 1.0f);
+            break;
+        case ExifInterface.ORIENTATION_ROTATE_270:
+            matrix.setRotate(-90.0f);
+            break;
+        default:
+            break;
+        }
+        return matrix;
+    }
+
+    /**
+     * Applies a JPEG's EXIF orientation to its pixels. Failure or a capture
+     * too large to decode safely leaves the staged original untouched, so a
+     * standards-compliant viewer can still honor its EXIF orientation.
+     */
+    private void normalizeCapturedJpegOrientation(File stagedFile) {
+        File normalizedFile = null;
+        Bitmap sourceBitmap = null;
+        Bitmap normalizedBitmap = null;
+        try {
+            ExifInterface sourceExif =
+                new ExifInterface(stagedFile.getAbsolutePath());
+            int orientation = sourceExif.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_UNDEFINED);
+            if (orientation == ExifInterface.ORIENTATION_UNDEFINED ||
+                orientation == ExifInterface.ORIENTATION_NORMAL) {
+                return;
+            }
+
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(stagedFile.getAbsolutePath(), bounds);
+            long pixelCount = (long)bounds.outWidth * (long)bounds.outHeight;
+            long estimatedWorkingBytes = pixelCount * 8L;
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0 ||
+                pixelCount > MAX_ORIENTATION_NORMALIZATION_PIXELS ||
+                estimatedWorkingBytes > Runtime.getRuntime().maxMemory() / 2L) {
+                Log.w("QField",
+                      "JPEG orientation normalization skipped for a large " +
+                          "capture; EXIF orientation was retained");
+                return;
+            }
+
+            String[] preservedValues =
+                new String[PRESERVED_JPEG_EXIF_ATTRIBUTES.length];
+            for (int i = 0; i < PRESERVED_JPEG_EXIF_ATTRIBUTES.length; ++i) {
+                preservedValues[i] = sourceExif.getAttribute(
+                    PRESERVED_JPEG_EXIF_ATTRIBUTES[i]);
+            }
+
+            sourceBitmap = BitmapFactory.decodeFile(stagedFile.getAbsolutePath());
+            if (sourceBitmap == null) {
+                return;
+            }
+            Matrix matrix = matrixForExifOrientation(orientation);
+            if (matrix.isIdentity()) {
+                return;
+            }
+            normalizedBitmap = Bitmap.createBitmap(
+                sourceBitmap, 0, 0, sourceBitmap.getWidth(),
+                sourceBitmap.getHeight(), matrix, true);
+            if (normalizedBitmap == null) {
+                return;
+            }
+
+            File parent = stagedFile.getParentFile();
+            normalizedFile = File.createTempFile(
+                ".qfield-oriented-", ".jpg", parent);
+            try (FileOutputStream output =
+                     new FileOutputStream(normalizedFile)) {
+                if (!normalizedBitmap.compress(
+                        Bitmap.CompressFormat.JPEG, 95, output)) {
                     return;
                 }
-                File galleryFile =
-                    new File(galleryDirectory, sourceFile.getName());
-                if (QFieldUtils.copyFile(sourceFile, galleryFile)) {
-                    MediaScannerConnection.scanFile(
-                        QFieldActivity.this,
-                        new String[] {galleryFile.getAbsolutePath()},
-                        new String[] {"image/jpeg"}, null);
+                output.flush();
+                output.getFD().sync();
+            }
+            if (!isValidCapturedResource(normalizedFile, false)) {
+                return;
+            }
+
+            ExifInterface normalizedExif =
+                new ExifInterface(normalizedFile.getAbsolutePath());
+            for (int i = 0; i < PRESERVED_JPEG_EXIF_ATTRIBUTES.length; ++i) {
+                if (preservedValues[i] == null) {
+                    continue;
+                }
+                try {
+                    normalizedExif.setAttribute(
+                        PRESERVED_JPEG_EXIF_ATTRIBUTES[i], preservedValues[i]);
+                } catch (RuntimeException exception) {
+                    Log.w("QField", "Unable to preserve JPEG EXIF field " +
+                                            PRESERVED_JPEG_EXIF_ATTRIBUTES[i]);
                 }
             }
-        });
+            normalizedExif.setAttribute(
+                ExifInterface.TAG_ORIENTATION,
+                Integer.toString(ExifInterface.ORIENTATION_NORMAL));
+            normalizedExif.saveAttributes();
+
+            if (replaceFilePreservingExisting(normalizedFile, stagedFile)) {
+                normalizedFile = null;
+            }
+        } catch (OutOfMemoryError error) {
+            Log.w("QField",
+                  "JPEG orientation normalization skipped due to memory " +
+                      "pressure");
+        } catch (Exception exception) {
+            Log.e("QField",
+                  "JPEG orientation normalization failed; original EXIF " +
+                      "capture retained",
+                  exception);
+        } finally {
+            if (normalizedBitmap != null && normalizedBitmap != sourceBitmap) {
+                normalizedBitmap.recycle();
+            }
+            if (sourceBitmap != null) {
+                sourceBitmap.recycle();
+            }
+            if (normalizedFile != null && normalizedFile.exists() &&
+                !normalizedFile.delete()) {
+                Log.w("QField", "Unable to remove temporary oriented JPEG");
+            }
+        }
+    }
+
+    /**
+     * Replaces destination only after a complete staged file exists. The
+     * primary path is one atomic rename on the destination filesystem. The
+     * fallback moves an existing destination aside and restores it if the new
+     * file cannot be installed.
+     */
+    private boolean restoreCaptureBackup(File backupFile, File destination) {
+        if (backupFile == null || !backupFile.isFile()) {
+            return false;
+        }
+        if (backupFile.renameTo(destination)) {
+            return true;
+        }
+        if (durableCopy(backupFile, destination) &&
+            destination.length() == backupFile.length()) {
+            if (!backupFile.delete()) {
+                Log.w("QField", "Unable to remove restored capture backup");
+            }
+            return true;
+        }
+        Log.e("QField", "Unable to restore the previous capture");
+        return false;
+    }
+
+    private boolean replaceFilePreservingExisting(File stagedFile,
+                                                  File destination) {
+        try {
+            Files.move(stagedFile.toPath(), destination.toPath(),
+                       StandardCopyOption.ATOMIC_MOVE,
+                       StandardCopyOption.REPLACE_EXISTING);
+            return destination.isFile() && destination.length() > 0;
+        } catch (AtomicMoveNotSupportedException exception) {
+            Log.w("QField", "Atomic capture replacement is not supported");
+        } catch (Exception exception) {
+            Log.w("QField", "Atomic capture replacement failed", exception);
+        }
+
+        File backupFile = null;
+        boolean destinationMoved = false;
+        try {
+            if (destination.exists()) {
+                backupFile = File.createTempFile(
+                    ".qfield-photo-backup-", ".tmp",
+                    destination.getParentFile());
+                if (!backupFile.delete() ||
+                    !destination.renameTo(backupFile)) {
+                    return false;
+                }
+                destinationMoved = true;
+            }
+
+            if (!stagedFile.renameTo(destination)) {
+                if (destinationMoved && backupFile != null) {
+                    restoreCaptureBackup(backupFile, destination);
+                }
+                return false;
+            }
+
+            if (backupFile != null && backupFile.exists() &&
+                !backupFile.delete()) {
+                Log.w("QField", "Unable to remove replaced photo backup");
+            }
+            return true;
+        } catch (Exception exception) {
+            Log.e("QField", "Capture replacement fallback failed", exception);
+            if (destinationMoved && backupFile != null &&
+                backupFile.exists() && !destination.exists()) {
+                restoreCaptureBackup(backupFile, destination);
+            }
+            return false;
+        }
+    }
+
+    private boolean commitCapturedResource(File capturedFile,
+                                           File destination,
+                                           boolean isVideo) {
+        File parent = destination.getParentFile();
+        if (parent == null ||
+            (!parent.isDirectory() && !parent.mkdirs())) {
+            return false;
+        }
+
+        File stagedFile = null;
+        try {
+            stagedFile = File.createTempFile(
+                ".qfield-capture-", ".tmp", parent);
+            if (!durableCopy(capturedFile, stagedFile) ||
+                !isValidCapturedResource(stagedFile, isVideo)) {
+                return false;
+            }
+            if (!isVideo) {
+                normalizeCapturedJpegOrientation(stagedFile);
+                if (!isValidCapturedResource(stagedFile, false)) {
+                    return false;
+                }
+            }
+            if (!replaceFilePreservingExisting(stagedFile, destination)) {
+                return false;
+            }
+            stagedFile = null;
+            return true;
+        } catch (Exception exception) {
+            Log.e("QField", "Captured resource commit failed", exception);
+            return false;
+        } finally {
+            if (stagedFile != null && stagedFile.exists() &&
+                !stagedFile.delete()) {
+                Log.w("QField", "Unable to remove staged capture");
+            }
+        }
     }
 
     private void getGalleryResource(String prefix, String filePath,
@@ -2417,31 +2665,63 @@ public class QFieldActivity extends QtActivity {
             return;
         } else if (requestCode == CAMERA_RESOURCE) {
             if (resultCode == RESULT_OK && resourceTempFilePath != null) {
-                File file = new File(resourceTempFilePath);
-                String finalFilePath = QFieldUtils.replaceFilenameTags(
+                final File file = new File(resourceTempFilePath);
+                final String finalFilePath = QFieldUtils.replaceFilenameTags(
                     resourceFilePath, file.getName());
-                File result = new File(resourcePrefix + finalFilePath);
+                final File result = new File(resourcePrefix + finalFilePath);
+                final boolean capturedIsVideo = resourceIsVideo;
+                resourceTempFilePath = null;
                 Log.d("QField",
                       "Taken camera picture: " + file.getAbsolutePath());
-                try {
-                    InputStream in = new FileInputStream(file);
-                    QFieldUtils.inputStreamToFile(in, result.getPath(),
-                                                  file.length());
-                    file.delete();
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                executorService.execute(new Runnable() {
+                    @Override
+                    public void run() {
+                        boolean committed = false;
+                        try {
+                            if (!isValidCapturedResource(
+                                    file, capturedIsVideo)) {
+                                Log.e("QField",
+                                      "Camera returned an invalid resource");
+                            } else {
+                                committed = commitCapturedResource(
+                                    file, result, capturedIsVideo);
+                            }
+                        } finally {
+                            if (file.exists() && !file.delete()) {
+                                Log.w("QField",
+                                      "Unable to remove temporary capture");
+                            }
+                        }
 
-                // Let the android scan new media folders/files to make them
-                // visible through MTP
-                result.setReadable(true);
-                result.setWritable(true);
-                MediaScannerConnection.scanFile(
-                    this, new String[] {result.getParentFile().toString()},
-                    null, null);
-                publishSungsanFieldPhotoToGallery(result);
-                resourceReceived(finalFilePath);
+                        final boolean captureCommitted = committed;
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (captureCommitted) {
+                                    // Scan the exact project original; do not
+                                    // create a second gallery file.
+                                    result.setReadable(true);
+                                    result.setWritable(true);
+                                    scanCapturedResource(
+                                        result, capturedIsVideo);
+                                    resourceReceived(finalFilePath);
+                                } else {
+                                    // The old destination, if any, is intact.
+                                    resourceCanceled(
+                                        "촬영 파일을 안전하게 저장하지 못했습니다. 기존 사진은 유지됩니다.");
+                                }
+                            }
+                        });
+                    }
+                });
             } else {
+                if (resourceTempFilePath != null) {
+                    File file = new File(resourceTempFilePath);
+                    if (file.exists() && !file.delete()) {
+                        Log.w("QField", "Unable to remove canceled capture");
+                    }
+                    resourceTempFilePath = null;
+                }
                 resourceCanceled("");
             }
         } else if (requestCode == GALLERY_RESOURCE && data != null) {

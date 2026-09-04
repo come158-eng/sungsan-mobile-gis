@@ -22,9 +22,9 @@ email                : kaustuv@opengis.ch
 /**
  * \brief Compensates for incorrect camera orientation on iOS and Windows.
  *
- * On iOS and Windows, Qt Multimedia's backend produces an inverted
- * camera preview in landscape mode and writes captured photos with
- * incorrect orientation or bogus EXIF tags (QTBUG-118594).
+ * On iOS and Windows, Qt Multimedia's backend can produce an inverted
+ * camera preview in landscape mode. Android, iOS and Windows captures can
+ * also require their EXIF orientation to be applied to the stored pixels.
  *
  * This class provides:
  *  \a previewRotation for correcting the live VideoOutput orientation
@@ -69,6 +69,7 @@ class CameraOrientationNormalizer : public QObject
     void updatePreviewRotation();
     Qt::ScreenOrientation mCurrentOrientation = Qt::PortraitOrientation;
     Qt::ScreenOrientation mCaptureOrientation = Qt::PortraitOrientation;
+    bool mCaptureOrientationRecorded = false;
     int mPreviewRotation = 0;
 };
 

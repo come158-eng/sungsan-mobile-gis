@@ -215,7 +215,44 @@ EditorWidgetBase {
     layer: currentLayer
     project: qgisProject
     appExpressionContextScopesGenerator: appScopesGenerator
-    expressionText: '"name"'
+    expressionText: {
+      if (!currentLayer) {
+        return "to_string($id)";
+      }
+      const fieldName = String(currentLayer.customProperty('kr.co.sungsan.mobilegis/photoObjectNameField') || "");
+      return fieldName.length > 0 ? '"' + fieldName.replace(/"/g, '""') + '"' : "to_string($id)";
+    }
+  }
+
+  function sungsanManagedPhotoFields() {
+    if (!currentLayer) {
+      return [];
+    }
+    const configuredFields = currentLayer.customProperty('kr.co.sungsan.mobilegis/fieldPhotoFields');
+    if (Array.isArray(configuredFields)) {
+      return configuredFields;
+    }
+    const serializedFields = String(configuredFields || "").trim();
+    if (serializedFields.length === 0) {
+      return [];
+    }
+    try {
+      const parsedFields = JSON.parse(serializedFields);
+      if (Array.isArray(parsedFields)) {
+        return parsedFields;
+      }
+    } catch (error) {
+      // Older projects stored QStringList as a comma-separated string.
+    }
+    return serializedFields.split(',').map(function(name) {
+      return name.trim().replace(/^\[?\"?/, '').replace(/\"?\]?$/, '');
+    });
+  }
+
+  function isSungsanManagedFieldPhoto() {
+    return appIsSungsan && currentLayer
+        && currentLayer.customProperty('kr.co.sungsan.mobilegis/managedFieldPhotos')
+        && sungsanManagedPhotoFields().indexOf(field.name) !== -1;
   }
 
   AudioAnalyzer {
@@ -511,6 +548,21 @@ EditorWidgetBase {
       }
     }
 
+    QfToolButton {
+      id: deletePhotoButton
+      anchors.top: image.top
+      anchors.right: sketchButton.left
+      anchors.rightMargin: 4
+      visible: image.source !== '' && image.status === Image.Ready && isEnabled && isSungsanManagedFieldPhoto()
+
+      round: true
+      iconSource: Theme.getThemeVectorIcon("ic_delete_forever_white_24dp")
+      iconColor: "#ffffff"
+      bgcolor: "#c74444"
+
+      onClicked: deletePhotoDialog.open()
+    }
+
     Connections {
       id: sketcherConnection
       target: sketcher
@@ -731,7 +783,7 @@ EditorWidgetBase {
       onFinished: path => {
         const filepath = StringUtils.replaceFilenameTags(getResourceFilePath(), path);
         platformUtilities.renameFile(path, prefixToRelativePath + filepath);
-        if (!FileUtils.mimeTypeName(path).startsWith("video/")) {
+        if (!cameraLoader.isVideo) {
           const maximumWidhtHeight = iface.readProjectNumEntry("qfieldsync", "maximumImageWidthHeight", 0);
           if (maximumWidhtHeight > 0) {
             FileUtils.restrictImageSize(prefixToRelativePath + filepath, maximumWidhtHeight);
@@ -825,21 +877,16 @@ EditorWidgetBase {
 
   function capturePhoto() {
     Qt.inputMethod.hide();
-    const isSungsanFieldPhoto = appIsSungsan && currentLayer &&
-        currentLayer.customProperty('kr.co.sungsan.mobilegis/saveFieldPhotosToGallery') &&
-        ['photo_near', 'photo_far', 'photo_other', 'photo_other_2'].indexOf(field.name) !== -1;
-    if (isSungsanFieldPhoto) {
-      const sungsanObjectName = sungsanObjectNameEvaluator.evaluate();
-      if (sungsanObjectName === undefined || sungsanObjectName === null ||
-          FeatureUtils.attributeIsNull(sungsanObjectName) || String(sungsanObjectName).trim().length === 0) {
-        mainWindow.displayToast("사진을 찍기 전에 객체명을 먼저 입력해 주세요.", "warning");
-        return;
+    if (isSungsanManagedFieldPhoto()) {
+      const objectName = sungsanObjectNameEvaluator.evaluate();
+      if (objectName === undefined || objectName === null || FeatureUtils.attributeIsNull(objectName) || String(objectName).trim().length === 0) {
+        mainWindow.displayToast("객체명이 비어 있어 내부 객체 ID로 사진 이름을 만듭니다.", "info");
       }
     }
     if (platformUtilities.capabilities & PlatformUtilities.NativeCamera && settings.valueBool("nativeCamera2", true)) {
       let filepath = getResourceFilePath();
       // Pictures taken by cameras will always be JPG
-      filepath = filepath.replace('{extension}', 'JPG');
+      filepath = filepath.replace('{extension}', 'jpg');
       __resourceSource = platformUtilities.getCameraPicture(qgisProject.homePath + '/', filepath, FileUtils.fileSuffix(filepath), this);
     } else {
       platformUtilities.createDir(qgisProject.homePath, 'DCIM');
@@ -865,6 +912,35 @@ EditorWidgetBase {
   function captureAudio() {
     Qt.inputMethod.hide();
     audioRecorderLoader.active = true;
+  }
+
+  QfDialog {
+    id: deletePhotoDialog
+    parent: mainWindow.contentItem
+    title: "현장사진 삭제"
+
+    Label {
+      width: parent.width
+      wrapMode: Text.WordWrap
+      text: "이 사진 파일과 현재 객체의 연결을 삭제할까요?"
+    }
+
+    onAccepted: {
+      const absolutePath = prefixToRelativePath + currentValue;
+      if (currentValue && FileUtils.fileExists(absolutePath)) {
+        const results = FileUtils.deleteFiles([absolutePath]);
+        if (!results[absolutePath]) {
+          mainWindow.displayToast("사진 파일을 삭제하지 못했습니다.", "error");
+          return;
+        }
+      }
+      valueChangeRequested("", false);
+      prepareValue("");
+      mainWindow.displayToast("사진을 삭제했습니다.");
+      visible = false;
+    }
+
+    onRejected: visible = false
   }
 
   Component.onCompleted: {

@@ -49,6 +49,18 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
     Q_INVOKABLE QVariantMap queryLandStarMetadata( const QString &filePath ) const;
 
     /**
+     * Prepares an arbitrary editable point, line, or polygon layer for the
+     * Sungsan four-slot field-photo workflow.
+     *
+     * Existing compatible photo fields are reused. Otherwise four short
+     * string fields are added when the provider supports schema changes. The
+     * method never commits or rolls back an edit session which was started by
+     * the user. Non-fatal preparation problems are returned in the warning
+     * value so callers can continue the survey without photo support.
+     */
+    Q_INVOKABLE QVariantMap prepareFieldSurveyLayer( QgsProject *project, QgsVectorLayer *layer );
+
+    /**
      * Writes all point features in a layer as
      * point-name,northing,easting,elevation,code.
      * The returned map contains ok, path, count and error values.

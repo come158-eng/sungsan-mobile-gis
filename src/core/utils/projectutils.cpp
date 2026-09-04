@@ -547,8 +547,8 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
       { QStringLiteral( "source_device" ), QStringLiteral( "측량 장비" ) },
       { QStringLiteral( "photo_near" ), QStringLiteral( "근경 사진" ) },
       { QStringLiteral( "photo_far" ), QStringLiteral( "원경 사진" ) },
-      { QStringLiteral( "photo_other" ), QStringLiteral( "기타 사진 1" ) },
-      { QStringLiteral( "photo_other_2" ), QStringLiteral( "기타 사진 2" ) },
+      { QStringLiteral( "photo_other" ), QStringLiteral( "기타 사진" ) },
+      { QStringLiteral( "photo_other_2" ), QStringLiteral( "기타2 사진" ) },
     };
     for ( auto aliasIterator = objectAliases.constBegin(); aliasIterator != objectAliases.constEnd(); ++aliasIterator )
     {
@@ -624,10 +624,15 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     }
 
     const QString photoNameBaseExpression = QStringLiteral(
+      "with_variable('current_fid', $id, "
+      "with_variable('object_name_raw', coalesce(nullif(trim(\"name\"), ''), nullif(trim(\"landstar_id\"), ''), nullif(to_string(\"object_id\"), ''), to_string($id)), "
       "with_variable('object_name_safe', "
-      "regexp_replace(coalesce(nullif(trim(\"name\"), ''), nullif(trim(\"landstar_id\"), ''), '이름없는객체'), "
-      "'[^0-9A-Za-z가-힣._ -]+', '_'), "
-      "'photos/현장사진/' || @object_name_safe || ' (%1).{extension}')" );
+      "regexp_replace(replace(@object_name_raw, char(92), '_'), "
+      "'[/:*?\"<>|]', '_'), "
+      "'images/성산_현장객체/' || @object_name_safe || "
+      "if(aggregate(@layer, 'count', $id, filter := $id != @current_fid AND coalesce(nullif(trim(\"name\"), ''), nullif(trim(\"landstar_id\"), '')) = "
+      "coalesce(nullif(trim(attribute(@parent, 'name')), ''), nullif(trim(attribute(@parent, 'landstar_id')), ''))) > 0, "
+      "'_' || left(coalesce(nullif(to_string(\"object_id\"), ''), to_string(@current_fid)), 8), '') || ' (%1).{extension}')))" );
     QVariantMap fixedPhotoNaming;
     fixedPhotoNaming.insert( QStringLiteral( "photo_near" ), photoNameBaseExpression.arg( 1 ) );
     fixedPhotoNaming.insert( QStringLiteral( "photo_far" ), photoNameBaseExpression.arg( 2 ) );
@@ -635,6 +640,10 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     fixedPhotoNaming.insert( QStringLiteral( "photo_other_2" ), photoNameBaseExpression.arg( 4 ) );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "QFieldSync/attachment_naming" ), QString::fromUtf8( QJsonDocument::fromVariant( fixedPhotoNaming ).toJson( QJsonDocument::Compact ) ) );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/saveFieldPhotosToGallery" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/managedFieldPhotos" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ), fixedPhotoFields );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/photoObjectNameField" ), QStringLiteral( "name" ) );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFolder" ), QStringLiteral( "images/성산_현장객체" ) );
 
     sungsanFieldObjectsLayer->setDisplayExpression( QStringLiteral( "coalesce(nullif(trim(\"landstar_id\"), ''), nullif(trim(\"name\"), ''), \"category\", '현장 객체')" ) );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), true );
@@ -673,7 +682,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     }
     sungsanFieldObjectsLayer->setEditFormConfig( objectFormConfig );
 
-    QDir( createdProjectDir ).mkpath( QStringLiteral( "photos/현장사진" ) );
+    QDir( createdProjectDir ).mkpath( QStringLiteral( "images/성산_현장객체" ) );
 
     createdProjectLayers << sungsanFieldObjectsLayer;
   }
@@ -1100,7 +1109,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
                                                     << "video"
                                                     << "files";
   if ( sungsanFieldTemplate )
-    attachmentDirectories << "photos";
+    attachmentDirectories << "images";
   createdProject->writeEntry( QStringLiteral( "qfieldsync" ), QStringLiteral( "attachmentDirs" ), attachmentDirectories );
 
   createdProject->addMapLayers( createdProjectLayers );

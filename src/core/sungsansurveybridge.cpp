@@ -15,6 +15,9 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
@@ -24,17 +27,24 @@
 #include <QStringConverter>
 #include <QStringDecoder>
 
+#include <qgsattributeeditorcontainer.h>
+#include <qgsattributeeditorfield.h>
 #include <qgscoordinatereferencesystem.h>
 #include <qgscoordinatetransform.h>
 #include <qgscoordinatetransformcontext.h>
 #include <qgsabstractgeometry.h>
+#include <qgseditformconfig.h>
 #include <qgsexception.h>
+#include <qgseditorwidgetsetup.h>
+#include <qgsexpression.h>
 #include <qgsfeature.h>
 #include <qgsfeaturerequest.h>
+#include <qgsfield.h>
 #include <qgsgeometry.h>
 #include <qgsmaplayer.h>
 #include <qgspoint.h>
 #include <qgsproject.h>
+#include <qgsvectordataprovider.h>
 #include <qgsvectorlayer.h>
 #include <qgsvertexid.h>
 #include <qgswkbtypes.h>
@@ -363,6 +373,379 @@ namespace
 SungsanSurveyBridge::SungsanSurveyBridge( QObject *parent )
   : QObject( parent )
 {}
+
+QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, QgsVectorLayer *layer )
+{
+  const auto result = []( const bool ok, const bool prepared, const QString &warning = QString(), const QString &error = QString() ) {
+    return QVariantMap{
+      { QStringLiteral( "ok" ), ok },
+      { QStringLiteral( "prepared" ), prepared },
+      { QStringLiteral( "warning" ), warning },
+      { QStringLiteral( "error" ), error },
+      { QStringLiteral( "fieldsAdded" ), QStringList() },
+      { QStringLiteral( "photoFields" ), QStringList() },
+      { QStringLiteral( "objectNameField" ), QString() },
+      { QStringLiteral( "photoFolder" ), QString() },
+    };
+  };
+
+  if ( !layer || !layer->isValid() )
+    return result( false, false, QString(), tr( "사진 기능을 준비할 유효한 조사 레이어가 없습니다." ) );
+
+  const Qgis::GeometryType geometryType = QgsWkbTypes::geometryType( layer->wkbType() );
+  if ( geometryType != Qgis::GeometryType::Point
+       && geometryType != Qgis::GeometryType::Line
+       && geometryType != Qgis::GeometryType::Polygon )
+  {
+    return result( true, false, tr( "선택한 레이어는 포인트·라인·폴리곤 레이어가 아니어서 사진 기능만 준비하지 않았습니다." ) );
+  }
+
+  if ( layer->readOnly() || !layer->supportsEditing() )
+    return result( true, false, tr( "선택한 레이어는 읽기 전용이어서 사진 필드를 준비하지 않았습니다. 조회는 계속할 수 있습니다." ) );
+
+  const auto isStringField = [layer]( const QString &fieldName ) {
+    const int fieldIndex = layer->fields().lookupField( fieldName );
+    return fieldIndex >= 0 && layer->fields().at( fieldIndex ).type() == QMetaType::QString;
+  };
+
+  // Prefer a previously prepared four-field mapping, then reuse the legacy
+  // Sungsan fields slot by slot. Short ss_photoN names remain valid for DBF
+  // providers with a ten-character field-name limit.
+  QStringList photoFields;
+  const QByteArray configuredPhotoFieldsJson = layer->customProperty(
+    QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ) ).toString().toUtf8();
+  const QJsonDocument configuredPhotoFieldsDocument = QJsonDocument::fromJson( configuredPhotoFieldsJson );
+  if ( configuredPhotoFieldsDocument.isArray() && configuredPhotoFieldsDocument.array().size() == 4 )
+  {
+    QStringList configuredFields;
+    for ( const QJsonValue &value : configuredPhotoFieldsDocument.array() )
+      configuredFields.append( value.toString() );
+    if ( std::all_of( configuredFields.cbegin(), configuredFields.cend(), isStringField ) )
+      photoFields = configuredFields;
+  }
+
+  const QStringList legacyPhotoFields = {
+    QStringLiteral( "photo_near" ),
+    QStringLiteral( "photo_far" ),
+    QStringLiteral( "photo_other" ),
+    QStringLiteral( "photo_other_2" ),
+  };
+  const QStringList managedPhotoFields = {
+    QStringLiteral( "ss_photo1" ),
+    QStringLiteral( "ss_photo2" ),
+    QStringLiteral( "ss_photo3" ),
+    QStringLiteral( "ss_photo4" ),
+  };
+
+  if ( photoFields.isEmpty() )
+  {
+    for ( int slot = 0; slot < managedPhotoFields.size(); ++slot )
+    {
+      if ( isStringField( legacyPhotoFields.at( slot ) ) )
+        photoFields.append( legacyPhotoFields.at( slot ) );
+      else
+        photoFields.append( managedPhotoFields.at( slot ) );
+    }
+  }
+
+  QStringList missingFields;
+  for ( const QString &fieldName : std::as_const( photoFields ) )
+  {
+    if ( !isStringField( fieldName ) )
+      missingFields.append( fieldName );
+  }
+
+  QStringList fieldsAdded;
+  if ( !missingFields.isEmpty() )
+  {
+    // Never commit or roll back a session owned by the operator. QField can
+    // call this method again after that edit has been saved.
+    if ( layer->isEditable() )
+    {
+      QVariantMap warningResult = result( true, false, tr( "레이어에 저장되지 않은 편집이 있어 사진 필드를 추가하지 않았습니다. 현재 편집을 저장한 뒤 다시 시도해 주세요. 조사는 계속할 수 있습니다." ) );
+      warningResult[QStringLiteral( "photoFields" )] = photoFields;
+      return warningResult;
+    }
+
+    QgsVectorDataProvider *provider = layer->dataProvider();
+    const QString providerType = layer->providerType().toLower();
+    const bool localSchemaProvider = providerType == QLatin1String( "ogr" )
+                                     || providerType == QLatin1String( "spatialite" );
+    if ( !localSchemaProvider )
+    {
+      QVariantMap warningResult = result( true, false, tr( "공유·원격 데이터베이스의 스키마는 앱이 자동으로 바꾸지 않습니다. QGIS에서 사진 필드 4개를 준비하면 속성 조사는 그대로 계속할 수 있습니다." ) );
+      warningResult[QStringLiteral( "photoFields" )] = photoFields;
+      return warningResult;
+    }
+    if ( !provider || !( provider->capabilities() & Qgis::VectorProviderCapability::AddAttributes ) )
+    {
+      QVariantMap warningResult = result( true, false, tr( "이 데이터 형식은 앱에서 사진 필드를 추가할 수 없습니다. QGIS에서 사진 필드를 준비하면 속성 조사는 그대로 계속할 수 있습니다." ) );
+      warningResult[QStringLiteral( "photoFields" )] = photoFields;
+      return warningResult;
+    }
+
+    if ( !layer->startEditing() )
+    {
+      QVariantMap warningResult = result( true, false, tr( "사진 필드 추가를 위한 편집을 시작하지 못했습니다. 기존 데이터는 변경하지 않았으며 조사는 계속할 수 있습니다." ) );
+      warningResult[QStringLiteral( "photoFields" )] = photoFields;
+      return warningResult;
+    }
+
+    bool fieldsStaged = true;
+    for ( const QString &fieldName : std::as_const( missingFields ) )
+    {
+      // 254 characters remains portable to DBF-backed shapefiles while being
+      // ample for a project-relative attachment path.
+      if ( !layer->addAttribute( QgsField( fieldName, QMetaType::QString, QString(), 254 ) ) )
+      {
+        fieldsStaged = false;
+        break;
+      }
+      fieldsAdded.append( fieldName );
+    }
+
+    if ( !fieldsStaged )
+    {
+      layer->rollBack();
+      layer->updateFields();
+      QVariantMap warningResult = result( true, false, tr( "사진 필드를 모두 추가하지 못해 이번 변경을 취소했습니다. 기존 데이터는 유지되며 조사는 계속할 수 있습니다." ) );
+      warningResult[QStringLiteral( "photoFields" )] = photoFields;
+      return warningResult;
+    }
+
+    if ( !layer->commitChanges() )
+    {
+      const QString details = layer->commitErrors().join( QStringLiteral( "; " ) );
+      layer->rollBack();
+      layer->updateFields();
+      QVariantMap warningResult = result(
+        true, false,
+        details.isEmpty()
+          ? tr( "사진 필드를 저장하지 못해 변경을 취소했습니다. 기존 데이터는 유지되며 조사는 계속할 수 있습니다." )
+          : tr( "사진 필드를 저장하지 못해 변경을 취소했습니다: %1" ).arg( details ) );
+      warningResult[QStringLiteral( "photoFields" )] = photoFields;
+      return warningResult;
+    }
+    layer->updateFields();
+  }
+
+  for ( const QString &fieldName : std::as_const( photoFields ) )
+  {
+    if ( !isStringField( fieldName ) )
+    {
+      QVariantMap warningResult = result( true, false, tr( "사진 필드 구성을 확인하지 못했습니다. 기존 데이터는 유지되며 조사는 계속할 수 있습니다." ) );
+      warningResult[QStringLiteral( "photoFields" )] = photoFields;
+      warningResult[QStringLiteral( "fieldsAdded" )] = fieldsAdded;
+      return warningResult;
+    }
+  }
+
+  // A desktop-prepared choice wins. Otherwise prefer common Korean GIS asset
+  // identifiers before generic name/id fields.
+  QString objectNameField = layer->customProperty(
+    QStringLiteral( "kr.co.sungsan.mobilegis/photoObjectNameField" ) ).toString().trimmed();
+  if ( objectNameField.isEmpty() || layer->fields().lookupField( objectNameField ) < 0 )
+  {
+    objectNameField.clear();
+    const QStringList objectNameAliases = {
+      QStringLiteral( "관리번호" ), QStringLiteral( "시설물관리번호" ), QStringLiteral( "시설물번호" ),
+      QStringLiteral( "mng_num" ), QStringLiteral( "mng_no" ), QStringLiteral( "manage_no" ),
+      QStringLiteral( "management_no" ), QStringLiteral( "asset_no" ), QStringLiteral( "asset_id" ),
+      QStringLiteral( "facility_no" ), QStringLiteral( "facility_id" ), QStringLiteral( "객체명" ),
+      QStringLiteral( "측점명" ), QStringLiteral( "point_name" ), QStringLiteral( "object_name" ),
+      QStringLiteral( "obj_name" ), QStringLiteral( "landstar_id" ), QStringLiteral( "name" ),
+      QStringLiteral( "no" ), QStringLiteral( "code" ), QStringLiteral( "object_id" ),
+      QStringLiteral( "uuid" ), QStringLiteral( "id" ), QStringLiteral( "fid" ),
+    };
+
+    for ( const QString &alias : objectNameAliases )
+    {
+      for ( int fieldIndex = 0; fieldIndex < layer->fields().size(); ++fieldIndex )
+      {
+        const QString fieldName = layer->fields().at( fieldIndex ).name();
+        if ( normalized( fieldName ) == normalized( alias )
+             || normalized( layer->attributeDisplayName( fieldIndex ) ) == normalized( alias ) )
+        {
+          objectNameField = fieldName;
+          break;
+        }
+      }
+      if ( !objectNameField.isEmpty() )
+        break;
+    }
+  }
+
+  QString safeLayerName = layer->name().trimmed();
+  safeLayerName.replace( QRegularExpression( QStringLiteral( "[\\x00-\\x1f/\\\\:*?\"<>|]+" ) ), QStringLiteral( "_" ) );
+  safeLayerName.replace( QRegularExpression( QStringLiteral( "[. ]+$" ) ), QString() );
+  if ( safeLayerName.isEmpty() || safeLayerName == QLatin1String( "." ) || safeLayerName == QLatin1String( ".." ) )
+    safeLayerName = QStringLiteral( "layer_%1" ).arg( layer->id().left( 12 ) );
+  if ( safeLayerName.size() > 80 )
+  {
+    safeLayerName = safeLayerName.left( 80 ).trimmed();
+    safeLayerName.replace( QRegularExpression( QStringLiteral( "[. ]+$" ) ), QString() );
+  }
+
+  const QString photoFolder = QStringLiteral( "images/%1" ).arg( safeLayerName );
+  QStringList warnings;
+  if ( !project || project->homePath().trimmed().isEmpty() )
+  {
+    warnings.append( tr( "프로젝트 저장 위치가 없어 사진 폴더를 미리 만들지 못했습니다. 프로젝트를 저장한 뒤 사진을 촬영해 주세요." ) );
+  }
+  else if ( !QDir( project->homePath() ).mkpath( photoFolder ) )
+  {
+    warnings.append( tr( "사진 폴더(%1)를 만들지 못했습니다. 저장 공간 권한과 여유 공간을 확인해 주세요." ).arg( photoFolder ) );
+  }
+
+  if ( project )
+  {
+    QStringList attachmentDirectories = project->readListEntry(
+      QStringLiteral( "qfieldsync" ), QStringLiteral( "attachmentDirs" ), QStringList() );
+    if ( !attachmentDirectories.contains( QStringLiteral( "images" ) ) )
+    {
+      attachmentDirectories.append( QStringLiteral( "images" ) );
+      project->writeEntry( QStringLiteral( "qfieldsync" ), QStringLiteral( "attachmentDirs" ), attachmentDirectories );
+    }
+  }
+
+  QVariantMap photoWidgetOptions;
+  photoWidgetOptions.insert( QStringLiteral( "DocumentViewer" ), 1 );
+  photoWidgetOptions.insert( QStringLiteral( "FileWidget" ), true );
+  photoWidgetOptions.insert( QStringLiteral( "FileWidgetButton" ), true );
+  photoWidgetOptions.insert( QStringLiteral( "RelativeStorage" ), 1 );
+  photoWidgetOptions.insert( QStringLiteral( "StorageMode" ), 0 );
+  photoWidgetOptions.insert( QStringLiteral( "UseLink" ), false );
+
+  const QStringList photoAliases = {
+    tr( "근경" ), tr( "원경" ), tr( "기타" ), tr( "기타2" ),
+  };
+
+  QJsonObject attachmentNaming;
+  const QByteArray currentNamingJson = layer->customProperty( QStringLiteral( "QFieldSync/attachment_naming" ) ).toString().toUtf8();
+  const QJsonDocument currentNamingDocument = QJsonDocument::fromJson( currentNamingJson );
+  if ( currentNamingDocument.isObject() )
+    attachmentNaming = currentNamingDocument.object();
+
+  const QString escapedPhotoFolder = QString( photoFolder ).replace( QLatin1Char( '\'' ), QStringLiteral( "''" ) );
+  QString objectNameExpression;
+  QString duplicateNameSuffixExpression = QStringLiteral( "''" );
+  if ( !objectNameField.isEmpty() )
+  {
+    objectNameExpression = QStringLiteral( "nullif(trim(to_string(%1)), '')" )
+                             .arg( QgsExpression::quotedColumnRef( objectNameField ) );
+    const QString escapedObjectNameField = QString( objectNameField ).replace( QLatin1Char( '\'' ), QStringLiteral( "''" ) );
+    duplicateNameSuffixExpression = QStringLiteral(
+      "if(%1 IS NOT NULL AND aggregate(@layer, 'count', $id, "
+      "filter := $id != @current_fid AND %1 = "
+      "nullif(trim(to_string(attribute(@parent, '%2'))), '')) > 0, "
+      "'_' || to_string(@current_fid), '')" )
+                                      .arg( objectNameExpression, escapedObjectNameField );
+  }
+  else
+  {
+    objectNameExpression = QStringLiteral( "NULL" );
+    warnings.append( tr( "객체명 필드를 자동으로 찾지 못해 내부 객체 ID를 사진 파일명에 사용합니다. 레이어 설정에서 객체명 필드를 지정할 수 있습니다." ) );
+  }
+
+  const QString photoNameBaseExpression = QStringLiteral(
+    "with_variable('current_fid', $id, "
+    "with_variable('object_name_safe', "
+    "regexp_replace(replace(coalesce(%1, '객체_' || to_string($id)), char(92), '_'), "
+    "'[/:*?\"<>|]', '_'), "
+    "'%2/' || @object_name_safe || %3 || '%4'))" );
+  const QStringList fixedPhotoSuffixes = {
+    QStringLiteral( " (1).{extension}" ),
+    QStringLiteral( " (2).{extension}" ),
+    QStringLiteral( " (3).{extension}" ),
+    QStringLiteral( " (4).{extension}" ),
+  };
+
+  QJsonArray photoFieldsJson;
+  for ( int slot = 0; slot < photoFields.size(); ++slot )
+  {
+    const QString fieldName = photoFields.at( slot );
+    const int fieldIndex = layer->fields().lookupField( fieldName );
+    layer->setFieldAlias( fieldIndex, photoAliases.at( slot ) );
+    layer->setEditorWidgetSetup( fieldIndex, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), photoWidgetOptions ) );
+    attachmentNaming.insert(
+      fieldName,
+      photoNameBaseExpression.arg( objectNameExpression, escapedPhotoFolder, duplicateNameSuffixExpression, fixedPhotoSuffixes.at( slot ) ) );
+    photoFieldsJson.append( fieldName );
+  }
+
+  // Custom drag-and-drop forms only display elements which are explicitly in
+  // their tree. Preserve the operator's complete form and append just the
+  // missing photo fields to one "현장사진" container. Auto-generated and UI
+  // file forms need no tree changes and will discover the new fields normally.
+  QgsEditFormConfig formConfig = layer->editFormConfig();
+  if ( formConfig.layout() == Qgis::AttributeFormLayout::DragAndDrop )
+  {
+    QgsAttributeEditorContainer *formRoot = formConfig.invisibleRootContainer();
+    if ( formRoot )
+    {
+      QSet<QString> fieldsInForm;
+      const QList<QgsAttributeEditorElement *> fieldElements = formRoot->findElements( Qgis::AttributeEditorType::Field );
+      for ( const QgsAttributeEditorElement *element : fieldElements )
+        fieldsInForm.insert( element->name() );
+
+      QgsAttributeEditorContainer *photoContainer = nullptr;
+      const QList<QgsAttributeEditorElement *> containerElements = formRoot->findElements( Qgis::AttributeEditorType::Container );
+      for ( QgsAttributeEditorElement *element : containerElements )
+      {
+        if ( element->name() == QLatin1String( "현장사진" ) )
+        {
+          photoContainer = static_cast<QgsAttributeEditorContainer *>( element );
+          break;
+        }
+      }
+
+      bool formChanged = false;
+      for ( const QString &fieldName : std::as_const( photoFields ) )
+      {
+        if ( fieldsInForm.contains( fieldName ) )
+          continue;
+
+        if ( !photoContainer )
+        {
+          photoContainer = new QgsAttributeEditorContainer( tr( "현장사진" ), formRoot );
+          formRoot->addChildElement( photoContainer );
+          formChanged = true;
+        }
+
+        const int fieldIndex = layer->fields().lookupField( fieldName );
+        photoContainer->addChildElement( new QgsAttributeEditorField( fieldName, fieldIndex, photoContainer ) );
+        fieldsInForm.insert( fieldName );
+        formChanged = true;
+      }
+
+      if ( formChanged )
+        layer->setEditFormConfig( formConfig );
+    }
+    else
+    {
+      warnings.append( tr( "레이어의 사용자 정의 입력 폼을 읽지 못해 사진 필드를 폼에 배치하지 못했습니다. QGIS 레이어 속성에서 폼 구성을 확인해 주세요." ) );
+    }
+  }
+
+  layer->setCustomProperty( QStringLiteral( "QFieldSync/attachment_naming" ),
+                            QString::fromUtf8( QJsonDocument( attachmentNaming ).toJson( QJsonDocument::Compact ) ) );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/managedFieldPhotos" ), true );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ),
+                            QString::fromUtf8( QJsonDocument( photoFieldsJson ).toJson( QJsonDocument::Compact ) ) );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/photoObjectNameField" ), objectNameField );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFolder" ), photoFolder );
+  if ( project )
+    project->setDirty( true );
+
+  QVariantMap successResult = result( true, true, warnings.join( QLatin1Char( '\n' ) ) );
+  successResult[QStringLiteral( "fieldsAdded" )] = fieldsAdded;
+  successResult[QStringLiteral( "photoFields" )] = photoFields;
+  successResult[QStringLiteral( "objectNameField" )] = objectNameField;
+  successResult[QStringLiteral( "photoFolder" )] = photoFolder;
+  successResult[QStringLiteral( "layerName" )] = layer->name();
+  successResult[QStringLiteral( "layerId" )] = layer->id();
+  return successResult;
+}
 
 QVariantMap SungsanSurveyBridge::queryLandStarMetadata( const QString &filePath ) const
 {

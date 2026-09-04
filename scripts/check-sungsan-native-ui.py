@@ -345,7 +345,6 @@ def check_shell_wiring() -> None:
     root = "src/qml/qgismobileapp.qml"
     home = "src/qml/sungsan/SungsanHomeScreen.qml"
     panel = "src/qml/sungsan/SungsanFieldPanel.qml"
-    gallery = "src/qml/editorwidgets/relationeditors/gallery_relation_editor.qml"
     cloud = "src/qml/QFieldCloudScreen.qml"
     branded_surface = "\n".join(
         read(path)
@@ -368,11 +367,14 @@ def check_shell_wiring() -> None:
         PASSES.append("Sungsan field UI exposes one non-duplicated layer button")
     require(panel, "visible: root.editMode && root.multiVertexLayer", "line and polygon controls stay hidden for point layers")
     require(panel, 'text: root.pointLayer ? "지점 추가" : "객체 추가"', "point capture has one direct add action")
-    require(panel, 'text: root.existingPointSelectionPending ? "지점 선택 취소" : "지점 사진·속성"', "existing point photo and attribute workflow is exposed for point layers")
+    require(panel, "property bool editableVectorLayer: false", "field panel tracks whether the selected layer is an editable vector layer")
+    require(panel, "property bool canEditExistingFeature: false", "field panel exposes generic existing-feature edit capability")
+    require(panel, "property bool existingFeatureSelectionPending: false", "field panel exposes generic existing-feature selection state")
+    require(panel, "signal editExistingFeatureRequested", "field panel exposes generic existing-feature editing")
     require(
         panel,
-        'detailText: root.existingPointSelectionPending ? "지도 선택 대기 중" : "기존 지점의 근경·원경·기타·추가사진"',
-        "existing point workflow advertises categorized and extra photos",
+        "근경·원경·기타·기타2",
+        "existing-feature workflow advertises the four fixed photo slots",
     )
     forbid(panel, 'text: "LandStar 측점 받기"', "mobile field panel excludes the manual LandStar file picker")
     forbid(panel, 'text: "CAD TXT 생성"', "mobile field panel excludes desktop CAD text export")
@@ -397,29 +399,15 @@ def check_shell_wiring() -> None:
     require(panel, 'text: "외부 GNSS 연결"', "generic external GNSS setup is exposed in the field panel")
     require(panel, "CHCNAV 포함 표준 NMEA", "GNSS setup describes model-independent NMEA compatibility")
     require(panel, "Bluetooth/BLE · TCP/UDP", "GNSS setup lists the supported receiver transports")
-    require(panel, "visible: root.pointLayer", "existing point attribute action is limited to point layers")
-    require(
-        gallery,
-        'relationId === "sungsan_field_photos"',
-        "categorized photo chooser is limited to the Sungsan field-photo relation",
-    )
-    for photo_type in ("근경", "원경", "기타"):
-        require(
-            gallery,
-            f'text: "{photo_type} 촬영"',
-            f"existing point photo chooser exposes {photo_type}",
-        )
-    require(gallery, 'text: "추가 사진 촬영"', "existing point photo chooser exposes unlimited extra photos")
-    require(
-        gallery,
-        'attributeFormModel.changeAttribute("photo_type", photoType)',
-        "photo type is written before the attachment naming expression is evaluated",
-    )
-    require(
-        gallery,
-        "pendingSungsanPhotoType",
-        "photo type survives the Android or built-in camera round trip",
-    )
+    require(panel, "visible: root.editableVectorLayer", "existing-feature action covers every editable vector geometry")
+    require(panel, "enabled: root.canEditExistingFeature", "existing-feature action follows update capability")
+    require(panel, "onClicked: root.editExistingFeatureRequested()", "existing-feature action emits the generic request")
+    for obsolete_name in (
+        "canEditExistingPoint",
+        "existingPointSelectionPending",
+        "editExistingPointRequested",
+    ):
+        forbid(panel, obsolete_name, f"obsolete point-only panel API {obsolete_name}")
     require(
         root,
         "projectLoaded: !welcomeScreen.visible",
@@ -495,13 +483,35 @@ def check_shell_wiring() -> None:
     else:
         PASSES.append("generic survey-point workflow no longer uses manhole-only wording")
     require(root, 'changeMode("digitize")', "survey mode wired")
-    require(root, "dashBoard.ensureEditableLayerSelected()", "editable layer selection wired")
+    require(root, "dashBoard.ensureEditableLayerSelected(requireFeatureAddition)", "permission-aware editable layer selection wired")
+    require(root, "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, dashBoard.activeLayer)", "selected user layer is prepared for the common photo workflow")
     require_regex(
         root,
-        r"function\s+sungsanStartSurvey\s*\([^)]*\).*?"
-        r"ensureEditableLayerSelected\s*\(\s*\).*?"
-        r"!dashBoard\.activeLayer\s*\|\|\s*!digitizingToolbar\.digitizingAllowed",
-        "survey start blocks missing, read-only and addition-locked layers",
+        r"function\s+sungsanStartSurvey\s*\(\s*requireFeatureAddition\s*\).*?"
+        r"ensureEditableLayerSelected\s*\(\s*requireFeatureAddition\s*\).*?"
+        r"prepareFieldSurveyLayer\s*\(\s*qgisProject\s*,\s*dashBoard\.activeLayer\s*\).*?"
+        r"changeMode\s*\(\s*[\"']digitize[\"']\s*\).*?"
+        r"return\s+stateMachine\.state\s*===\s*[\"']digitize[\"']",
+        "survey start prepares an arbitrary selected layer and reports success",
+    )
+    require_regex(
+        root,
+        r"function\s+ensureEditableLayerSelected\s*\(\s*requireFeatureAddition\s*\).*?"
+        r"if\s*\(\s*activeLayerIsEditable\s*\)\s*\{\s*"
+        r"return\s*\{\s*[\"']ok[\"']\s*:\s*true",
+        "valid user-selected editable layer is preserved",
+    )
+    require_regex(
+        root,
+        r"function\s+ensureEditableLayerSelected\s*\(\s*requireFeatureAddition\s*\).*?"
+        r"editableLayers\.length\s*===\s*1.*?activeLayer\s*=\s*editableLayers\[0\]",
+        "one unambiguous editable fallback layer is selected automatically",
+    )
+    require_regex(
+        root,
+        r"function\s+ensureEditableLayerSelected\s*\(\s*requireFeatureAddition\s*\).*?"
+        r"[\"']selectionRequired[\"']\s*:\s*editableLayers\.length\s*>\s*1",
+        "multiple editable layers require an explicit user selection",
     )
     require_regex(
         root,
@@ -510,26 +520,31 @@ def check_shell_wiring() -> None:
     )
     require_regex(
         root,
-        r"onAddFeatureRequested\s*:\s*\{.*?Qt\.callLater.*?"
+        r"onAddFeatureRequested\s*:\s*\{.*?sungsanStartSurvey\s*\(\s*true\s*\).*?Qt\.callLater.*?"
         r"geometryType\s*\(\s*\)\s*===\s*Qgis\.GeometryType\.Point.*?"
         r"digitizingToolbar\.triggerAddVertex\s*\(\s*\)",
         "Sungsan point add captures once and opens the attribute workflow directly",
     )
     require_regex(
         root,
-        r"onEditExistingPointRequested\s*:\s*\{.*?"
-        r"sungsanExistingPointEditPending\s*=\s*true.*?"
-        r"기존 지점의 근경·원경·기타·추가사진과 속성을 입력하려면 지도에서 지점을 눌러 주세요",
-        "existing point photo workflow waits for a map selection without creating geometry",
+        r"onEditExistingFeatureRequested\s*:\s*\{.*?"
+        r"sungsanStartSurvey\s*\(\s*false\s*\).*?"
+        r"sungsanExistingFeatureEditPending\s*=\s*true",
+        "generic existing-feature workflow waits for a map selection without requiring feature addition",
     )
     require_regex(
         root,
         r"onIdentifyFinished\s*:\s*\{.*?"
-        r"sungsanExistingPointEditPending.*?"
+        r"sungsanExistingFeatureEditPending.*?"
         r"MultiFeatureListModel\.LayerRole.*?"
         r"featureListForm\.state\s*=\s*\"FeatureFormEdit\"",
-        "identified features from the active layer open directly in attribute edit mode",
+        "identified point, line or polygon features from the active layer open directly in attribute edit mode",
     )
+    for obsolete_name in (
+        "sungsanExistingPointEditPending",
+        "onEditExistingPointRequested",
+    ):
+        forbid(root, obsolete_name, f"obsolete point-only app API {obsolete_name}")
     require_regex(
         "src/qml/FeatureListForm.qml",
         r"editExistingAfterSelection.*?"
