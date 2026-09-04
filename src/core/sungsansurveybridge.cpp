@@ -18,6 +18,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
@@ -575,19 +576,64 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
     }
   }
 
-  QString safeLayerName = layer->name().trimmed();
-  safeLayerName.replace( QRegularExpression( QStringLiteral( "[\\x00-\\x1f/\\\\:*?\"<>|]+" ) ), QStringLiteral( "_" ) );
-  safeLayerName.replace( QRegularExpression( QStringLiteral( "[. ]+$" ) ), QString() );
-  if ( safeLayerName.isEmpty() || safeLayerName == QLatin1String( "." ) || safeLayerName == QLatin1String( ".." ) )
-    safeLayerName = QStringLiteral( "layer_%1" ).arg( layer->id().left( 12 ) );
-  if ( safeLayerName.size() > 80 )
+  QStringList warnings;
+  const auto safeLayerFolderComponent = []( QString name, const QString &layerId ) {
+    name = name.trimmed();
+    name.replace( QRegularExpression( QStringLiteral( "[\\x00-\\x1f/\\\\:*?\"<>|]+" ) ), QStringLiteral( "_" ) );
+    name.replace( QRegularExpression( QStringLiteral( "[. ]+$" ) ), QString() );
+    if ( name.isEmpty() || name == QLatin1String( "." ) || name == QLatin1String( ".." ) )
+      name = QStringLiteral( "layer_%1" ).arg( layerId.left( 12 ) );
+    if ( name.size() > 80 )
+    {
+      name = name.left( 80 ).trimmed();
+      name.replace( QRegularExpression( QStringLiteral( "[. ]+$" ) ), QString() );
+    }
+    if ( name.isEmpty() )
+      name = QStringLiteral( "layer_%1" ).arg( layerId.left( 12 ) );
+    return name;
+  };
+
+  const QString safeLayerName = safeLayerFolderComponent( layer->name(), layer->id() );
+  const QString photoFolderProperty = QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFolder" );
+  const QString configuredPhotoFolder = layer->customProperty( photoFolderProperty ).toString().trimmed();
+  QString photoFolder = configuredPhotoFolder;
+  if ( photoFolder.isEmpty() )
   {
-    safeLayerName = safeLayerName.left( 80 ).trimmed();
-    safeLayerName.replace( QRegularExpression( QStringLiteral( "[. ]+$" ) ), QString() );
+    bool layerFolderCollision = false;
+    const QString defaultPhotoFolder = QStringLiteral( "images/%1" ).arg( safeLayerName );
+    if ( project )
+    {
+      const QMap<QString, QgsMapLayer *> projectLayers = project->mapLayers();
+      for ( QgsMapLayer *candidate : projectLayers )
+      {
+        QgsVectorLayer *candidateLayer = qobject_cast<QgsVectorLayer *>( candidate );
+        if ( !candidateLayer || candidateLayer == layer || candidateLayer->id() == layer->id() )
+          continue;
+
+        const QString candidateFolder = candidateLayer->customProperty( photoFolderProperty ).toString().trimmed();
+        const QString candidateSafeName = safeLayerFolderComponent( candidateLayer->name(), candidateLayer->id() );
+        if ( candidateLayer->name().compare( layer->name(), Qt::CaseInsensitive ) == 0
+             || candidateSafeName.compare( safeLayerName, Qt::CaseInsensitive ) == 0
+             || ( !candidateFolder.isEmpty() && candidateFolder.compare( defaultPhotoFolder, Qt::CaseInsensitive ) == 0 ) )
+        {
+          layerFolderCollision = true;
+          break;
+        }
+      }
+    }
+
+    if ( layerFolderCollision )
+    {
+      const QString layerIdSuffix = QString::fromLatin1(
+        QCryptographicHash::hash( layer->id().toUtf8(), QCryptographicHash::Sha256 ).toHex().left( 8 ) );
+      photoFolder = QStringLiteral( "%1_%2" ).arg( defaultPhotoFolder, layerIdSuffix );
+    }
+    else
+    {
+      photoFolder = defaultPhotoFolder;
+    }
   }
 
-  const QString photoFolder = QStringLiteral( "images/%1" ).arg( safeLayerName );
-  QStringList warnings;
   if ( !project || project->homePath().trimmed().isEmpty() )
   {
     warnings.append( tr( "프로젝트 저장 위치가 없어 사진 폴더를 미리 만들지 못했습니다. 프로젝트를 저장한 뒤 사진을 촬영해 주세요." ) );
@@ -628,30 +674,33 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
 
   const QString escapedPhotoFolder = QString( photoFolder ).replace( QLatin1Char( '\'' ), QStringLiteral( "''" ) );
   QString objectNameExpression;
+  QString objectNameSafeExpression;
   QString duplicateNameSuffixExpression = QStringLiteral( "''" );
   if ( !objectNameField.isEmpty() )
   {
     objectNameExpression = QStringLiteral( "nullif(trim(to_string(%1)), '')" )
                              .arg( QgsExpression::quotedColumnRef( objectNameField ) );
-    const QString escapedObjectNameField = QString( objectNameField ).replace( QLatin1Char( '\'' ), QStringLiteral( "''" ) );
+    objectNameSafeExpression = QStringLiteral(
+      "regexp_replace(replace(coalesce(%1, '객체_' || to_string($id)), char(92), '_'), "
+      "'[/:*?\"<>|]', '_')" )
+                                 .arg( objectNameExpression );
     duplicateNameSuffixExpression = QStringLiteral(
       "if(%1 IS NOT NULL AND aggregate(@layer, 'count', $id, "
-      "filter := $id != @current_fid AND %1 = "
-      "nullif(trim(to_string(attribute(@parent, '%2'))), '')) > 0, "
+      "filter := $id != @current_fid AND lower(%2) = lower(@object_name_safe)) > 0, "
       "'_' || to_string(@current_fid), '')" )
-                                      .arg( objectNameExpression, escapedObjectNameField );
+                                      .arg( objectNameExpression, objectNameSafeExpression );
   }
   else
   {
     objectNameExpression = QStringLiteral( "NULL" );
+    objectNameSafeExpression = QStringLiteral(
+      "regexp_replace(replace('객체_' || to_string($id), char(92), '_'), '[/:*?\"<>|]', '_')" );
     warnings.append( tr( "객체명 필드를 자동으로 찾지 못해 내부 객체 ID를 사진 파일명에 사용합니다. 레이어 설정에서 객체명 필드를 지정할 수 있습니다." ) );
   }
 
   const QString photoNameBaseExpression = QStringLiteral(
     "with_variable('current_fid', $id, "
-    "with_variable('object_name_safe', "
-    "regexp_replace(replace(coalesce(%1, '객체_' || to_string($id)), char(92), '_'), "
-    "'[/:*?\"<>|]', '_'), "
+    "with_variable('object_name_safe', %1, "
     "'%2/' || @object_name_safe || %3 || '%4'))" );
   const QStringList fixedPhotoSuffixes = {
     QStringLiteral( " (1).{extension}" ),
@@ -669,7 +718,7 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
     layer->setEditorWidgetSetup( fieldIndex, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), photoWidgetOptions ) );
     attachmentNaming.insert(
       fieldName,
-      photoNameBaseExpression.arg( objectNameExpression, escapedPhotoFolder, duplicateNameSuffixExpression, fixedPhotoSuffixes.at( slot ) ) );
+      photoNameBaseExpression.arg( objectNameSafeExpression, escapedPhotoFolder, duplicateNameSuffixExpression, fixedPhotoSuffixes.at( slot ) ) );
     photoFieldsJson.append( fieldName );
   }
 
@@ -734,6 +783,60 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
                             QString::fromUtf8( QJsonDocument( photoFieldsJson ).toJson( QJsonDocument::Compact ) ) );
   layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/photoObjectNameField" ), objectNameField );
   layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFolder" ), photoFolder );
+
+  // Keep non-sensitive identifiers with the portable layer configuration so
+  // an exported photo can be traced back to its project, layer and feature
+  // identity rule without exposing an operator name, device ID or file path.
+  QString trackingProjectId;
+  if ( project )
+  {
+    trackingProjectId = project->readEntry(
+      QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/fieldPhotoProjectId" ), QString() ).trimmed();
+    if ( trackingProjectId.isEmpty() )
+    {
+      trackingProjectId = QUuid::createUuid().toString( QUuid::WithoutBraces );
+      project->writeEntry(
+        QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/fieldPhotoProjectId" ), trackingProjectId );
+    }
+  }
+
+  QString featureIdField;
+  const QStringList stableFeatureIdCandidates = {
+    QStringLiteral( "object_id" ), QStringLiteral( "uuid" ),
+    QStringLiteral( "globalid" ), QStringLiteral( "guid" ),
+  };
+  for ( const QString &candidate : stableFeatureIdCandidates )
+  {
+    const int fieldIndex = layer->fields().lookupField( candidate );
+    if ( fieldIndex >= 0 )
+    {
+      featureIdField = layer->fields().at( fieldIndex ).name();
+      break;
+    }
+  }
+  if ( featureIdField.isEmpty() && layer->dataProvider() )
+  {
+    const auto primaryKeyIndexes = layer->dataProvider()->pkAttributeIndexes();
+    if ( primaryKeyIndexes.size() == 1 && primaryKeyIndexes.constFirst() >= 0
+         && primaryKeyIndexes.constFirst() < layer->fields().size() )
+    {
+      featureIdField = layer->fields().at( primaryKeyIndexes.constFirst() ).name();
+    }
+  }
+
+  QString featureIdExpression = QStringLiteral( "to_string($id)" );
+  if ( !featureIdField.isEmpty() )
+  {
+    featureIdExpression = QStringLiteral( "coalesce(nullif(trim(to_string(%1)), ''), to_string($id))" )
+                            .arg( QgsExpression::quotedColumnRef( featureIdField ) );
+  }
+
+  if ( !trackingProjectId.isEmpty() )
+    layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoProjectId" ), trackingProjectId );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoLayerId" ), layer->id() );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFeatureIdField" ), featureIdField );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFeatureIdExpression" ), featureIdExpression );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoMetadataVersion" ), 1 );
   if ( project )
     project->setDirty( true );
 
@@ -742,6 +845,9 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   successResult[QStringLiteral( "photoFields" )] = photoFields;
   successResult[QStringLiteral( "objectNameField" )] = objectNameField;
   successResult[QStringLiteral( "photoFolder" )] = photoFolder;
+  successResult[QStringLiteral( "trackingProjectId" )] = trackingProjectId;
+  successResult[QStringLiteral( "trackingLayerId" )] = layer->id();
+  successResult[QStringLiteral( "trackingFeatureIdExpression" )] = featureIdExpression;
   successResult[QStringLiteral( "layerName" )] = layer->name();
   successResult[QStringLiteral( "layerId" )] = layer->id();
   return successResult;

@@ -118,6 +118,11 @@ EditorWidgetBase {
   }
 
   property string audioSourcePath: ''
+  // Keep the value that was attached when a managed field-photo capture was
+  // started.  The native camera commits its result before resourceReceived is
+  // emitted, so this lets us remove an obsolete, differently named photo only
+  // after the replacement has been verified on disk.
+  property string sungsanPendingPreviousPhotoPath: ""
 
   function prepareValue(fullValue) {
     if (fullValue != "" && !config.UseLink) { // coercion needed
@@ -253,6 +258,59 @@ EditorWidgetBase {
     return appIsSungsan && currentLayer
         && currentLayer.customProperty('kr.co.sungsan.mobilegis/managedFieldPhotos')
         && sungsanManagedPhotoFields().indexOf(field.name) !== -1;
+  }
+
+  function rememberSungsanPreviousPhoto() {
+    sungsanPendingPreviousPhotoPath = isSungsanManagedFieldPhoto() && currentValue
+        ? String(currentValue)
+        : "";
+  }
+
+  function normalizedSungsanPhotoPath(path) {
+    return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/");
+  }
+
+  function commitSungsanManagedPhoto(path) {
+    const previousPath = sungsanPendingPreviousPhotoPath;
+    sungsanPendingPreviousPhotoPath = "";
+
+    if (!path) {
+      return false;
+    }
+
+    const relativePath = String(path);
+    if (!isSungsanManagedFieldPhoto()) {
+      valueChangeRequested(relativePath, false);
+      return true;
+    }
+
+    const absoluteNewPath = prefixToRelativePath + relativePath;
+    if (!FileUtils.fileExists(absoluteNewPath)) {
+      mainWindow.displayToast("새 사진을 안전하게 저장하지 못했습니다. 기존 사진은 유지됩니다.", "error");
+      return false;
+    }
+
+    const currentPathBeforeCommit = currentValue ? String(currentValue) : "";
+
+    // Point the field at the verified replacement before removing an obsolete
+    // file.  A same-path retake is already replaced atomically by Android and
+    // must never be passed to deleteFiles().
+    valueChangeRequested(relativePath, false);
+
+    if (previousPath
+        && normalizedSungsanPhotoPath(currentPathBeforeCommit) === normalizedSungsanPhotoPath(previousPath)
+        && normalizedSungsanPhotoPath(previousPath) !== normalizedSungsanPhotoPath(relativePath)) {
+      const absolutePreviousPath = prefixToRelativePath + previousPath;
+      if (normalizedSungsanPhotoPath(absolutePreviousPath) !== normalizedSungsanPhotoPath(absoluteNewPath)
+          && FileUtils.fileExists(absolutePreviousPath)) {
+        const results = FileUtils.deleteFiles([absolutePreviousPath]);
+        if (!results[absolutePreviousPath]) {
+          mainWindow.displayToast("새 사진은 저장했지만 이전 사진 파일을 정리하지 못했습니다.", "warning");
+        }
+      }
+    }
+
+    return true;
   }
 
   AudioAnalyzer {
@@ -782,18 +840,34 @@ EditorWidgetBase {
 
       onFinished: path => {
         const filepath = StringUtils.replaceFilenameTags(getResourceFilePath(), path);
-        platformUtilities.renameFile(path, prefixToRelativePath + filepath);
+        const destinationPath = prefixToRelativePath + filepath;
+        const moved = isSungsanManagedFieldPhoto()
+            ? FileUtils.replaceFileSafely(path, destinationPath)
+            : platformUtilities.renameFile(path, destinationPath);
+        if (isSungsanManagedFieldPhoto() && (!moved || !FileUtils.fileExists(prefixToRelativePath + filepath))) {
+          sungsanPendingPreviousPhotoPath = "";
+          mainWindow.displayToast("새 사진을 안전하게 저장하지 못했습니다. 기존 사진은 유지됩니다.", "error");
+          close();
+          return;
+        }
         if (!cameraLoader.isVideo) {
           const maximumWidhtHeight = iface.readProjectNumEntry("qfieldsync", "maximumImageWidthHeight", 0);
           if (maximumWidhtHeight > 0) {
             FileUtils.restrictImageSize(prefixToRelativePath + filepath, maximumWidhtHeight);
           }
         }
-        valueChangeRequested(filepath, false);
+        if (isSungsanManagedFieldPhoto()) {
+          commitSungsanManagedPhoto(filepath);
+        } else {
+          valueChangeRequested(filepath, false);
+        }
         close();
       }
 
-      onCanceled: close()
+      onCanceled: {
+        sungsanPendingPreviousPhotoPath = "";
+        close();
+      }
       onClosed: cameraLoader.active = false
     }
   }
@@ -806,7 +880,13 @@ EditorWidgetBase {
         if (maximumWidhtHeight > 0) {
           FileUtils.restrictImageSize(prefixToRelativePath + path, maximumWidhtHeight);
         }
-        valueChangeRequested(path, false);
+        if (isSungsanManagedFieldPhoto()) {
+          commitSungsanManagedPhoto(path);
+        } else {
+          valueChangeRequested(path, false);
+        }
+      } else {
+        sungsanPendingPreviousPhotoPath = "";
       }
     }
   }
@@ -856,6 +936,7 @@ EditorWidgetBase {
   function attachFile() {
     Qt.inputMethod.hide();
     platformUtilities.requestStoragePermission();
+    sungsanPendingPreviousPhotoPath = "";
     const filepath = getResourceFilePath();
     if (documentViewer == ExternalResource.DocumentAudio) {
       __resourceSource = platformUtilities.getFile(qgisProject.homePath + '/', filepath, "audio/*", this);
@@ -867,6 +948,10 @@ EditorWidgetBase {
   function attachGallery() {
     Qt.inputMethod.hide();
     platformUtilities.requestStoragePermission();
+    // Gallery imports do not currently provide a staged/validated success
+    // signal on every Android version.  Never reuse a pending camera cleanup
+    // for this path, otherwise a failed import could remove the old photo.
+    sungsanPendingPreviousPhotoPath = "";
     const filepath = getResourceFilePath();
     if (documentViewer == ExternalResource.DocumentVideo) {
       __resourceSource = platformUtilities.getGalleryVideo(qgisProject.homePath + '/', filepath, this);
@@ -877,6 +962,7 @@ EditorWidgetBase {
 
   function capturePhoto() {
     Qt.inputMethod.hide();
+    rememberSungsanPreviousPhoto();
     if (isSungsanManagedFieldPhoto()) {
       const objectName = sungsanObjectNameEvaluator.evaluate();
       if (objectName === undefined || objectName === null || FeatureUtils.attributeIsNull(objectName) || String(objectName).trim().length === 0) {
@@ -897,6 +983,7 @@ EditorWidgetBase {
 
   function captureVideo() {
     Qt.inputMethod.hide();
+    sungsanPendingPreviousPhotoPath = "";
     if (platformUtilities.capabilities & PlatformUtilities.NativeCamera && settings.valueBool("nativeCamera2", true)) {
       let filepath = getResourceFilePath();
       // Video taken by cameras will always be MP4
@@ -911,6 +998,7 @@ EditorWidgetBase {
 
   function captureAudio() {
     Qt.inputMethod.hide();
+    sungsanPendingPreviousPhotoPath = "";
     audioRecorderLoader.active = true;
   }
 

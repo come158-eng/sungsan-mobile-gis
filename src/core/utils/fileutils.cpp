@@ -31,6 +31,7 @@
 #include <QMimeDatabase>
 #include <QPainter>
 #include <QPainterPath>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <qgis.h>
 #include <qgsapplication.h>
@@ -680,6 +681,87 @@ bool FileUtils::writeFileContent( const QString &filePath, const QByteArray &con
     qDebug() << QStringLiteral( "Failed to open file for writing: %1" ).arg( errorMsg );
     return false;
   }
+}
+
+bool FileUtils::replaceFileSafely( const QString &sourceFilePath, const QString &destinationFilePath )
+{
+  const QFileInfo sourceInfo( sourceFilePath );
+  const QFileInfo destinationInfo( destinationFilePath );
+  if ( !sourceInfo.exists() || !sourceInfo.isFile() || sourceInfo.size() <= 0
+       || destinationFilePath.trimmed().isEmpty() || !isWithinProjectDirectory( destinationFilePath ) )
+  {
+    return false;
+  }
+
+  if ( QDir::cleanPath( sourceInfo.absoluteFilePath() ).compare(
+         QDir::cleanPath( destinationInfo.absoluteFilePath() ),
+#ifdef Q_OS_WIN
+         Qt::CaseInsensitive
+#else
+         Qt::CaseSensitive
+#endif
+         ) == 0 )
+  {
+    return true;
+  }
+
+  QDir destinationDirectory( destinationInfo.absolutePath() );
+  if ( !destinationDirectory.mkpath( QStringLiteral( "." ) ) )
+  {
+    return false;
+  }
+
+  QFile sourceFile( sourceFilePath );
+  if ( !sourceFile.open( QIODevice::ReadOnly ) )
+  {
+    return false;
+  }
+
+  const qint64 expectedSize = sourceFile.size();
+  QSaveFile destinationFile( destinationFilePath );
+  if ( !destinationFile.open( QIODevice::WriteOnly ) )
+  {
+    return false;
+  }
+
+  QByteArray buffer;
+  buffer.resize( 64 * 1024 );
+  qint64 totalWritten = 0;
+  while ( !sourceFile.atEnd() )
+  {
+    const qint64 bytesRead = sourceFile.read( buffer.data(), buffer.size() );
+    if ( bytesRead <= 0 )
+    {
+      destinationFile.cancelWriting();
+      return false;
+    }
+    if ( destinationFile.write( buffer.constData(), bytesRead ) != bytesRead )
+    {
+      destinationFile.cancelWriting();
+      return false;
+    }
+    totalWritten += bytesRead;
+  }
+  sourceFile.close();
+
+  if ( totalWritten != expectedSize || !destinationFile.commit() )
+  {
+    return false;
+  }
+
+  const QFileInfo committedInfo( destinationFilePath );
+  if ( !committedInfo.exists() || !committedInfo.isFile() || committedInfo.size() != expectedSize )
+  {
+    return false;
+  }
+
+  if ( !QFile::remove( sourceFilePath ) )
+  {
+    QgsMessageLog::logMessage(
+      QObject::tr( "The replacement was saved, but the temporary camera file could not be removed: %1" ).arg( sourceFilePath ),
+      QString(), Qgis::MessageLevel::Warning );
+  }
+  return true;
 }
 
 QVariantMap FileUtils::getFileInfo( const QString &filePath, bool fetchContent )

@@ -22,6 +22,8 @@ BRIDGE_H = (ROOT / "src/core/sungsansurveybridge.h").read_text(encoding="utf-8")
 BRIDGE_CPP = (ROOT / "src/core/sungsansurveybridge.cpp").read_text(encoding="utf-8")
 EXTERNAL_RESOURCE = (ROOT / "src/qml/editorwidgets/ExternalResource.qml").read_text(encoding="utf-8")
 PROJECT_UTILS = (ROOT / "src/core/utils/projectutils.cpp").read_text(encoding="utf-8")
+FILE_UTILS_H = (ROOT / "src/core/utils/fileutils.h").read_text(encoding="utf-8")
+FILE_UTILS_CPP = (ROOT / "src/core/utils/fileutils.cpp").read_text(encoding="utf-8")
 ORIENTATION_CPP = (
     ROOT / "src/core/cameraorientationnormalizer.cpp"
 ).read_text(encoding="utf-8")
@@ -45,6 +47,64 @@ def between(source: str, start_token: str, end_token: str) -> str:
     return source[start:] if end < 0 else source[start:end]
 
 
+def qml_function_bodies(source: str) -> list[tuple[str, list[str], str]]:
+    """Return ordinary JavaScript function bodies from a QML source file.
+
+    A small delimiter scanner is used instead of a regular-expression-only
+    match so braces in strings and comments do not make a cleanup contract
+    appear to pass accidentally.
+    """
+
+    functions: list[tuple[str, list[str], str]] = []
+    pattern = re.compile(r"\bfunction\s+(\w+)\s*\(([^)]*)\)\s*\{")
+    for match in pattern.finditer(source):
+        opening = match.end() - 1
+        depth = 0
+        state = "code"
+        quote = ""
+        index = opening
+        while index < len(source):
+            char = source[index]
+            following = source[index + 1] if index + 1 < len(source) else ""
+            if state == "line-comment":
+                if char == "\n":
+                    state = "code"
+            elif state == "block-comment":
+                if char == "*" and following == "/":
+                    state = "code"
+                    index += 1
+            elif state == "string":
+                if char == "\\":
+                    index += 1
+                elif char == quote:
+                    state = "code"
+            elif char == "/" and following == "/":
+                state = "line-comment"
+                index += 1
+            elif char == "/" and following == "*":
+                state = "block-comment"
+                index += 1
+            elif char in "'\"`":
+                state = "string"
+                quote = char
+            elif char == "{":
+                depth += 1
+            elif char == "}":
+                depth -= 1
+                if depth == 0:
+                    parameters = [
+                        parameter.strip()
+                        for parameter in match.group(2).split(",")
+                        if parameter.strip()
+                    ]
+                    functions.append(
+                        (match.group(1), parameters, source[opening + 1:index])
+                    )
+                    break
+            index += 1
+    return functions
+
+
 start_survey = between(
     APP, "function sungsanStartSurvey", "function sungsanShowCurrentLocation"
 )
@@ -59,6 +119,13 @@ prepare_layer = between(
     "SungsanSurveyBridge::prepareFieldSurveyLayer",
     "SungsanSurveyBridge::queryLandStarMetadata",
 )
+object_naming = between(
+    prepare_layer, "QString objectNameExpression", "const QStringList fixedPhotoSuffixes"
+)
+folder_setup = between(
+    prepare_layer, "QString safeLayerName", "QVariantMap photoWidgetOptions"
+)
+external_functions = qml_function_bodies(EXTERNAL_RESOURCE)
 
 
 # Generic survey selection: generated-template markers must not be prerequisites.
@@ -171,7 +238,14 @@ check(
 )
 check(
     "layer and object filename components are sanitized",
-    "safeLayerName.replace( QRegularExpression" in prepare_layer
+    (
+        "safeLayerName.replace( QRegularExpression" in prepare_layer
+        or (
+            "safeLayerFolderComponent" in prepare_layer
+            and "name.replace( QRegularExpression" in prepare_layer
+        )
+    )
+    and "objectNameSafeExpression" in prepare_layer
     and "regexp_replace" in prepare_layer,
 )
 check(
@@ -184,6 +258,54 @@ check(
     and "aggregate(@layer, 'count', $id" in prepare_layer
     and "$id != @current_fid" in prepare_layer
     and "'_' || to_string(@current_fid)" in prepare_layer,
+)
+check(
+    "filename collision detection compares sanitized object names",
+    "aggregate(@layer, 'count', $id" in object_naming
+    and "regexp_replace" in object_naming
+    and bool(
+        re.search(
+            r"duplicateNameSuffixExpression\s*=.*?"
+            r"lower\(%2\)\s*=\s*lower\(@object_name_safe\).*?"
+            r"\.arg\(\s*objectNameExpression\s*,\s*objectNameSafeExpression\s*\)",
+            object_naming,
+            re.DOTALL,
+        )
+    ),
+)
+check(
+    "sanitized duplicate layer names receive distinct folders",
+    "project->mapLayers()" in folder_setup
+    and "safeLayerFolderComponent( candidateLayer->name(), candidateLayer->id() )"
+    in folder_setup
+    and "candidateSafeName.compare( safeLayerName, Qt::CaseInsensitive ) == 0"
+    in folder_setup
+    and bool(
+        re.search(
+            r"QCryptographicHash::hash\(\s*layer->id\(\)\.toUtf8\(\).*?"
+            r"photoFolder\s*=\s*QStringLiteral\(\s*\"%1_%2\"\s*\)"
+            r"\.arg\(\s*defaultPhotoFolder\s*,\s*layerIdSuffix\s*\)",
+            folder_setup,
+            re.DOTALL,
+        )
+    ),
+)
+configured_folder_read = re.search(
+    r"(?:"
+    r"layer->customProperty\s*\(\s*QStringLiteral\s*\(\s*"
+    r'"kr\.co\.sungsan\.mobilegis/fieldPhotoFolder"\s*\)\s*\)'
+    r"|"
+    r'photoFolderProperty\s*=\s*QStringLiteral\s*\(\s*"kr\.co\.sungsan\.mobilegis/fieldPhotoFolder"\s*\)'
+    r".*?layer->customProperty\s*\(\s*photoFolderProperty\s*\)"
+    r")\.toString\s*\(\s*\)",
+    prepare_layer,
+    re.DOTALL,
+)
+check(
+    "existing managed photo folder is read and preserved",
+    bool(configured_folder_read)
+    and "QString photoFolder = configuredPhotoFolder" in prepare_layer
+    and "if ( photoFolder.isEmpty() )" in folder_setup,
 )
 check(
     "fixed numbered filenames",
@@ -238,6 +360,100 @@ check(
     and "isSungsanManagedFieldPhoto()" in EXTERNAL_RESOURCE
     and "FileUtils.deleteFiles([absolutePath])" in EXTERNAL_RESOURCE
     and 'valueChangeRequested("", false)' in EXTERNAL_RESOURCE,
+)
+check(
+    "preparation never mutates existing feature values",
+    all(
+        mutation not in prepare_layer
+        for mutation in (
+            "changeAttributeValue(",
+            "setAttribute(",
+            "updateFeature(",
+            "deleteFeature(",
+        )
+    ),
+)
+
+replacement_helper = next(
+    (
+        body
+        for name, parameters, body in external_functions
+        if name == "commitSungsanManagedPhoto" and parameters == ["path"]
+    ),
+    "",
+)
+remember_helper = next(
+    (
+        body
+        for name, parameters, body in external_functions
+        if name == "rememberSungsanPreviousPhoto" and not parameters
+    ),
+    "",
+)
+capture_helper = next(
+    (
+        body
+        for name, parameters, body in external_functions
+        if name == "capturePhoto" and not parameters
+    ),
+    "",
+)
+gallery_helper = next(
+    (
+        body
+        for name, parameters, body in external_functions
+        if name == "attachGallery" and not parameters
+    ),
+    "",
+)
+new_file_check_position = replacement_helper.find(
+    "FileUtils.fileExists(absoluteNewPath)"
+)
+value_change_position = replacement_helper.find("valueChangeRequested(relativePath")
+if new_file_check_position >= 0:
+    value_change_position = replacement_helper.find(
+        "valueChangeRequested(relativePath", new_file_check_position
+    )
+old_file_delete_position = replacement_helper.find(
+    "FileUtils.deleteFiles([absolutePreviousPath])"
+)
+remember_capture_position = capture_helper.find("rememberSungsanPreviousPhoto()")
+path_capture_position = capture_helper.find("getResourceFilePath()")
+
+check(
+    "object-name changes keep the stored photo link until recapture succeeds",
+    bool(remember_helper)
+    and "sungsanPendingPreviousPhotoPath" in remember_helper
+    and "currentValue" in remember_helper
+    and "String(currentValue)" in remember_helper
+    and 0 <= remember_capture_position < path_capture_position,
+)
+check(
+    "recapture removes the previous managed photo only after replacement succeeds",
+    bool(replacement_helper)
+    and "const previousPath = sungsanPendingPreviousPhotoPath" in replacement_helper
+    and "const currentPathBeforeCommit = currentValue" in replacement_helper
+    and "normalizedSungsanPhotoPath(currentPathBeforeCommit) === normalizedSungsanPhotoPath(previousPath)"
+    in replacement_helper
+    and "normalizedSungsanPhotoPath(previousPath) !== normalizedSungsanPhotoPath(relativePath)"
+    in replacement_helper
+    and "normalizedSungsanPhotoPath(absolutePreviousPath) !== normalizedSungsanPhotoPath(absoluteNewPath)"
+    in replacement_helper
+    and 0 <= new_file_check_position < value_change_position < old_file_delete_position
+    # Only camera capture may arm cleanup. Gallery/file imports do not expose a
+    # uniformly validated success callback, so they must clear pending state.
+    and 'sungsanPendingPreviousPhotoPath = ""' in gallery_helper
+    and "rememberSungsanPreviousPhoto()" not in gallery_helper
+    and EXTERNAL_RESOURCE.count("commitSungsanManagedPhoto(") >= 3,
+)
+check(
+    "portable camera fallback replaces an existing photo atomically",
+    "FileUtils.replaceFileSafely(path, destinationPath)" in EXTERNAL_RESOURCE
+    and "Q_INVOKABLE static bool replaceFileSafely" in FILE_UTILS_H
+    and "QSaveFile destinationFile( destinationFilePath )" in FILE_UTILS_CPP
+    and "destinationFile.commit()" in FILE_UTILS_CPP
+    and FILE_UTILS_CPP.find("destinationFile.commit()")
+    < FILE_UTILS_CPP.find("QFile::remove( sourceFilePath )"),
 )
 
 

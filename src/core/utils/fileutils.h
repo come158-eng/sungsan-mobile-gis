@@ -97,6 +97,16 @@ class QFIELD_CORE_EXPORT FileUtils : public QObject
     Q_INVOKABLE static bool writeFileContent( const QString &filePath, const QByteArray &content );
 
     /**
+     * Replaces a project file from a temporary source without deleting the
+     * existing destination before the complete replacement is committed.
+     *
+     * The source is removed only after a successful commit. This is intended
+     * for camera resources where a failed retake must leave the previous
+     * project attachment intact.
+     */
+    Q_INVOKABLE static bool replaceFileSafely( const QString &sourceFilePath, const QString &destinationFilePath );
+
+    /**
     * Gets detailed information about a file including MD5 hash and metadata.
     * Optionally includes the file content when fetchContent is true.
     * This is useful for file validation, caching, and efficient file handling in QML.
