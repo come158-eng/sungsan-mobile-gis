@@ -50,6 +50,16 @@ class CameraOrientationNormalizer : public QObject
     Q_INVOKABLE void recordCaptureOrientation();
 
     /**
+     * Records the orientation represented by the camera viewport itself.
+     *
+     * Android devices can keep QScreen::orientation() locked to portrait
+     * while the QML camera viewport has already rotated to landscape. The
+     * explicit viewport value is therefore the reliable source of truth when
+     * flattening EXIF orientation into the stored pixels.
+     */
+    Q_INVOKABLE void recordCaptureViewportOrientation( bool landscape );
+
+    /**
      * Ensures the JPEG at \a path has pixels matching the orientation
      * recorded by recordCaptureOrientation(). Rotates the image if
      * pixel dimensions contradict the capture orientation and strips

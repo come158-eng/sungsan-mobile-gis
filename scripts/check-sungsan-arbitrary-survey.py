@@ -27,6 +27,10 @@ FILE_UTILS_CPP = (ROOT / "src/core/utils/fileutils.cpp").read_text(encoding="utf
 ORIENTATION_CPP = (
     ROOT / "src/core/cameraorientationnormalizer.cpp"
 ).read_text(encoding="utf-8")
+ORIENTATION_H = (
+    ROOT / "src/core/cameraorientationnormalizer.h"
+).read_text(encoding="utf-8")
+QFIELD_CAMERA = (ROOT / "src/qml/QFieldCamera.qml").read_text(encoding="utf-8")
 ANDROID_ACTIVITY = (
     ROOT / "platform/android/src/ch/opengis/qfield/QFieldActivity.java"
 ).read_text(encoding="utf-8")
@@ -154,7 +158,12 @@ check(
 )
 check("new features require addition capability", "sungsanStartSurvey(true)" in APP)
 check("existing features do not require addition capability", "sungsanStartSurvey(false)" in existing_handler)
-check("selected layer is prepared", "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, dashBoard.activeLayer)" in start_survey)
+check(
+    "selected layer is prepared",
+    "sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, true)" in start_survey
+    and "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, layer)"
+    in start_survey,
+)
 check("survey start is not generated-template gated", all(token not in start_survey for token in (
     "sungsan_field_template", "fieldPackage", "fieldObjects", "landstarImportTarget"
 )))
@@ -484,6 +493,32 @@ check(
     "Q_OS_ANDROID" in ORIENTATION_CPP
     and "setAutoTransform( hasExifTransform )" in ORIENTATION_CPP
     and "QSaveFile" in ORIENTATION_CPP,
+)
+check(
+    "managed field photos always use the orientation-aware in-app camera",
+    bool(capture_helper)
+    and "if (isSungsanManagedFieldPhoto())" in capture_helper
+    and "cameraLoader.active = true" in capture_helper
+    and "return;" in capture_helper
+    and capture_helper.find("cameraLoader.active = true")
+    < capture_helper.find("PlatformUtilities.NativeCamera"),
+)
+check(
+    "camera records viewport orientation before capture",
+    "recordCaptureViewportOrientation( bool landscape )" in ORIENTATION_H
+    and "CameraOrientationNormalizer::recordCaptureViewportOrientation( bool landscape )"
+    in ORIENTATION_CPP
+    and "recordCaptureViewportOrientation(!cameraItem.isPortraitMode)"
+    in QFIELD_CAMERA
+    and QFIELD_CAMERA.find("recordCaptureViewportOrientation(!cameraItem.isPortraitMode)")
+    < QFIELD_CAMERA.find("imageCapture.captureToFile"),
+)
+check(
+    "active ordinary layer receives default photo slots",
+    "onActiveLayerChanged" in APP
+    and "sungsanPhotoLayerPreparationTimer.restart()" in APP
+    and "function sungsanPrepareFieldPhotoLayer(layer, showWarnings)" in APP
+    and "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, layer)" in APP,
 )
 check(
     "project photo itself is media-scanned",

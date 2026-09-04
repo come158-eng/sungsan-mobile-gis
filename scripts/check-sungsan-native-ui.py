@@ -484,12 +484,13 @@ def check_shell_wiring() -> None:
         PASSES.append("generic survey-point workflow no longer uses manhole-only wording")
     require(root, 'changeMode("digitize")', "survey mode wired")
     require(root, "dashBoard.ensureEditableLayerSelected(requireFeatureAddition)", "permission-aware editable layer selection wired")
-    require(root, "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, dashBoard.activeLayer)", "selected user layer is prepared for the common photo workflow")
+    require(root, "sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, true)", "selected user layer is prepared for the common photo workflow")
+    require(root, "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, layer)", "common photo preparation delegates to the native bridge")
     require_regex(
         root,
         r"function\s+sungsanStartSurvey\s*\(\s*requireFeatureAddition\s*\).*?"
         r"ensureEditableLayerSelected\s*\(\s*requireFeatureAddition\s*\).*?"
-        r"prepareFieldSurveyLayer\s*\(\s*qgisProject\s*,\s*dashBoard\.activeLayer\s*\).*?"
+        r"sungsanPrepareFieldPhotoLayer\s*\(\s*dashBoard\.activeLayer\s*,\s*true\s*\).*?"
         r"changeMode\s*\(\s*[\"']digitize[\"']\s*\).*?"
         r"return\s+stateMachine\.state\s*===\s*[\"']digitize[\"']",
         "survey start prepares an arbitrary selected layer and reports success",

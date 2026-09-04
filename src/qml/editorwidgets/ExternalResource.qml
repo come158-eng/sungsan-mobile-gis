@@ -968,6 +968,15 @@ EditorWidgetBase {
       if (objectName === undefined || objectName === null || FeatureUtils.attributeIsNull(objectName) || String(objectName).trim().length === 0) {
         mainWindow.displayToast("객체명이 비어 있어 내부 객체 ID로 사진 이름을 만듭니다.", "info");
       }
+
+      // Always use the in-app camera for managed field photos. Vendor camera
+      // activities can return portrait pixels without an EXIF orientation tag
+      // after a landscape capture, which cannot be repaired during ZIP
+      // export. QFieldCamera records the viewport orientation at shutter time.
+      platformUtilities.createDir(qgisProject.homePath, 'DCIM');
+      cameraLoader.isVideo = false;
+      cameraLoader.active = true;
+      return;
     }
     if (platformUtilities.capabilities & PlatformUtilities.NativeCamera && settings.valueBool("nativeCamera2", true)) {
       let filepath = getResourceFilePath();

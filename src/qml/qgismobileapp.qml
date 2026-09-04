@@ -75,6 +75,16 @@ ApplicationWindow {
   property bool sungsanExistingFeatureEditPending: false
   property string sungsanPendingLandStarPath: ""
 
+  // Prepare ordinary user-created layers as soon as they become active. The
+  // short delay lets QGIS finish switching the layer before its schema and
+  // form configuration are inspected.
+  Timer {
+    id: sungsanPhotoLayerPreparationTimer
+    interval: 0
+    repeat: false
+    onTriggered: mainWindow.sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, false)
+  }
+
   onSungsanPendingLandStarPathChanged: {
     mainWindowSettings.sungsanPendingLandStarPath = sungsanPendingLandStarPath;
   }
@@ -3641,6 +3651,12 @@ ApplicationWindow {
 
     Component.onCompleted: focusstack.addFocusTaker(this)
 
+    onActiveLayerChanged: {
+      if (appIsSungsan && activeLayer) {
+        sungsanPhotoLayerPreparationTimer.restart();
+      }
+    }
+
     onReturnHome: {
       if (currentRubberband && currentRubberband.model.vertexCount > 1) {
         digitizingToolbar.cancelDialog.open();
@@ -3775,15 +3791,35 @@ ApplicationWindow {
       return false;
     }
     if (qgisProject.fileName) {
-      const preparation = sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, dashBoard.activeLayer);
-      if (preparation && preparation.warning) {
-        displayToast(preparation.warning, "warning");
-      }
+      mainWindow.sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, true);
     } else {
       displayToast("조사는 시작할 수 있지만 사진을 상대경로로 저장하려면 프로젝트를 먼저 저장해 주세요.", "warning");
     }
     changeMode("digitize");
     return stateMachine.state === "digitize";
+  }
+
+  function sungsanPrepareFieldPhotoLayer(layer, showWarnings) {
+    if (!appIsSungsan || !qgisProject || !qgisProject.fileName || !layer) {
+      return null;
+    }
+
+    const geometryType = layer.geometryType();
+    if (geometryType !== Qgis.GeometryType.Point
+        && geometryType !== Qgis.GeometryType.Line
+        && geometryType !== Qgis.GeometryType.Polygon) {
+      return null;
+    }
+
+    const preparation = sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, layer);
+    if (preparation && preparation.error) {
+      if (showWarnings) {
+        displayToast(preparation.error, "warning");
+      }
+    } else if (preparation && preparation.warning && showWarnings) {
+      displayToast(preparation.warning, "warning");
+    }
+    return preparation;
   }
 
   function sungsanShowCurrentLocation(source) {

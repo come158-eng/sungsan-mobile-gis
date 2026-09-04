@@ -47,6 +47,25 @@ void CameraOrientationNormalizer::recordCaptureOrientation()
   mCaptureOrientationRecorded = true;
 }
 
+void CameraOrientationNormalizer::recordCaptureViewportOrientation( bool landscape )
+{
+  QScreen *screen = QGuiApplication::primaryScreen();
+  const Qt::ScreenOrientation screenOrientation = screen ? screen->orientation() : Qt::PrimaryOrientation;
+  const bool screenIsLandscape = screenOrientation == Qt::LandscapeOrientation
+                                 || screenOrientation == Qt::InvertedLandscapeOrientation;
+  const bool screenIsPortrait = screenOrientation == Qt::PortraitOrientation
+                                || screenOrientation == Qt::InvertedPortraitOrientation;
+
+  // Preserve the clockwise/counter-clockwise distinction whenever Qt reports
+  // an orientation consistent with the visible viewport. If Android keeps the
+  // screen enum locked, the viewport still gives us the correct aspect.
+  if ( ( landscape && screenIsLandscape ) || ( !landscape && screenIsPortrait ) )
+    mCaptureOrientation = screenOrientation;
+  else
+    mCaptureOrientation = landscape ? Qt::LandscapeOrientation : Qt::PortraitOrientation;
+  mCaptureOrientationRecorded = true;
+}
+
 bool CameraOrientationNormalizer::normalizeImageOrientation( const QString &path )
 {
 #if defined( Q_OS_ANDROID ) || defined( Q_OS_IOS ) || defined( Q_OS_WIN )
@@ -91,7 +110,12 @@ bool CameraOrientationNormalizer::normalizeImageOrientation( const QString &path
   if ( needsFallbackRotation )
   {
     QTransform transform;
-    transform.rotate( pixelsAreLandscape ? 90 : 270 );
+    int rotationDegrees = pixelsAreLandscape ? 90 : 270;
+    if ( pixelsAreLandscape && mCaptureOrientation == Qt::InvertedPortraitOrientation )
+      rotationDegrees = 270;
+    else if ( !pixelsAreLandscape && mCaptureOrientation == Qt::InvertedLandscapeOrientation )
+      rotationDegrees = 90;
+    transform.rotate( rotationDegrees );
     image = image.transformed( transform, Qt::SmoothTransformation );
   }
 

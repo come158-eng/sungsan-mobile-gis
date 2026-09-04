@@ -493,9 +493,13 @@ Popup {
                   return;
                 if (cameraItem.state == "PhotoCapture") {
                   platformUtilities.createDir(qgisProject.homePath, 'DCIM');
+                  // Record the visible viewport before asking the backend to
+                  // capture. Some Android camera backends can emit imageSaved
+                  // immediately and QScreen may stay locked to portrait even
+                  // while this viewport is landscape.
+                  captureLoader.item.orientationNormalizer.recordCaptureViewportOrientation(!cameraItem.isPortraitMode);
                   captureLoader.item.imageCapture.captureToFile(qgisProject.homePath + '/DCIM/');
                   captureFlashAnimation.start();
-                  captureLoader.item.orientationNormalizer.recordCaptureOrientation();
                   if (positionSource.active) {
                     currentPosition = positionSource.positionInformation;
                     currentProjectedPosition = positionSource.projectedPosition;
