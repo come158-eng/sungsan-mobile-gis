@@ -504,13 +504,14 @@ check(
     < capture_helper.find("PlatformUtilities.NativeCamera"),
 )
 check(
-    "camera records viewport orientation before capture",
-    "recordCaptureViewportOrientation( bool landscape )" in ORIENTATION_H
-    and "CameraOrientationNormalizer::recordCaptureViewportOrientation( bool landscape )"
+    "camera records physical device orientation before capture",
+    "recordCaptureDeviceOrientation( int deviceOrientation, bool viewportLandscape )" in ORIENTATION_H
+    and "CameraOrientationNormalizer::recordCaptureDeviceOrientation( int deviceOrientation, bool viewportLandscape )"
     in ORIENTATION_CPP
-    and "recordCaptureViewportOrientation(!cameraItem.isPortraitMode)"
-    in QFIELD_CAMERA
-    and QFIELD_CAMERA.find("recordCaptureViewportOrientation(!cameraItem.isPortraitMode)")
+    and "OrientationSensor" in QFIELD_CAMERA
+    and "lastStableDeviceOrientation" in QFIELD_CAMERA
+    and "recordCaptureDeviceOrientation(" in QFIELD_CAMERA
+    and QFIELD_CAMERA.find("recordCaptureDeviceOrientation(")
     < QFIELD_CAMERA.find("imageCapture.captureToFile"),
 )
 check(
@@ -519,6 +520,13 @@ check(
     and "sungsanPhotoLayerPreparationTimer.restart()" in APP
     and "function sungsanPrepareFieldPhotoLayer(layer, showWarnings)" in APP
     and "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, layer)" in APP,
+)
+check(
+    "all project layers receive default photo slots on project load",
+    "prepareFieldSurveyProject( QgsProject *project )" in BRIDGE_H
+    and "SungsanSurveyBridge::prepareFieldSurveyProject( QgsProject *project )" in BRIDGE_CPP
+    and "sungsanPhotoProjectPreparationTimer.restart()" in APP
+    and "sungsanSurveyBridge.prepareFieldSurveyProject(qgisProject)" in APP,
 )
 check(
     "project photo itself is media-scanned",

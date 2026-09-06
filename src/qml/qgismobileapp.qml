@@ -85,6 +85,26 @@ ApplicationWindow {
     onTriggered: mainWindow.sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, false)
   }
 
+  // Prepare all editable point/line/polygon layers once a project has
+  // finished opening. This covers objects opened directly from the map before
+  // the operator has changed the active layer or pressed 조사 시작.
+  Timer {
+    id: sungsanPhotoProjectPreparationTimer
+    interval: 250
+    repeat: false
+    onTriggered: mainWindow.sungsanPrepareAllFieldPhotoLayers(false)
+  }
+
+  Connections {
+    target: projectInfo
+
+    function onFilePathChanged() {
+      if (appIsSungsan && projectInfo.filePath) {
+        sungsanPhotoProjectPreparationTimer.restart();
+      }
+    }
+  }
+
   onSungsanPendingLandStarPathChanged: {
     mainWindowSettings.sungsanPendingLandStarPath = sungsanPendingLandStarPath;
   }
@@ -94,6 +114,9 @@ ApplicationWindow {
     // a thread blocking permission request being thrown
     if (positioningSettings.positioningActivated) {
       positionSource.active = true;
+    }
+    if (sceneLoaded && appIsSungsan && qgisProject && qgisProject.fileName) {
+      sungsanPhotoProjectPreparationTimer.restart();
     }
   }
 
@@ -3818,6 +3841,20 @@ ApplicationWindow {
       }
     } else if (preparation && preparation.warning && showWarnings) {
       displayToast(preparation.warning, "warning");
+    }
+    return preparation;
+  }
+
+  function sungsanPrepareAllFieldPhotoLayers(showWarnings) {
+    if (!appIsSungsan || !qgisProject || !qgisProject.fileName) {
+      return null;
+    }
+
+    const preparation = sungsanSurveyBridge.prepareFieldSurveyProject(qgisProject);
+    if (showWarnings && preparation && preparation.warnings && preparation.warnings.length > 0) {
+      displayToast(preparation.warnings.join("\n"), "warning");
+    } else if (showWarnings && preparation && preparation.error) {
+      displayToast(preparation.error, "warning");
     }
     return preparation;
   }

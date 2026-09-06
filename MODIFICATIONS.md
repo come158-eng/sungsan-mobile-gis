@@ -21,8 +21,8 @@ before vcpkg starts. The manual workflow also restores and saves versioned
 vcpkg binary packages so a late application failure does not require rebuilding
 every completed dependency on the next run.
 
-This source is Sungsan Mobile GIS `1.2.0-sungsan-release`
-(`versionCode 10200000`). The production field release adds explicit LandStar
+This source is Sungsan Mobile GIS `1.2.1-sungsan-release`
+(`versionCode 10201000`). The production field release adds explicit LandStar
 CRS confirmation, source evidence retention, external GNSS freshness checks,
 relation-backed unlimited point photos, and the generic field-project template.
 Beta3 removes SVG rendering and Qt Quick graphical

@@ -61,6 +61,13 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
     Q_INVOKABLE QVariantMap prepareFieldSurveyLayer( QgsProject *project, QgsVectorLayer *layer );
 
     /**
+     * Prepares every editable spatial layer in a loaded project for the same
+     * four-slot field-photo workflow. Read-only and unsupported layers are
+     * reported but left untouched.
+     */
+    Q_INVOKABLE QVariantMap prepareFieldSurveyProject( QgsProject *project );
+
+    /**
      * Writes all point features in a layer as
      * point-name,northing,easting,elevation,code.
      * The returned map contains ok, path, count and error values.

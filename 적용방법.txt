@@ -1,12 +1,12 @@
-성산 모바일 GIS 1.2.0 배포 안내
+성산 모바일 GIS 1.2.1 배포 안내
 
 일반 사용자는 GitHub Actions 결과에서 다음 파일만 설치합니다.
 
-  Sungsan-Mobile-GIS-v1.2.0-arm64-SIGNED-RELEASE.apk
+  Sungsan-Mobile-GIS-v1.2.1-arm64-SIGNED-RELEASE.apk
 
 - UNSIGNED 파일은 서명 입력용이므로 설치하지 않습니다.
 - DEBUG-KEY-TEST-ONLY 파일은 내부 시험용이므로 현장 배포에 사용하지 않습니다.
-- Android versionCode는 10200000입니다.
+- Android versionCode는 10201000입니다.
 - 기존 앱과 같은 성산 배포 인증서로 서명된 APK는 데이터 유지 상태로 업데이트할 수 있습니다.
 
 현장 전 필수 확인

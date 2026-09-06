@@ -24,6 +24,8 @@
 #include <QScreen>
 #include <QTransform>
 
+#include <QOrientationReading>
+
 CameraOrientationNormalizer::CameraOrientationNormalizer( QObject *parent )
   : QObject( parent )
 {
@@ -63,6 +65,32 @@ void CameraOrientationNormalizer::recordCaptureViewportOrientation( bool landsca
     mCaptureOrientation = screenOrientation;
   else
     mCaptureOrientation = landscape ? Qt::LandscapeOrientation : Qt::PortraitOrientation;
+  mCaptureOrientationRecorded = true;
+}
+
+void CameraOrientationNormalizer::recordCaptureDeviceOrientation( int deviceOrientation, bool viewportLandscape )
+{
+  switch ( static_cast<QOrientationReading::Orientation>( deviceOrientation ) )
+  {
+    case QOrientationReading::TopUp:
+      mCaptureOrientation = Qt::PortraitOrientation;
+      break;
+    case QOrientationReading::TopDown:
+      mCaptureOrientation = Qt::InvertedPortraitOrientation;
+      break;
+    case QOrientationReading::LeftUp:
+      mCaptureOrientation = Qt::LandscapeOrientation;
+      break;
+    case QOrientationReading::RightUp:
+      mCaptureOrientation = Qt::InvertedLandscapeOrientation;
+      break;
+    case QOrientationReading::Undefined:
+    case QOrientationReading::FaceUp:
+    case QOrientationReading::FaceDown:
+      recordCaptureViewportOrientation( viewportLandscape );
+      return;
+  }
+
   mCaptureOrientationRecorded = true;
 }
 

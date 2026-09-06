@@ -853,6 +853,72 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   return successResult;
 }
 
+QVariantMap SungsanSurveyBridge::prepareFieldSurveyProject( QgsProject *project )
+{
+  QVariantMap projectResult{
+    { QStringLiteral( "ok" ), project != nullptr },
+    { QStringLiteral( "prepared" ), 0 },
+    { QStringLiteral( "skipped" ), 0 },
+    { QStringLiteral( "failed" ), 0 },
+    { QStringLiteral( "warnings" ), QStringList() },
+    { QStringLiteral( "error" ), QString() },
+  };
+
+  if ( !project )
+  {
+    projectResult[QStringLiteral( "error" )] = tr( "사진 기능을 준비할 프로젝트가 없습니다." );
+    return projectResult;
+  }
+
+  int prepared = 0;
+  int skipped = 0;
+  int failed = 0;
+  QStringList warnings;
+  const QMap<QString, QgsMapLayer *> projectLayers = project->mapLayers();
+  for ( QgsMapLayer *mapLayer : projectLayers )
+  {
+    QgsVectorLayer *vectorLayer = qobject_cast<QgsVectorLayer *>( mapLayer );
+    if ( !vectorLayer )
+      continue;
+
+    const Qgis::GeometryType geometryType = QgsWkbTypes::geometryType( vectorLayer->wkbType() );
+    if ( geometryType != Qgis::GeometryType::Point
+         && geometryType != Qgis::GeometryType::Line
+         && geometryType != Qgis::GeometryType::Polygon )
+      continue;
+
+    const QVariantMap layerResult = prepareFieldSurveyLayer( project, vectorLayer );
+    if ( !layerResult.value( QStringLiteral( "ok" ) ).toBool() )
+    {
+      ++failed;
+      const QString error = layerResult.value( QStringLiteral( "error" ) ).toString().trimmed();
+      if ( !error.isEmpty() )
+        warnings.append( tr( "%1: %2" ).arg( vectorLayer->name(), error ) );
+    }
+    else if ( layerResult.value( QStringLiteral( "prepared" ) ).toBool() )
+    {
+      ++prepared;
+      const QString warning = layerResult.value( QStringLiteral( "warning" ) ).toString().trimmed();
+      if ( !warning.isEmpty() )
+        warnings.append( tr( "%1: %2" ).arg( vectorLayer->name(), warning ) );
+    }
+    else
+    {
+      ++skipped;
+      const QString warning = layerResult.value( QStringLiteral( "warning" ) ).toString().trimmed();
+      if ( !warning.isEmpty() )
+        warnings.append( tr( "%1: %2" ).arg( vectorLayer->name(), warning ) );
+    }
+  }
+
+  projectResult[QStringLiteral( "prepared" )] = prepared;
+  projectResult[QStringLiteral( "skipped" )] = skipped;
+  projectResult[QStringLiteral( "failed" )] = failed;
+  projectResult[QStringLiteral( "warnings" )] = warnings;
+  projectResult[QStringLiteral( "ok" )] = failed == 0;
+  return projectResult;
+}
+
 QVariantMap SungsanSurveyBridge::queryLandStarMetadata( const QString &filePath ) const
 {
   const QFileInfo info( filePath );

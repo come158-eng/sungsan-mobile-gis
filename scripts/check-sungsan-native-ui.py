@@ -486,6 +486,8 @@ def check_shell_wiring() -> None:
     require(root, "dashBoard.ensureEditableLayerSelected(requireFeatureAddition)", "permission-aware editable layer selection wired")
     require(root, "sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, true)", "selected user layer is prepared for the common photo workflow")
     require(root, "sungsanSurveyBridge.prepareFieldSurveyLayer(qgisProject, layer)", "common photo preparation delegates to the native bridge")
+    require(root, "sungsanPhotoProjectPreparationTimer.restart()", "project opening schedules preparation of every editable spatial layer")
+    require(root, "sungsanSurveyBridge.prepareFieldSurveyProject(qgisProject)", "project-wide photo preparation delegates to the native bridge")
     require_regex(
         root,
         r"function\s+sungsanStartSurvey\s*\(\s*requireFeatureAddition\s*\).*?"
@@ -750,12 +752,12 @@ def check_android_bridge() -> None:
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APP_VERSION_STR="${APP_VERSION_STR:-1.2.0}"',
+        'APP_VERSION_STR="${APP_VERSION_STR:-1.2.1}"',
         "Sungsan product version name",
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APK_VERSION_CODE="${APK_VERSION_CODE:-10200000}"',
+        'APK_VERSION_CODE="${APK_VERSION_CODE:-10201000}"',
         "monotonically increased Android version code",
     )
     require(

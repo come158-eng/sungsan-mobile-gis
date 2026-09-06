@@ -4,6 +4,7 @@ import QtQuick.Shapes
 import QtQuick.Window
 import QtMultimedia
 import QtCore
+import QtSensors
 import org.qfield
 import Theme
 
@@ -22,6 +23,7 @@ Popup {
   property var currentProjectedPosition: undefined
 
   property bool captureLoaderActivated: false
+  property int lastStableDeviceOrientation: OrientationReading.Undefined
 
   property bool allowCaptureModeToggle: false
 
@@ -70,6 +72,7 @@ Popup {
 
   onAboutToShow: {
     currentPath = "";
+    lastStableDeviceOrientation = OrientationReading.Undefined;
     photoPreview.source = "";
     videoPreview.stop();
     videoPreview.source = "";
@@ -118,6 +121,28 @@ Popup {
     property string deviceId: ''
     property size resolution: Qt.size(0, 0)
     property int pixelFormat: 0
+  }
+
+  // Read the physical phone orientation even when Android's screen rotation
+  // is locked. Face-up/face-down readings are intentionally ignored so the
+  // last useful portrait/landscape direction remains available at shutter.
+  OrientationSensor {
+    id: deviceOrientationSensor
+    active: cameraItem.visible
+    dataRate: 10
+
+    onReadingChanged: {
+      if (!reading) {
+        return;
+      }
+      const orientation = reading.orientation;
+      if (orientation === OrientationReading.TopUp
+          || orientation === OrientationReading.TopDown
+          || orientation === OrientationReading.LeftUp
+          || orientation === OrientationReading.RightUp) {
+        cameraItem.lastStableDeviceOrientation = orientation;
+      }
+    }
   }
 
   ExpressionEvaluator {
@@ -497,7 +522,9 @@ Popup {
                   // capture. Some Android camera backends can emit imageSaved
                   // immediately and QScreen may stay locked to portrait even
                   // while this viewport is landscape.
-                  captureLoader.item.orientationNormalizer.recordCaptureViewportOrientation(!cameraItem.isPortraitMode);
+                  captureLoader.item.orientationNormalizer.recordCaptureDeviceOrientation(
+                      cameraItem.lastStableDeviceOrientation,
+                      !cameraItem.isPortraitMode);
                   captureLoader.item.imageCapture.captureToFile(qgisProject.homePath + '/DCIM/');
                   captureFlashAnimation.start();
                   if (positionSource.active) {

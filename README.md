@@ -1,6 +1,6 @@
 <!-- Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11. -->
 
-# Sungsan Mobile GIS 1.2.0 정식 소스
+# Sungsan Mobile GIS 1.2.1 정식 소스
 
 이 포크는 QGIS 프로젝트 호환 엔진으로 QField v4.2.11 오픈소스를
 사용하지만, 일반 사용자가 보는 홈·현장 작업 화면은 **성산 전용**으로

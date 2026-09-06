@@ -60,6 +60,15 @@ class CameraOrientationNormalizer : public QObject
     Q_INVOKABLE void recordCaptureViewportOrientation( bool landscape );
 
     /**
+     * Records the physical device orientation reported by Qt Sensors.
+     *
+     * Unlike the window dimensions, the orientation sensor keeps changing
+     * while Android rotation lock is enabled. The viewport value is retained
+     * as a fallback for devices which do not expose an orientation sensor.
+     */
+    Q_INVOKABLE void recordCaptureDeviceOrientation( int deviceOrientation, bool viewportLandscape );
+
+    /**
      * Ensures the JPEG at \a path has pixels matching the orientation
      * recorded by recordCaptureOrientation(). Rotates the image if
      * pixel dimensions contradict the capture orientation and strips
