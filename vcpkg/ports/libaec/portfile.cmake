@@ -1,4 +1,4 @@
-# Modified for Meta Engineering GIS by Sungsan on 2026-08-19.
+# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-19.
 #
 # The vcpkg baseline used by this project downloads libaec 1.1.6 from the
 # DKRZ GitLab service. Repeated HTTP 429 responses there made clean GitHub
