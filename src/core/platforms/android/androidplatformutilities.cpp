@@ -1,5 +1,5 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 /***************************************************************************
                             androidplatformutilities.cpp  -  utilities for qfield
 
@@ -101,7 +101,7 @@ void AndroidPlatformUtilities::afterUpdate()
       if ( activity.isValid() )
       {
         const QString message = qfield::isSungsanBuild
-                                  ? QStringLiteral( "성산 모바일 GIS 설치를 마무리하고 있습니다. 잠시만 기다려 주세요." )
+                                  ? QStringLiteral( "메타이엔지 모바일 GIS 설치를 마무리하고 있습니다. 잠시만 기다려 주세요." )
                                   : QObject::tr( "Please wait while QField installation finalizes." );
         QJniObject messageJni = QJniObject::fromString( message );
         activity.callMethod<void>( "showBlockingProgressDialog", "(Ljava/lang/String;)V", messageJni.object<jstring>() );

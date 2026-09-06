@@ -56,7 +56,7 @@ check(
     "no region or EPSG hardcoding",
     all(token not in UTILS for token in ("성주군", "EPSG:5183", "128.282", "35.919", "seongju")),
 )
-check("template package marker", "kr.co.sungsan.mobilegis.field-package/1" in UTILS)
+check("template package marker", "kr.co.metaengi.mobilegis.field-package/1" in UTILS)
 check("LandStar CRS warning metadata", "/landstarCrsNotice" in UTILS and "현재 프로젝트 좌표계" in UTILS)
 
 parent_fields = (
@@ -84,8 +84,8 @@ for field_name in parent_fields:
     check(f"parent field {field_name}", f'QStringLiteral( "{field_name}" )' in UTILS)
 
 check("PointZ field layer", "Qgis::WkbType::PointZ, defaultProjectCrs" in UTILS)
-check("field object marker", "kr.co.sungsan.mobilegis/fieldObjects" in UTILS)
-check("LandStar target marker", "kr.co.sungsan.mobilegis/landstarImportTarget" in UTILS)
+check("field object marker", "kr.co.metaengi.mobilegis/fieldObjects" in UTILS)
+check("LandStar target marker", "kr.co.metaengi.mobilegis/landstarImportTarget" in UTILS)
 check(
     "only technical parent fields hidden",
     'const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ) }'
@@ -93,7 +93,7 @@ check(
 )
 check("external resource editor", 'QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" )' in UTILS)
 check("project-relative photo storage", 'fieldPhotoOptions.insert( QStringLiteral( "RelativeStorage" ), 1 )' in UTILS)
-check("layer-based field-photo directory", "'images/성산_현장객체/' || @object_name_safe" in UTILS)
+check("layer-based field-photo directory", "'images/메타이엔지_현장객체/' || @object_name_safe" in UTILS)
 check("no conflicting external-resource root", 'fieldPhotoOptions.insert( QStringLiteral( "DefaultRoot" )' not in UTILS)
 check("images included as attachment directory", 'attachmentDirectories << "images"' in UTILS)
 check("QField attachment naming", "QFieldSync/attachment_naming" in UTILS)
@@ -112,7 +112,7 @@ check(
 )
 check("photo section follows object name", UTILS.index('QStringLiteral( "name" ), nameFieldIndex') < UTILS.index('QStringLiteral( "현장사진" )'))
 check("no plus-button photo relation", "현장 사진 · 근경/원경/기타/추가" not in UTILS)
-check("layer photo directory created", 'mkpath( QStringLiteral( "images/성산_현장객체" ) )' in UTILS)
+check("layer photo directory created", 'mkpath( QStringLiteral( "images/메타이엔지_현장객체" ) )' in UTILS)
 check("legacy photo directories removed", all(path not in UTILS for path in (
     "photos/현장사진", "photos/근경", "photos/원경", "photos/기타", "photos/추가"
 )))
@@ -120,10 +120,10 @@ check(
     "fourth fixed photo is labelled 기타2",
     'QStringLiteral( "photo_other_2" ), QStringLiteral( "기타2 사진" )' in UTILS,
 )
-check("managed photo marker", "kr.co.sungsan.mobilegis/managedFieldPhotos" in UTILS)
-check("managed photo field list", "kr.co.sungsan.mobilegis/fieldPhotoFields" in UTILS)
-check("configured photo object-name field", "kr.co.sungsan.mobilegis/photoObjectNameField" in UTILS)
-check("configured layer photo folder", "kr.co.sungsan.mobilegis/fieldPhotoFolder" in UTILS)
+check("managed photo marker", "kr.co.metaengi.mobilegis/managedFieldPhotos" in UTILS)
+check("managed photo field list", "kr.co.metaengi.mobilegis/fieldPhotoFields" in UTILS)
+check("configured photo object-name field", "kr.co.metaengi.mobilegis/photoObjectNameField" in UTILS)
+check("configured layer photo folder", "kr.co.metaengi.mobilegis/fieldPhotoFolder" in UTILS)
 check("gallery duplicate helper removed", "publishSungsanFieldPhotoToGallery" not in ANDROID_ACTIVITY)
 check("gallery duplicate-copy wording removed", "Keeps a second copy" not in ANDROID_ACTIVITY)
 check("legacy duplicate gallery album removed", '"/성산 GIS/"' not in ANDROID_ACTIVITY)
@@ -169,8 +169,8 @@ check(
         or "내부 객체 ID" in capture_preamble
     ),
 )
-check("name guard recognizes managed arbitrary layers", "kr.co.sungsan.mobilegis/managedFieldPhotos" in EXTERNAL_RESOURCE)
-check("name guard reads the managed field list", "kr.co.sungsan.mobilegis/fieldPhotoFields" in EXTERNAL_RESOURCE)
+check("name guard recognizes managed arbitrary layers", "kr.co.metaengi.mobilegis/managedFieldPhotos" in EXTERNAL_RESOURCE)
+check("name guard reads the managed field list", "kr.co.metaengi.mobilegis/fieldPhotoFields" in EXTERNAL_RESOURCE)
 check(
     "name guard decodes bridge JSON field lists",
     "JSON.parse" in EXTERNAL_RESOURCE
@@ -184,4 +184,4 @@ if failed:
     print(f"{len(CHECKS) - len(failed)}/{len(CHECKS)} checks passed")
     sys.exit(1)
 
-print(f"PASS: {len(CHECKS)}/{len(CHECKS)} Sungsan field-project checks")
+print(f"PASS: {len(CHECKS)}/{len(CHECKS)} Meta Engineering field-project checks")

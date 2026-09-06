@@ -1,12 +1,16 @@
 #!/bin/bash
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-19.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-19.
 
 set -euo pipefail
 
 echo "building for ${triplet} on Qt ${install_qt_version} (${install_qt_arch})"
 
 export SOURCE_DIR=/usr/src/qfield
-python3 "${SOURCE_DIR}/scripts/check-sungsan-build-inputs.py"
+if [[ "${APP_PACKAGE_ID:-}" == "kr.co.metaengi.mobilegis" ]]; then
+	python3 "${SOURCE_DIR}/scripts/check-metaengi-build-inputs.py"
+else
+	python3 "${SOURCE_DIR}/scripts/check-sungsan-build-inputs.py"
+fi
 
 CMAKE_BUILD_DIR="${QFIELD_CMAKE_BUILD_DIR:-/usr/src/qfield/build-${triplet}}"
 ANDROID_NDK_VERSION=$(sed -En -e 's/^Pkg.Revision\s*=\s*([0-9a-f]+)/\1/p' ${ANDROID_NDK_HOME}/source.properties)
@@ -39,9 +43,9 @@ WITH_SAMPLE_PROJECTS="${WITH_SAMPLE_PROJECTS:-ON}"
 
 echo "Package name ${APP_PACKAGE_NAME} (Android ID: ${APP_PACKAGE_ID})"
 
-if [[ "${APP_PACKAGE_ID}" == "kr.co.sungsan.mobilegis" ]]; then
+if [[ "${APP_PACKAGE_ID}" == "kr.co.metaengi.mobilegis" ]]; then
 	if [[ "${SUNG_SAN_RELEASE_BUILD:-}" != "0" && "${SUNG_SAN_RELEASE_BUILD:-}" != "1" ]]; then
-		echo "오류: SUNG_SAN_RELEASE_BUILD는 성산 빌드에서 0 또는 1이어야 합니다." >&2
+		echo "오류: SUNG_SAN_RELEASE_BUILD는 메타이엔지 빌드에서 0 또는 1이어야 합니다." >&2
 		exit 10
 	fi
 	for forbidden_signing_variable in \
@@ -53,17 +57,24 @@ if [[ "${APP_PACKAGE_ID}" == "kr.co.sungsan.mobilegis" ]]; then
 		QT_ANDROID_KEYSTORE_STORE_PASS \
 		QT_ANDROID_KEYSTORE_KEY_PASS; do
 		if [[ -n "${!forbidden_signing_variable:-}" ]]; then
-			echo "오류: 전체 성산 빌드 컨테이너에 서명 비밀을 전달할 수 없습니다." >&2
+			echo "오류: 전체 메타이엔지 빌드 컨테이너에 서명 비밀을 전달할 수 없습니다." >&2
 			exit 11
 		fi
 	done
 fi
 
 if [[ ${SUNG_SAN_CONFIGURE_VWORLD:-OFF} == ON ]]; then
-	cmake \
-		-D SOURCE_DIR="${SOURCE_DIR}/branding/sungsan/plugins/sungsan_vworld" \
-		-D OUTPUT_DIR="${SOURCE_DIR}/build-sungsan-native-generated/plugins" \
-		-P "${SOURCE_DIR}/branding/sungsan/configure-vworld-plugin.cmake"
+	if [[ "${APP_PACKAGE_ID}" == "kr.co.metaengi.mobilegis" ]]; then
+		cmake \
+			-D SOURCE_DIR="${SOURCE_DIR}/branding/metaengi/plugins/sungsan_vworld" \
+			-D OUTPUT_DIR="${SOURCE_DIR}/build-metaengi-native-generated/plugins" \
+			-P "${SOURCE_DIR}/branding/metaengi/configure-vworld-plugin.cmake"
+	else
+		cmake \
+			-D SOURCE_DIR="${SOURCE_DIR}/branding/sungsan/plugins/sungsan_vworld" \
+			-D OUTPUT_DIR="${SOURCE_DIR}/build-sungsan-native-generated/plugins" \
+			-P "${SOURCE_DIR}/branding/sungsan/configure-vworld-plugin.cmake"
+	fi
 fi
 
 # Configure and install deps

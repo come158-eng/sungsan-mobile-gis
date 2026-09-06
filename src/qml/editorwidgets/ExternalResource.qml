@@ -224,7 +224,7 @@ EditorWidgetBase {
       if (!currentLayer) {
         return "to_string($id)";
       }
-      const fieldName = String(currentLayer.customProperty('kr.co.sungsan.mobilegis/photoObjectNameField') || "");
+      const fieldName = String(currentLayer.customProperty('kr.co.metaengi.mobilegis/photoObjectNameField') || "");
       return fieldName.length > 0 ? '"' + fieldName.replace(/"/g, '""') + '"' : "to_string($id)";
     }
   }
@@ -233,7 +233,7 @@ EditorWidgetBase {
     if (!currentLayer) {
       return [];
     }
-    const configuredFields = currentLayer.customProperty('kr.co.sungsan.mobilegis/fieldPhotoFields');
+    const configuredFields = currentLayer.customProperty('kr.co.metaengi.mobilegis/fieldPhotoFields');
     if (Array.isArray(configuredFields)) {
       return configuredFields;
     }
@@ -256,7 +256,7 @@ EditorWidgetBase {
 
   function isSungsanManagedFieldPhoto() {
     return appIsSungsan && currentLayer
-        && currentLayer.customProperty('kr.co.sungsan.mobilegis/managedFieldPhotos')
+        && currentLayer.customProperty('kr.co.metaengi.mobilegis/managedFieldPhotos')
         && sungsanManagedPhotoFields().indexOf(field.name) !== -1;
   }
 

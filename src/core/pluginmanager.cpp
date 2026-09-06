@@ -14,7 +14,7 @@
  *                                                                         *
  ***************************************************************************/
 
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11:
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11:
 // keep the bundled Sungsan VWorld basemap available, but opt-in.
 
 #include "platformutilities.h"

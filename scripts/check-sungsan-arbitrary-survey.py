@@ -222,10 +222,10 @@ check(
     and 'providerType == QLatin1String( "spatialite" )' in prepare_layer
     and "공유·원격 데이터베이스의 스키마는 앱이 자동으로 바꾸지 않습니다" in prepare_layer,
 )
-check("prepared-layer marker", "kr.co.sungsan.mobilegis/managedFieldPhotos" in prepare_layer)
-check("photo field metadata", "kr.co.sungsan.mobilegis/fieldPhotoFields" in prepare_layer)
-check("object-name field metadata", "kr.co.sungsan.mobilegis/photoObjectNameField" in prepare_layer)
-check("layer photo-folder metadata", "kr.co.sungsan.mobilegis/fieldPhotoFolder" in prepare_layer)
+check("prepared-layer marker", "kr.co.metaengi.mobilegis/managedFieldPhotos" in prepare_layer)
+check("photo field metadata", "kr.co.metaengi.mobilegis/fieldPhotoFields" in prepare_layer)
+check("object-name field metadata", "kr.co.metaengi.mobilegis/photoObjectNameField" in prepare_layer)
+check("layer photo-folder metadata", "kr.co.metaengi.mobilegis/fieldPhotoFolder" in prepare_layer)
 check("existing attachment naming is preserved", "QFieldSync/attachment_naming" in prepare_layer)
 check("project-relative photo widgets", "RelativeStorage" in prepare_layer and "ExternalResource" in prepare_layer)
 check("four fixed legacy slots can be reused", all(token in prepare_layer for token in (
@@ -302,9 +302,9 @@ check(
 configured_folder_read = re.search(
     r"(?:"
     r"layer->customProperty\s*\(\s*QStringLiteral\s*\(\s*"
-    r'"kr\.co\.sungsan\.mobilegis/fieldPhotoFolder"\s*\)\s*\)'
+    r'"kr\.co\.metaengi\.mobilegis/fieldPhotoFolder"\s*\)\s*\)'
     r"|"
-    r'photoFolderProperty\s*=\s*QStringLiteral\s*\(\s*"kr\.co\.sungsan\.mobilegis/fieldPhotoFolder"\s*\)'
+    r'photoFolderProperty\s*=\s*QStringLiteral\s*\(\s*"kr\.co\.metaengi\.mobilegis/fieldPhotoFolder"\s*\)'
     r".*?layer->customProperty\s*\(\s*photoFolderProperty\s*\)"
     r")\.toString\s*\(\s*\)",
     prepare_layer,
@@ -350,15 +350,15 @@ check(
 
 
 # Generated projects must use the same portable contract as arbitrary layers.
-check("generated project uses images directory", "images/성산_현장객체" in PROJECT_UTILS)
+check("generated project uses images directory", "images/메타이엔지_현장객체" in PROJECT_UTILS)
 check("legacy single photo directory removed", "photos/현장사진" not in PROJECT_UTILS)
 check("generated project has fixed fourth slot", "photo_other_2" in PROJECT_UTILS and "기타2" in PROJECT_UTILS)
 
 
 # The editor guard must recognize managed arbitrary-layer slots, not just the
 # four column names from the generated point template.
-check("managed arbitrary photo guard", "kr.co.sungsan.mobilegis/managedFieldPhotos" in EXTERNAL_RESOURCE)
-check("managed photo-field list guard", "kr.co.sungsan.mobilegis/fieldPhotoFields" in EXTERNAL_RESOURCE)
+check("managed arbitrary photo guard", "kr.co.metaengi.mobilegis/managedFieldPhotos" in EXTERNAL_RESOURCE)
+check("managed photo-field list guard", "kr.co.metaengi.mobilegis/fieldPhotoFields" in EXTERNAL_RESOURCE)
 check(
     "managed JSON photo-field list is decoded",
     "JSON.parse" in EXTERNAL_RESOURCE,

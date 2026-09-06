@@ -124,17 +124,17 @@ def check_configuration(package_name: str, package_id: str) -> None:
         "APP_PACKAGE_ID": package_id,
         "APP_PACKAGE_PATH": package_id.replace(".", "/"),
         "APP_PACKAGE_JNI_NAME": jni_name(package_id),
-        "APP_NAME": "QField" if package_name == "qfield" else "Sungsan Mobile GIS",
-        "APP_ICON": "qfield_logo" if package_name == "qfield" else "sungsan_mobile_gis",
-        "APP_URL_SCHEME": "qfield" if package_name == "qfield" else "sungsanmobilegis",
-        "APP_DATA_DIR_NAME": "QField" if package_name == "qfield" else "SungsanMobileGIS",
-        "APP_POSITIONING_CHANNEL_NAME": "" if package_name == "qfield" else "Sungsan Mobile GIS",
-        "APP_POSITIONING_CHANNEL_DESCRIPTION": "" if package_name == "qfield" else "성산 위치 서비스",
-        "APP_POSITIONING_NOTIFICATION_TITLE": "" if package_name == "qfield" else "성산 위치 서비스",
-        "APP_POSITIONING_NOTIFICATION_RUNNING_TEXT": "" if package_name == "qfield" else "성산 위치 서비스가 실행 중입니다",
-        "APP_CLOUD_CHANNEL_NAME": "" if package_name == "qfield" else "Sungsan Mobile GIS",
-        "APP_CLOUD_CHANNEL_DESCRIPTION": "" if package_name == "qfield" else "성산 데이터 전송 서비스",
-        "APP_CLOUD_NOTIFICATION_TITLE": "" if package_name == "qfield" else "성산 데이터 전송",
+        "APP_NAME": "QField" if package_name == "qfield" else "Meta Engineering GIS",
+        "APP_ICON": "qfield_logo" if package_name == "qfield" else "metaengi_mobile_gis",
+        "APP_URL_SCHEME": "qfield" if package_name == "qfield" else "metaengimobilegis",
+        "APP_DATA_DIR_NAME": "QField" if package_name == "qfield" else "MetaEngiMobileGIS",
+        "APP_POSITIONING_CHANNEL_NAME": "" if package_name == "qfield" else "Meta Engineering GIS",
+        "APP_POSITIONING_CHANNEL_DESCRIPTION": "" if package_name == "qfield" else "메타이엔지 위치 서비스",
+        "APP_POSITIONING_NOTIFICATION_TITLE": "" if package_name == "qfield" else "메타이엔지 위치 서비스",
+        "APP_POSITIONING_NOTIFICATION_RUNNING_TEXT": "" if package_name == "qfield" else "메타이엔지 위치 서비스가 실행 중입니다",
+        "APP_CLOUD_CHANNEL_NAME": "" if package_name == "qfield" else "Meta Engineering GIS",
+        "APP_CLOUD_CHANNEL_DESCRIPTION": "" if package_name == "qfield" else "메타이엔지 데이터 전송 서비스",
+        "APP_CLOUD_NOTIFICATION_TITLE": "" if package_name == "qfield" else "메타이엔지 데이터 전송",
         "APP_CLOUD_NOTIFICATION_RUNNING_TEXT": "" if package_name == "qfield" else "현장 첨부 파일을 전송하고 있습니다",
         "APP_VERSION_STR": "test",
         "APK_VERSION_CODE": "1",
@@ -190,15 +190,15 @@ def check_configuration(package_name: str, package_id: str) -> None:
         assert '"QFieldCloud"' in cloud
     else:
         for expected_text in (
-            "Sungsan Mobile GIS",
-            "성산 위치 서비스",
-            "성산 위치 서비스가 실행 중입니다",
+            "Meta Engineering GIS",
+            "메타이엔지 위치 서비스",
+            "메타이엔지 위치 서비스가 실행 중입니다",
         ):
             assert expected_text in positioning
         for expected_text in (
-            "Sungsan Mobile GIS",
-            "성산 데이터 전송 서비스",
-            "성산 데이터 전송",
+            "Meta Engineering GIS",
+            "메타이엔지 데이터 전송 서비스",
+            "메타이엔지 데이터 전송",
             "현장 첨부 파일을 전송하고 있습니다",
         ):
             assert expected_text in cloud
@@ -208,12 +208,12 @@ def check_static_wiring() -> None:
     package_cmake = (ROOT / "cmake/Package.cmake").read_text(encoding="utf-8")
     build_sh = (ROOT / "scripts/build.sh").read_text(encoding="utf-8")
     build_vcpkg = (ROOT / "scripts/build-vcpkg.sh").read_text(encoding="utf-8")
-    build_sungsan = (ROOT / "scripts/build-sungsan-android.sh").read_text(
+    build_sungsan = (ROOT / "scripts/build-metaengi-android.sh").read_text(
         encoding="utf-8"
     )
     welcome = (ROOT / "src/qml/WelcomeScreen.qml").read_text(encoding="utf-8")
     vworld_plugin = (
-        ROOT / "branding/sungsan/plugins/sungsan_vworld/main.qml.in"
+        ROOT / "branding/metaengi/plugins/sungsan_vworld/main.qml.in"
     ).read_text(encoding="utf-8")
     project_utils = (ROOT / "src/core/utils/projectutils.cpp").read_text(
         encoding="utf-8"
@@ -260,22 +260,22 @@ def check_static_wiring() -> None:
         assert f'-D {notification_variable}="${{{notification_variable}}}"' in build_vcpkg
         assert f'export {notification_variable}=' in build_sungsan
         assert f'@{notification_variable}@' in package_cmake
-    assert 'APP_PACKAGE_ID="kr.co.sungsan.mobilegis"' in build_sungsan
+    assert 'APP_PACKAGE_ID="kr.co.metaengi.mobilegis"' in build_sungsan
     assert 'APP_VERSION_STR="${APP_VERSION_STR:-1.2.1}"' in build_sungsan
     assert 'APK_VERSION_CODE="${APK_VERSION_CODE:-10201000}"' in build_sungsan
     assert 'APP_DEFAULT_LANGUAGE="ko"' in build_sungsan
-    assert 'APP_URL_SCHEME="sungsanmobilegis"' in build_sungsan
-    assert 'APP_DATA_DIR_NAME="SungsanMobileGIS"' in build_sungsan
+    assert 'APP_URL_SCHEME="metaengimobilegis"' in build_sungsan
+    assert 'APP_DATA_DIR_NAME="MetaEngiMobileGIS"' in build_sungsan
     assert (
-        'QFIELD_CMAKE_BUILD_DIR="/usr/src/qfield/build-sungsan-native-${triplet}"'
+        'QFIELD_CMAKE_BUILD_DIR="/usr/src/qfield/build-metaengi-native-${triplet}"'
         in build_sungsan
     )
     assert (
-        'APP_BUNDLED_PLUGINS="/usr/src/qfield/build-sungsan-native-generated/plugins"'
+        'APP_BUNDLED_PLUGINS="/usr/src/qfield/build-metaengi-native-generated/plugins"'
         in build_sungsan
     )
     assert (
-        'SOURCE_BUILD_DIR="${SOURCE_DIR}/build-sungsan-native-${triplet}"'
+        'SOURCE_BUILD_DIR="${SOURCE_DIR}/build-metaengi-native-${triplet}"'
         in build_sungsan
     )
     assert (
@@ -283,13 +283,13 @@ def check_static_wiring() -> None:
         in build_sungsan
     )
     assert (
-        '-D OUTPUT_DIR="${SOURCE_DIR}/build-sungsan-native-generated/plugins"'
+        '-D OUTPUT_DIR="${SOURCE_DIR}/build-metaengi-native-generated/plugins"'
         in build_vcpkg
     )
-    assert '/usr/src/qfield/build-sungsan-${triplet}' not in build_sungsan
-    assert '${SOURCE_DIR}/build-sungsan-${triplet}/src/app/android-build' not in build_sungsan
-    assert '/usr/src/qfield/build-sungsan-generated/plugins' not in build_sungsan
-    assert '${SOURCE_DIR}/build-sungsan-generated/plugins' not in build_vcpkg
+    assert '/usr/src/qfield/build-metaengi-${triplet}' not in build_sungsan
+    assert '${SOURCE_DIR}/build-metaengi-${triplet}/src/app/android-build' not in build_sungsan
+    assert '/usr/src/qfield/build-metaengi-generated/plugins' not in build_sungsan
+    assert '${SOURCE_DIR}/build-metaengi-generated/plugins' not in build_vcpkg
     assert 'SENTRY_DSN=""' in build_sungsan
     assert 'WITH_SAMPLE_PROJECTS="OFF"' in build_sungsan
     assert "-e WITH_SAMPLE_PROJECTS" in build_sh
@@ -308,10 +308,10 @@ def check_static_wiring() -> None:
     assert 'market://details?id=" + appPackageId' in welcome
     official_market_link = "market://details?id=" + "ch.opengis.qfield"
     assert official_market_link not in welcome
-    assert 'appPackageId == QStringLiteral( "kr.co.sungsan.mobilegis" )' in qfield_header
+    assert 'appPackageId == QStringLiteral( "kr.co.metaengi.mobilegis" )' in qfield_header
     assert 'setContextProperty( "appIsSungsan", qfield::isSungsanBuild )' in mobile_app
-    assert 'QStringLiteral( "Sungsan" ) : QStringLiteral( "OPENGIS.ch" )' in main_cpp
-    assert 'QStringLiteral( "sungsan.co.kr" ) : QStringLiteral( "opengis.ch" )' in main_cpp
+    assert 'QStringLiteral( "Meta Engineering" ) : QStringLiteral( "OPENGIS.ch" )' in main_cpp
+    assert 'QStringLiteral( "metaengi.co.kr" ) : QStringLiteral( "opengis.ch" )' in main_cpp
     assert "visible: !appIsSungsan" in dashboard
     for dashboard_action in (
         "measurementButton",
@@ -346,9 +346,9 @@ def main() -> None:
     check_configuration("qfield", "ch.opengis.qfield")
     check_configuration("qfield_home", "ch.opengis.qfield_home")
     check_configuration("qfield_dev", "ch.opengis.qfield_dev")
-    check_configuration("sungsanmobilegis", "kr.co.sungsan.mobilegis")
+    check_configuration("metaengimobilegis", "kr.co.metaengi.mobilegis")
     check_static_wiring()
-    print("OK: upstream 및 Sungsan Android 패키지 ID 정적 검증 통과")
+    print("OK: upstream 및 Meta Engineering Android 패키지 ID 정적 검증 통과")
 
 
 if __name__ == "__main__":

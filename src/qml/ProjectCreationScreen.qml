@@ -1,4 +1,4 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -45,7 +45,7 @@ Page {
 
       Label {
         text: appIsSungsan
-                ? "간단한 현장 프로젝트를 만들 수 있습니다. 라벨·심볼·입력 양식까지 설정하려면 PC의 QGIS에서 성산 모바일 GIS 플러그인으로 현장용 패키지를 만들어 주세요."
+                ? "간단한 현장 프로젝트를 만들 수 있습니다. 라벨·심볼·입력 양식까지 설정하려면 PC의 QGIS에서 메타이엔지 모바일 GIS 플러그인으로 현장용 패키지를 만들어 주세요."
                 : qsTr("This page will guide you through the creation of a simple project through simple configuration toggles. For more advanced needs, we advise you to create projects in QGIS using QFieldSync.")
         font: Theme.defaultFont
         color: Theme.mainTextColor

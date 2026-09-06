@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-19.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-19.
 """Dependency-free security gate for the manual two-job Android workflow.
 
 The release build job must never receive Sungsan release credentials.  Only a
@@ -134,7 +134,7 @@ def main() -> int:
                 "build-vcpkg.sh",
                 "build-sungsan-android.sh",
                 "validate-sungsan-keystore.sh",
-                "sign-sungsan-release-apk.sh",
+                "sign-metaengi-release-apk.sh",
             )
         ),
         "only the five reviewed build entry points receive executable permission",
@@ -242,7 +242,7 @@ def main() -> int:
         not re.search(r"secrets\.(?:STOREPASS|KEYPASS|KEYNAME|PLAYSTORE_SIGNINGKEY)", source),
         "no legacy or upstream release-secret name remains",
     )
-    require("environment:\n      name: sungsan-release" in signer, "sign job uses protected sungsan-release environment")
+    require("environment:\n      name: metaengi-release" in signer, "sign job uses protected metaengi-release environment")
     require(
         "required reviewers" in signer and "disallow" in signer and "administrator bypass" in signer,
         "workflow warns that reviewer protection requires repository settings",
@@ -277,7 +277,7 @@ def main() -> int:
         input_validation_index >= 0 and secret_index > input_validation_index,
         "artifact inventory and metadata are checked before secret injection",
     )
-    require("${{ runner.temp }}/sungsan-release-secrets" in signer, "all release secrets live under RUNNER_TEMP")
+    require("${{ runner.temp }}/metaengi-release-secrets" in signer, "all release secrets live under RUNNER_TEMP")
     require("umask 077" in signer and "chmod 0600" in signer, "secret files are mode restricted")
     require("prebuild-certificate.sha256" in signer, "certificate digest is fixed before signing")
     require("keytool -importkeystore" in signer and "keytool -exportcert" in signer, "private key and certificate are prevalidated")
@@ -298,7 +298,7 @@ def main() -> int:
     require("${#signer_digests[@]} != 1" in signer, "exactly one signer certificate is required")
     require("${signer_digests[0]}" in signer and "${anchored_digest}" in signer, "final signer matches the pre-sign certificate anchor")
     require("Verified using v2 scheme (APK Signature Scheme v2): true" in signer, "APK v2 signature is mandatory")
-    require("package: name='kr.co.sungsan.mobilegis'" in build and "package: name='kr.co.sungsan.mobilegis'" in signer, "package ID and versions are checked on both sides")
+    require("package: name='kr.co.metaengi.mobilegis'" in build and "package: name='kr.co.metaengi.mobilegis'" in signer, "package ID and versions are checked on both sides")
     require(source.count("native-code: 'arm64-v8a'") >= 2, "arm64 ABI is checked before and after trust boundary")
 
     forbidden_deployments = {
@@ -322,7 +322,7 @@ def main() -> int:
     disabled_source = DISABLED_UPSTREAM.read_text(encoding="utf-8") if DISABLED_UPSTREAM.is_file() else ""
     require(bool(disabled_source), "upstream Android workflow is retained only as .disabled reference")
     require(
-        disabled_source.startswith("# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11."),
+        disabled_source.startswith("# Modified for Meta Engineering GIS by Sungsan on 2026-08-11."),
         "disabled upstream workflow carries the Sungsan change notice",
     )
     require("DISABLED UPSTREAM REFERENCE ONLY" in disabled_source, "disabled upstream workflow explains its status")
@@ -340,7 +340,7 @@ def main() -> int:
         "Korean instructions distinguish the worktree from distributable ZIP workflows",
     )
     require(
-        "sungsan-release" in readme_source
+        "metaengi-release" in readme_source
         and "Required reviewers" in readme_source
         and "관리자 우회" in readme_source,
         "Korean instructions require protected-environment reviewers and no administrator bypass",

@@ -1,4 +1,4 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
 /***************************************************************************
                             platformutilities.cpp  -  utilities for qfield
 
@@ -38,6 +38,7 @@
 #include <QMessageBox>
 #include <QQuickWindow>
 #include <QStandardPaths>
+#include <QUuid>
 #include <QStorageInfo>
 #include <QTimer>
 #include <QUrl>
@@ -215,36 +216,62 @@ bool PlatformUtilities::renameFile( const QString &oldFilePath, const QString &n
   {
     return true;
   }
-
-  bool ok = false;
-
-  // Insure the path exists
-  QDir dir( newFi.absolutePath() );
-  ok = dir.mkpath( newFi.absolutePath() );
-  if ( !ok )
+  if ( !oldFi.exists() || !oldFi.isFile() )
   {
     return false;
   }
 
-  // If the renamed file exists, overwrite
-  if ( newFi.exists() && overwrite )
+  // Insure the path exists
+  QDir dir( newFi.absolutePath() );
+  if ( !dir.mkpath( newFi.absolutePath() ) )
   {
-    QFile newfile( newFilePath );
-    ok = newfile.remove();
-    if ( !ok )
+    return false;
+  }
+
+  if ( newFi.exists() && !overwrite )
+  {
+    return false;
+  }
+
+  // Keep the previous attachment until the new file has reached its final
+  // destination. A failed camera write must never erase the old photo.
+  QString previousFilePath;
+  if ( newFi.exists() )
+  {
+    previousFilePath = dir.filePath( QStringLiteral( ".%1.previous-%2" )
+                                       .arg( newFi.fileName(), QUuid::createUuid().toString( QUuid::WithoutBraces ) ) );
+    if ( !QFile::rename( newFilePath, previousFilePath ) )
     {
       return false;
     }
   }
 
-  ok = QFile::rename( oldFilePath, newFilePath );
-  if ( !ok )
+  bool moved = QFile::rename( oldFilePath, newFilePath );
+  if ( !moved )
   {
-    ok = QFile::copy( oldFilePath, newFilePath );
-    QFile oldfile( oldFilePath );
-    oldfile.remove();
+    moved = QFile::copy( oldFilePath, newFilePath );
+    if ( moved )
+    {
+      QFile oldFile( oldFilePath );
+      oldFile.remove();
+    }
   }
-  return ok;
+
+  if ( !moved )
+  {
+    QFile::remove( newFilePath );
+    if ( !previousFilePath.isEmpty() )
+    {
+      QFile::rename( previousFilePath, newFilePath );
+    }
+    return false;
+  }
+
+  if ( !previousFilePath.isEmpty() )
+  {
+    QFile::remove( previousFilePath );
+  }
+  return true;
 }
 
 QString PlatformUtilities::applicationDirectory() const

@@ -1,7 +1,7 @@
 /***************************************************************************
   sungsansurveybridge.cpp
   -----------------------
-  LandStar/CAD point exchange for Sungsan Mobile GIS.
+  LandStar/CAD point exchange for Meta Engineering GIS.
  ***************************************************************************/
 
 #include "sungsansurveybridge.h"
@@ -410,11 +410,11 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   };
 
   // Prefer a previously prepared four-field mapping, then reuse the legacy
-  // Sungsan fields slot by slot. Short ss_photoN names remain valid for DBF
+  // Meta Engineering fields slot by slot. Short ss_photoN names remain valid for DBF
   // providers with a ten-character field-name limit.
   QStringList photoFields;
   const QByteArray configuredPhotoFieldsJson = layer->customProperty(
-    QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ) ).toString().toUtf8();
+    QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFields" ) ).toString().toUtf8();
   const QJsonDocument configuredPhotoFieldsDocument = QJsonDocument::fromJson( configuredPhotoFieldsJson );
   if ( configuredPhotoFieldsDocument.isArray() && configuredPhotoFieldsDocument.array().size() == 4 )
   {
@@ -544,7 +544,7 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   // A desktop-prepared choice wins. Otherwise prefer common Korean GIS asset
   // identifiers before generic name/id fields.
   QString objectNameField = layer->customProperty(
-    QStringLiteral( "kr.co.sungsan.mobilegis/photoObjectNameField" ) ).toString().trimmed();
+    QStringLiteral( "kr.co.metaengi.mobilegis/photoObjectNameField" ) ).toString().trimmed();
   if ( objectNameField.isEmpty() || layer->fields().lookupField( objectNameField ) < 0 )
   {
     objectNameField.clear();
@@ -594,7 +594,7 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   };
 
   const QString safeLayerName = safeLayerFolderComponent( layer->name(), layer->id() );
-  const QString photoFolderProperty = QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFolder" );
+  const QString photoFolderProperty = QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFolder" );
   const QString configuredPhotoFolder = layer->customProperty( photoFolderProperty ).toString().trimmed();
   QString photoFolder = configuredPhotoFolder;
   if ( photoFolder.isEmpty() )
@@ -778,11 +778,11 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
 
   layer->setCustomProperty( QStringLiteral( "QFieldSync/attachment_naming" ),
                             QString::fromUtf8( QJsonDocument( attachmentNaming ).toJson( QJsonDocument::Compact ) ) );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/managedFieldPhotos" ), true );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ),
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/managedFieldPhotos" ), true );
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFields" ),
                             QString::fromUtf8( QJsonDocument( photoFieldsJson ).toJson( QJsonDocument::Compact ) ) );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/photoObjectNameField" ), objectNameField );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFolder" ), photoFolder );
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/photoObjectNameField" ), objectNameField );
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFolder" ), photoFolder );
 
   // Keep non-sensitive identifiers with the portable layer configuration so
   // an exported photo can be traced back to its project, layer and feature
@@ -791,12 +791,12 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   if ( project )
   {
     trackingProjectId = project->readEntry(
-      QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/fieldPhotoProjectId" ), QString() ).trimmed();
+      QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/fieldPhotoProjectId" ), QString() ).trimmed();
     if ( trackingProjectId.isEmpty() )
     {
       trackingProjectId = QUuid::createUuid().toString( QUuid::WithoutBraces );
       project->writeEntry(
-        QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/fieldPhotoProjectId" ), trackingProjectId );
+        QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/fieldPhotoProjectId" ), trackingProjectId );
     }
   }
 
@@ -832,11 +832,11 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   }
 
   if ( !trackingProjectId.isEmpty() )
-    layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoProjectId" ), trackingProjectId );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoLayerId" ), layer->id() );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFeatureIdField" ), featureIdField );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFeatureIdExpression" ), featureIdExpression );
-  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoMetadataVersion" ), 1 );
+    layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoProjectId" ), trackingProjectId );
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoLayerId" ), layer->id() );
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFeatureIdField" ), featureIdField );
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFeatureIdExpression" ), featureIdExpression );
+  layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoMetadataVersion" ), 1 );
   if ( project )
     project->setDirty( true );
 
@@ -974,7 +974,7 @@ QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, Qgs
          || !QgsWkbTypes::hasZ( layer->wkbType() ) || !layer->supportsEditing() )
       return false;
 
-    const bool markedForFieldObjects = layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), false ).toBool() || layer->name() == QStringLiteral( "성산_현장객체" );
+    const bool markedForFieldObjects = layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ), false ).toBool() || layer->name() == QStringLiteral( "메타이엔지_현장객체" );
     if ( !markedForFieldObjects )
       return false;
 
@@ -1005,7 +1005,7 @@ QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, Qgs
       continue;
 
     compatibleTargets.append( layer );
-    if ( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/landstarImportTarget" ), false ).toBool() )
+    if ( layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/landstarImportTarget" ), false ).toBool() )
       explicitTargets.append( layer );
   }
 
@@ -1035,7 +1035,7 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
   QgsVectorLayer *layer = selectTargetLayer( project, preferredLayer, &targetLayerError );
   if ( !layer )
     return errorResult( targetLayerError.isEmpty()
-                          ? tr( "측점을 저장할 성산 현장객체 레이어가 없습니다. PC 플러그인에서 현장 패키지를 다시 만들어 주세요." )
+                          ? tr( "측점을 저장할 메타이엔지 현장객체 레이어가 없습니다. PC 플러그인에서 현장 패키지를 다시 만들어 주세요." )
                           : targetLayerError );
 
   QFile file( filePath );
@@ -1233,7 +1233,7 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
   }
 
   if ( !layer->crs().isValid() )
-    return errorResult( tr( "성산 현장객체 레이어의 좌표계가 올바르지 않아 측점을 저장하지 않았습니다." ) );
+    return errorResult( tr( "메타이엔지 현장객체 레이어의 좌표계가 올바르지 않아 측점을 저장하지 않았습니다." ) );
 
   const QString targetCrsAuthId = layer->crs().authid();
   QString sourceCrsAuthId = QStringLiteral( "EPSG:4326" );
@@ -1241,12 +1241,12 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
   {
     bool confirmationRead = false;
     const bool crsConfirmed = project && project->readBoolEntry(
-                                                QStringLiteral( "SungsanMobileGIS" ),
+                                                QStringLiteral( "MetaEngiMobileGIS" ),
                                                 QStringLiteral( "/landstarCrsConfirmed" ),
                                                 false,
                                                 &confirmationRead );
     const QString confirmedAuthId = project ? project->readEntry(
-                                                QStringLiteral( "SungsanMobileGIS" ),
+                                                QStringLiteral( "MetaEngiMobileGIS" ),
                                                 QStringLiteral( "/landstarCrsAuthId" ),
                                                 QString() )
                                             : QString();
@@ -1461,7 +1461,7 @@ QVariantMap SungsanSurveyBridge::exportCadText( QgsVectorLayer *layer, const QSt
   QDir root( projectHomePath );
   if ( !root.mkpath( QStringLiteral( "CAD_TXT" ) ) )
     return errorResult( tr( "프로젝트 안에 CAD_TXT 폴더를 만들지 못했습니다." ) );
-  const QString fileName = QStringLiteral( "Sungsan_CAD_%1.txt" ).arg( QDateTime::currentDateTime().toString( QStringLiteral( "yyyyMMdd_HHmmss" ) ) );
+  const QString fileName = QStringLiteral( "MetaEngi_CAD_%1.txt" ).arg( QDateTime::currentDateTime().toString( QStringLiteral( "yyyyMMdd_HHmmss" ) ) );
   const QString outputPath = root.filePath( QStringLiteral( "CAD_TXT/%1" ).arg( fileName ) );
 
   QSaveFile file( outputPath );

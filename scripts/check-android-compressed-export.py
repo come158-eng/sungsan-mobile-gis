@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Static regression gate for safe Android project ZIP sharing.
 
-Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 This check is intentionally dependency-free because the release workspace does
 not contain the Android SDK/Qt toolchain needed for an APK build.
 """
@@ -69,7 +69,7 @@ def main() -> int:
 
     checks = {
         "2026-08-11 change notice":
-            "Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11." in source,
+            "Modified for Meta Engineering GIS by Sungsan on 2026-08-11." in source,
         "compression result is used": bool(re.search(
             r"archiveReady\s*=.*?QFieldUtils\.folderToZip", export, re.S
         )),

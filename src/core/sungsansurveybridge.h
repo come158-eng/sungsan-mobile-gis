@@ -1,7 +1,7 @@
 /***************************************************************************
   sungsansurveybridge.h
   ---------------------
-  LandStar/CAD point exchange for Sungsan Mobile GIS.
+  LandStar/CAD point exchange for Meta Engineering GIS.
  ***************************************************************************/
 
 #ifndef SUNGSANSURVEYBRIDGE_H
@@ -17,7 +17,7 @@ class QgsVectorLayer;
 
 /**
  * Imports LandStar delimited point files into a project point layer and
- * creates the compact text format used by the Sungsan CAD workflow.
+ * creates the compact text format used by the Meta Engineering CAD workflow.
  *
  * The bridge deliberately accepts ordinary files only. Android content URIs
  * are copied into the application's private LandStar inbox by the platform
@@ -33,8 +33,8 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
     /**
      * Imports one UTF-8 LandStar CSV/TXT/PXY/KOF file.
      *
-     * A preferred Sungsan field-object layer can be supplied. Otherwise the
-     * bridge requires one unambiguous Sungsan LandStar import target. The
+     * A preferred Meta Engineering field-object layer can be supplied. Otherwise the
+     * bridge requires one unambiguous Meta Engineering LandStar import target. The
      * default no-header order is
      * point-name,northing,easting,elevation,code.
      */
@@ -50,7 +50,7 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
 
     /**
      * Prepares an arbitrary editable point, line, or polygon layer for the
-     * Sungsan four-slot field-photo workflow.
+     * Meta Engineering four-slot field-photo workflow.
      *
      * Existing compatible photo fields are reused. Otherwise four short
      * string fields are added when the provider supports schema changes. The

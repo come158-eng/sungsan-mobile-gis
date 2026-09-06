@@ -1,5 +1,5 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 /***************************************************************************
                             qgismobileapp.cpp
                               -------------------
@@ -254,7 +254,7 @@ QgisMobileapp::QgisMobileapp( QgsApplication *app, QObject *parent )
 
   // we cannot use "/" as separator, since QGIS puts a suffix QGIS/31700 anyway
   const QString userAgent = QStringLiteral( "%1|%2|%3|%4|" )
-                              .arg( qfield::isSungsanBuild ? QStringLiteral( "sungsan-mobile-gis" ) : QStringLiteral( "qfield" ),
+                              .arg( qfield::isSungsanBuild ? QStringLiteral( "metaengi-mobile-gis" ) : QStringLiteral( "qfield" ),
                                     qfield::appVersion,
                                     qfield::appVersionStr.normalized( QString::NormalizationForm_KD ),
                                     qfield::gitRev );
@@ -1341,7 +1341,7 @@ bool QgisMobileapp::print( const QString &layoutName )
         QgsLayoutItemLabel *labelItem = qobject_cast<QgsLayoutItemLabel *>( item );
         const QString dateExpression = QStringLiteral( "[%format_date(now(), 'yyyy-MM-dd @ hh:mm')%]" );
         labelItem->setText( qfield::isSungsanBuild
-                              ? QStringLiteral( "%1 · 성산 모바일 GIS" ).arg( dateExpression )
+                              ? QStringLiteral( "%1 · 메타이엔지 모바일 GIS" ).arg( dateExpression )
                               : tr( "Map printed on %1 using QField" ).arg( dateExpression ) );
       }
     }

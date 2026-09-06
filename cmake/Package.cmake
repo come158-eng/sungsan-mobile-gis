@@ -1,4 +1,4 @@
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 if(QT_MOC_EXECUTABLE)
   get_filename_component(_qt_bin_dir ${QT_MOC_EXECUTABLE} DIRECTORY)
 endif()
@@ -104,25 +104,25 @@ if(ANDROID AND ANDROIDDEPLOYQT_EXECUTABLE)
       ${CMAKE_SOURCE_DIR}/platform/android/generated.xml.in
       ${ANDROID_TEMPLATE_FOLDER}/res/values/generated.xml
       @ONLY)
-    if(APP_PACKAGE_ID STREQUAL "kr.co.sungsan.mobilegis")
-      # Keep upstream Android defaults untouched. Sungsan's package instead
+    if(APP_PACKAGE_ID STREQUAL "kr.co.metaengi.mobilegis")
+      # Keep upstream Android defaults untouched. The Meta Engineering package
       # receives Korean default resources so devices with any system locale
-      # show Sungsan wording in native dialogs before QML is initialized.
-      set(SUNGSAN_ANDROID_DEFAULT_STRINGS
-          "${CMAKE_SOURCE_DIR}/branding/sungsan/android/res/values/strings.xml")
-      if(NOT EXISTS "${SUNGSAN_ANDROID_DEFAULT_STRINGS}")
+      # show Meta Engineering wording in native dialogs before QML is initialized.
+      set(METAENGI_ANDROID_DEFAULT_STRINGS
+          "${CMAKE_SOURCE_DIR}/branding/metaengi/android/res/values/strings.xml")
+      if(NOT EXISTS "${METAENGI_ANDROID_DEFAULT_STRINGS}")
         message(FATAL_ERROR
-                "Sungsan Android default strings are missing: ${SUNGSAN_ANDROID_DEFAULT_STRINGS}")
+                "Meta Engineering Android default strings are missing: ${METAENGI_ANDROID_DEFAULT_STRINGS}")
       endif()
       # Android otherwise prefers an upstream values-<locale>/strings.xml over
       # the Korean default whenever the device uses that locale. Remove only
       # those staged string catalogs (never the source files or other Android
-      # resources) so every locale safely falls back to the Sungsan catalog.
-      file(GLOB SUNGSAN_ANDROID_LOCALIZED_STRINGS
+      # resources) so every locale safely falls back to the Meta Engineering catalog.
+      file(GLOB METAENGI_ANDROID_LOCALIZED_STRINGS
            "${ANDROID_TEMPLATE_FOLDER}/res/values-*/strings.xml")
-      file(REMOVE ${SUNGSAN_ANDROID_LOCALIZED_STRINGS})
+      file(REMOVE ${METAENGI_ANDROID_LOCALIZED_STRINGS})
       configure_file(
-        "${SUNGSAN_ANDROID_DEFAULT_STRINGS}"
+        "${METAENGI_ANDROID_DEFAULT_STRINGS}"
         "${ANDROID_TEMPLATE_FOLDER}/res/values/strings.xml"
         COPYONLY)
     endif()

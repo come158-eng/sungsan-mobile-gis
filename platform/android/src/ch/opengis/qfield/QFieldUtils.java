@@ -6,7 +6,7 @@
               email                : nirvn dot asia at gmail dot com
  ***************************************************************************/
 
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11: hardened project
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11: hardened project
 // ZIP extraction against path traversal and excessive archive expansion.
 
 /***************************************************************************

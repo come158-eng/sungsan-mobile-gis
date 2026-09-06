@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 
 # Run only in the isolated signing container. Passwords are read by keytool
 # directly from read-only mode-0600 files and never enter container metadata,
@@ -13,7 +13,7 @@ if [[ -z "${KEYNAME:-}" ]]; then
   exit 2
 fi
 
-KEYSTORE_FILE="${SUNG_SAN_KEYSTORE_FILE:-/run/secrets/sungsan-release-keystore.p12}"
+KEYSTORE_FILE="${SUNG_SAN_KEYSTORE_FILE:-/run/secrets/metaengi-release-keystore.p12}"
 STOREPASS_FILE="${SUNG_SAN_STOREPASS_FILE:-/run/secrets/storepass.txt}"
 KEYPASS_FILE="${SUNG_SAN_KEYPASS_FILE:-/run/secrets/keypass.txt}"
 if [[ ! -f "${KEYSTORE_FILE}" || -L "${KEYSTORE_FILE}" ]]; then

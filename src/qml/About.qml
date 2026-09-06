@@ -1,4 +1,4 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -159,7 +159,7 @@ Item {
             font: Theme.strongFont
             color: Theme.light
             wrapMode: Text.WordWrap
-            text: "성산 현장조사 전용 모바일 GIS"
+            text: "메타이엔지 현장조사 전용 모바일 GIS"
           }
 
           Label {

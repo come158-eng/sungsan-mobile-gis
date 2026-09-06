@@ -1,4 +1,4 @@
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 #############################################################
 # CMake settings
 cmake_minimum_required(VERSION 3.19)
@@ -66,7 +66,7 @@ GET_GIT_HEAD_REVISION(GIT_REFSPEC GIT_REV)
 # opengisch/QField commit link. Pin the exact audited upstream base revision for
 # this package only. Ordinary upstream packages continue using the live Git
 # revision returned above.
-if(APP_PACKAGE_ID STREQUAL "kr.co.sungsan.mobilegis")
+if(APP_PACKAGE_ID STREQUAL "kr.co.metaengi.mobilegis")
   if(NOT APP_UPSTREAM_REVISION)
     set(APP_UPSTREAM_REVISION "f7123fc8dfa40be4e874d9bf5b46e81c6d05039b")
   endif()

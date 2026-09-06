@@ -1,0 +1,5 @@
+name=메타이엔지 VWorld 기본지도
+description=사용자가 기능을 활성화한 경우 VWorld 위성영상을 가장 아래 배경 레이어로 추가합니다.
+author=Meta Engineering
+version=1.0.0
+icon=icon.png

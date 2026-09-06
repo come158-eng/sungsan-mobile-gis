@@ -1,5 +1,5 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 /**
  * QFieldActivity.java - class needed to copy files from assets to
  * getExternalFilesDir() before starting QtActivity this can be used to perform
@@ -164,9 +164,9 @@ public class QFieldActivity extends QtActivity {
     public static native void resourceCanceled(String message);
     public static native void landStarFileReceived(String path);
 
-    private static final String SUNGSAN_PACKAGE_ID = "kr.co.sungsan.mobilegis";
+    private static final String SUNGSAN_PACKAGE_ID = "kr.co.metaengi.mobilegis";
     private static final String SUNGSAN_ACTIVATION_PREFERENCES =
-        "sungsan_activation_v1";
+        "metaengi_activation_v1";
     private static final String SUNGSAN_ACTIVATION_TOKEN = "activation_token";
     private static final String SUNGSAN_ACTIVATION_PUBLIC_KEY =
         "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE6lgfKMb/3AOh3sC8xCFtOj7bhBOkY72HBOEeMgfTE2zaAWVvtrrCFuWSBLTA6C8REECtBzDBo28G/Imb7fbT4A==";
@@ -729,7 +729,7 @@ public class QFieldActivity extends QtActivity {
                     Context.CLIPBOARD_SERVICE);
                 if (clipboard != null) {
                     clipboard.setPrimaryClip(
-                        ClipData.newPlainText("성산 GIS 설치 요청번호",
+                        ClipData.newPlainText("모바일 GIS 설치 요청번호",
                                               requestCode));
                 }
             }
@@ -746,7 +746,7 @@ public class QFieldActivity extends QtActivity {
         content.addView(tokenInput);
 
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("성산 모바일 GIS 사용 승인");
+        builder.setTitle("모바일 GIS 기기 승인");
         builder.setView(content);
         builder.setCancelable(false);
         builder.setPositiveButton("사용 승인", null);

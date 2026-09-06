@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Static gate for transactional Android project ZIP imports.
 
-Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 The Android/Qt SDK is not present in the release workspace, so this gate checks
 the safety-critical source structure without claiming an APK build or device
 test.
@@ -78,7 +78,7 @@ def main() -> int:
 
     checks = {
         "2026-08-11 change notice":
-            "Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11." in source,
+            "Modified for Meta Engineering GIS by Sungsan on 2026-08-11." in source,
         "new imports extract into a sibling staging folder":
             'createSiblingStagingDirectory(\n                            targetDirectory, "importing")'
             in import_archive,

@@ -79,7 +79,7 @@ def main() -> None:
     require("MAX_POINT_FILE_BYTES" in BRIDGE and "MAX_POINT_ROWS" in BRIDGE,
             "native LandStar parser limits are missing")
     require("usableFieldObjectLayer" in BRIDGE and
-            "kr.co.sungsan.mobilegis/fieldObjects" in BRIDGE,
+            "kr.co.metaengi.mobilegis/fieldObjects" in BRIDGE,
             "LandStar imports must be restricted to the field-object layer")
     require("QgsWkbTypes::hasZ" in BRIDGE and "requiredFields" in BRIDGE and
             all(field in BRIDGE for field in (
@@ -87,7 +87,7 @@ def main() -> None:
                 "fix_status", "gps_accuracy_m", "surveyed_at", "source_device",
             )),
             "LandStar target must preserve the complete PointZ survey schema")
-    require("kr.co.sungsan.mobilegis/landstarImportTarget" in BRIDGE and
+    require("kr.co.metaengi.mobilegis/landstarImportTarget" in BRIDGE and
             "explicitTargets" in BRIDGE and "candidates.size() > 1" in BRIDGE,
             "LandStar imports must select one explicit target and reject ambiguity")
     require("QUuid::createUuid()" in BRIDGE,

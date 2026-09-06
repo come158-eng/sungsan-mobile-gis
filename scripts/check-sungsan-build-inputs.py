@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 Sungsan
 # SPDX-License-Identifier: GPL-2.0-only
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-19.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-19.
 
 """Fast, dependency-free validation of every Sungsan Android brand input.
 

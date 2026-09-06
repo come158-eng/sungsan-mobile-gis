@@ -2,7 +2,7 @@
  * QFieldPositioningService.java
  * @author  Mathieu Pellerin - <mathieu@opengis.ch>
  */
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 /*
  Copyright (c) 2024, Mathieu Pellerin <mathieu@opengis.ch>
  All rights reserved.

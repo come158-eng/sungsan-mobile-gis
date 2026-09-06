@@ -1,4 +1,4 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 /***************************************************************************
   localfilesmodel.cpp
 
@@ -145,7 +145,7 @@ const QString LocalFilesModel::getCurrentTitleFromPath( const QString &path ) co
   }
   else if ( path == PlatformUtilities::instance()->applicationDirectory() )
   {
-    return qfield::isSungsanBuild ? QStringLiteral( "성산 모바일 GIS 파일 폴더" ) : tr( "QField files directory" );
+    return qfield::isSungsanBuild ? QStringLiteral( "메타이엔지 모바일 GIS 파일 폴더" ) : tr( "QField files directory" );
   }
   else if ( path == mCreatedProjectsPath )
   {
@@ -251,7 +251,7 @@ void LocalFilesModel::reloadModel()
     {
       mItems << LocalFileItem( ItemMetaType::Folder,
                                ItemType::ApplicationFolder,
-                               qfield::isSungsanBuild ? QStringLiteral( "성산 모바일 GIS 파일 폴더" ) : tr( "QField files directory" ),
+                               qfield::isSungsanBuild ? QStringLiteral( "메타이엔지 모바일 GIS 파일 폴더" ) : tr( "QField files directory" ),
                                QString(),
                                applicationDirectory );
     }

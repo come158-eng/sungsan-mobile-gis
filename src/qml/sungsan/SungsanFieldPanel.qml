@@ -1,5 +1,5 @@
 /*
- * Sungsan Mobile GIS primary field-work controls
+ * Meta Engineering GIS primary field-work controls
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import QtQuick
@@ -132,7 +132,7 @@ Item {
         spacing: 0
         Label {
           Layout.fillWidth: true
-          text: root.projectName.length > 0 ? root.projectName : "성산 현장지도"
+          text: root.projectName.length > 0 ? root.projectName : "메타이엔지 현장지도"
           color: "#ffffff"
           font.pixelSize: 16
           font.bold: true

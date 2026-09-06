@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 
 # Sign exactly one audited unsigned-release output. This script is mounted
 # read-only into a network-disabled container together with only the release
@@ -12,7 +12,7 @@ BUILD_TOOLS_DIR="${SUNG_SAN_BUILD_TOOLS_DIR:-/android-sdk/build-tools/35.0.1}"
 APK_DIRECTORY="${SUNG_SAN_APK_DIRECTORY:-/run/apk}"
 UNSIGNED_APK="${APK_DIRECTORY}/android-build-release-unsigned.apk"
 SIGNED_APK="${APK_DIRECTORY}/android-build-release-signed.apk"
-KEYSTORE_FILE="${SUNG_SAN_KEYSTORE_FILE:-/run/secrets/sungsan-release-keystore.p12}"
+KEYSTORE_FILE="${SUNG_SAN_KEYSTORE_FILE:-/run/secrets/metaengi-release-keystore.p12}"
 STOREPASS_FILE="${SUNG_SAN_STOREPASS_FILE:-/run/secrets/storepass.txt}"
 KEYPASS_FILE="${SUNG_SAN_KEYPASS_FILE:-/run/secrets/keypass.txt}"
 CERTIFICATE_ANCHOR="${SUNG_SAN_CERTIFICATE_ANCHOR:-/run/anchor/prebuild-certificate.sha256}"

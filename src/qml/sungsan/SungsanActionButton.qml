@@ -1,5 +1,5 @@
 /*
- * Sungsan Mobile GIS field action button
+ * Meta Engineering GIS field action button
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import QtQuick

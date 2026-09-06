@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 
 set -e
 
@@ -43,8 +43,8 @@ if [[ -t 0 && -t 1 ]]; then
 fi
 
 SIGNING_ENV_ARGS=(-e STOREPASS -e KEYNAME -e KEYPASS)
-if [[ "${APP_PACKAGE_ID:-}" == "kr.co.sungsan.mobilegis" ]]; then
-	# The full Sungsan build container must never receive release credentials.
+if [[ "${APP_PACKAGE_ID:-}" == "kr.co.metaengi.mobilegis" ]]; then
+	# The full Meta Engineering build container must never receive release credentials.
 	# Dedicated network-disabled containers perform preflight and final signing.
 	SIGNING_ENV_ARGS=()
 fi

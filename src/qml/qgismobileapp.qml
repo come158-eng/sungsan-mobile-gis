@@ -1,4 +1,4 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 /***************************************************************************
                             qgismobileapp.qml
                               -------------------
@@ -3789,7 +3789,7 @@ ApplicationWindow {
     dashBoard.shouldReturnHome = false;
   }
 
-  // Sungsan's primary field workflow intentionally delegates to the proven
+  // Meta Engineering's primary field workflow intentionally delegates to the proven
   // QGIS/QField engine objects below.  The branded controls never duplicate
   // project loading, positioning, digitizing, or export logic.
   function sungsanStartSurvey(requireFeatureAddition) {
@@ -4044,7 +4044,7 @@ ApplicationWindow {
     let site = tokens.join(" ").trim();
     let region = "경상남도";
     if (!site || site === ".") {
-      site = fileName.length > 0 ? fileName.replace(/\.[^/.]+$/, "") : "성산 기본 현장";
+      site = fileName.length > 0 ? fileName.replace(/\.[^/.]+$/, "") : "메타이엔지 기본 현장";
     }
 
     const knownParts = site.split(/\s+/);
@@ -4054,7 +4054,7 @@ ApplicationWindow {
     }
 
     if (!site) {
-      site = "성산 기본 현장";
+      site = "메타이엔지 기본 현장";
     }
 
     return {
@@ -4083,7 +4083,7 @@ ApplicationWindow {
       const regionName = parsedRegion.length > 0 ? parsedRegion : "";
       const siteName = projectName.length > 0 ? projectName : parsedSite;
       const inferredRegion = inferred.regionName && inferred.regionName.trim().length > 0 ? inferred.regionName.trim() : "경상남도";
-      const inferredSite = inferred.siteName && inferred.siteName.trim().length > 0 ? inferred.siteName.trim() : "성산 기본 현장";
+      const inferredSite = inferred.siteName && inferred.siteName.trim().length > 0 ? inferred.siteName.trim() : "메타이엔지 기본 현장";
       const safeRegion = regionName.length > 0 ? regionName : inferredRegion;
       const safeSite = siteName.length > 0 ? siteName : inferredSite;
       const safeDate = sungsanNormalizeProjectDate(parsedDate || inferred.workDate);
@@ -5877,7 +5877,7 @@ ApplicationWindow {
         return;
       }
       pluginManagerSettings.open();
-      displayToast("‘성산 VWorld 기본지도’를 켜면 위성영상이 자동으로 추가됩니다.", "info");
+      displayToast("‘메타이엔지 VWorld 기본지도’를 켜면 위성영상이 자동으로 추가됩니다.", "info");
     }
 
     onLayersRequested: {
@@ -6010,7 +6010,7 @@ ApplicationWindow {
 
     onCreateFieldProjectRequested: (regionName, siteName, workDate) => {
       const safeRegion = typeof regionName === "string" && regionName.trim().length > 0 ? regionName.trim() : "경상남도";
-      const safeSite = typeof siteName === "string" && siteName.trim().length > 0 ? siteName.trim() : "성산 기본 현장";
+      const safeSite = typeof siteName === "string" && siteName.trim().length > 0 ? siteName.trim() : "메타이엔지 기본 현장";
       const safeDate = typeof workDate === "string" && workDate.trim().length > 0 ? workDate.trim() : "";
       const resolvedTitle = `${safeSite} ${safeDate}`.trim();
       const queuedImportPath = welcomeScreen.pendingLandStarProjectPath || "";

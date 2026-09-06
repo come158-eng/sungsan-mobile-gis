@@ -1,4 +1,4 @@
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
 set(QFIELD_CORE_SRCS
     cogo/cogoexecutor.cpp
     cogo/cogooperation.cpp

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-2.0-or-later
-# Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+# Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 """Static gate for isolated Sungsan Android release signing.
 
 Qt 6.10.x expands its signing environment passwords into child-process argv.
@@ -45,7 +45,7 @@ def forbid(source: str, pattern: str, purpose: str) -> None:
 def main() -> int:
     cpack = read("platform/android/CPackAndroidDeployQt.cmake.in")
     branch_start = cpack.find(
-        'if("@APP_PACKAGE_ID@" STREQUAL "kr.co.sungsan.mobilegis")'
+        'if("@APP_PACKAGE_ID@" STREQUAL "kr.co.metaengi.mobilegis")'
     )
     branch_end = cpack.find("# Keep the upstream QField packaging behavior unchanged.")
     if branch_start < 0 or branch_end <= branch_start:
@@ -115,15 +115,15 @@ def main() -> int:
     )
     require(
         entrypoint,
-        r"prebuild-certificate\.sha256.*?sign-sungsan-release-apk\.sh",
+        r"prebuild-certificate\.sha256.*?sign-metaengi-release-apk\.sh",
         "pre-build certificate anchor is passed to the isolated signer",
     )
     require(
         entrypoint,
         r"cp --.*?validate-sungsan-keystore\.sh.*?"
         r"SIGNING_STATE_DIR\}/bin/validate-sungsan-keystore\.sh.*?"
-        r"cp --.*?sign-sungsan-release-apk\.sh.*?"
-        r"SIGNING_STATE_DIR\}/bin/sign-sungsan-release-apk\.sh.*?chmod 0500",
+        r"cp --.*?sign-metaengi-release-apk\.sh.*?"
+        r"SIGNING_STATE_DIR\}/bin/sign-metaengi-release-apk\.sh.*?chmod 0500",
         "signing scripts are frozen outside the source tree before compilation",
     )
     require(
@@ -145,7 +145,7 @@ def main() -> int:
             FAILURES.append(f"{description}: expected twice ({option})")
     require(
         entrypoint,
-        r"KEYSTORE_HOST_PATH\}:/run/secrets/sungsan-release-keystore\.p12:ro",
+        r"KEYSTORE_HOST_PATH\}:/run/secrets/metaengi-release-keystore\.p12:ro",
         "external keystore is mounted read-only into isolated containers",
     )
     require(
@@ -218,7 +218,7 @@ def main() -> int:
         "validator never puts passwords in argv",
     )
 
-    signer = read("scripts/sign-sungsan-release-apk.sh")
+    signer = read("scripts/sign-metaengi-release-apk.sh")
     require(
         signer,
         r"ZIPALIGN.*?-c -P 16 4.*?ZIPALIGN.*?-P 16 -f 4.*?"

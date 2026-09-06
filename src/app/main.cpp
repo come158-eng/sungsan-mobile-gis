@@ -1,5 +1,5 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 /***************************************************************************
                             main.cpp  -  main for qgis mobileapp
                             based on src/browser/main.cpp
@@ -81,8 +81,8 @@ void initGraphics()
 
 void setApplicationIdentity()
 {
-  QCoreApplication::setOrganizationName( qfield::isSungsanBuild ? QStringLiteral( "Sungsan" ) : QStringLiteral( "OPENGIS.ch" ) );
-  QCoreApplication::setOrganizationDomain( qfield::isSungsanBuild ? QStringLiteral( "sungsan.co.kr" ) : QStringLiteral( "opengis.ch" ) );
+  QCoreApplication::setOrganizationName( qfield::isSungsanBuild ? QStringLiteral( "Meta Engineering" ) : QStringLiteral( "OPENGIS.ch" ) );
+  QCoreApplication::setOrganizationDomain( qfield::isSungsanBuild ? QStringLiteral( "metaengi.co.kr" ) : QStringLiteral( "opengis.ch" ) );
   QCoreApplication::setApplicationName( qfield::appName );
 }
 

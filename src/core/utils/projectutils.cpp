@@ -1,4 +1,4 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
 /***************************************************************************
   projectutils.cpp - ProjectUtils
 
@@ -88,7 +88,7 @@ bool ProjectUtils::addMapLayerAtBottom( QgsProject *project, QgsMapLayer *layer 
   if ( isVWorldSatelliteLayer( layer ) )
   {
     layer->setAttribution( QStringLiteral( "출처: 국토교통부 브이월드(VWorld)" ) );
-    layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/vworldSatellite" ), true );
+    layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/vworldSatellite" ), true );
   }
 
   if ( !project->addMapLayer( layer, false ) )
@@ -156,15 +156,15 @@ bool ProjectUtils::exportFieldSurveyComparisonReport( QgsProject *project, const
     {
       continue;
     }
-    if ( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/landstarImportTarget" ) ).toBool()
-         || layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ) ).toBool()
-         || layer->name() == QStringLiteral( "성산_현장객체" ) )
+    if ( layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/landstarImportTarget" ) ).toBool()
+         || layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ) ).toBool()
+         || layer->name() == QStringLiteral( "메타이엔지_현장객체" ) )
     {
       objectLayerId = it.key();
       continue;
     }
-    if ( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotos" ) ).toBool()
-         || layer->name() == QStringLiteral( "성산_현장사진" ) )
+    if ( layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotos" ) ).toBool()
+         || layer->name() == QStringLiteral( "메타이엔지_현장사진" ) )
     {
       photoLayerId = it.key();
     }
@@ -229,9 +229,9 @@ bool ProjectUtils::exportFieldSurveyComparisonReport( QgsProject *project, const
   };
 
   const QString projectTitle = project->title();
-  const QString regionName = project->readEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/regionName" ), QString() );
-  const QString siteName = project->readEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/siteName" ), QString() );
-  const QString workDate = project->readEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/workDate" ), QString() );
+  const QString regionName = project->readEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/regionName" ), QString() );
+  const QString siteName = project->readEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/siteName" ), QString() );
+  const QString workDate = project->readEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/workDate" ), QString() );
   const QString objectLayerName = objectLayerId.isEmpty() ? QString() : layers.value( objectLayerId )->name();
   const QString reportPath = QStringLiteral( "%1/survey_compare_%2.txt" ).arg( projectDirectory, QDateTime::currentDateTime().toString( QStringLiteral( "yyyyMMdd_HHmmss" ) ) );
 
@@ -462,9 +462,9 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
   QgsProjectMetadata projectMetadata = createdProject->metadata();
   projectMetadata.setTitle( projectTitle );
   createdProject->setMetadata( projectMetadata );
-  createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/regionName" ), regionName );
-  createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/siteName" ), siteName );
-  createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/workDate" ), safeDate );
+  createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/regionName" ), regionName );
+  createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/siteName" ), siteName );
+  createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/workDate" ), safeDate );
 
   // Basic project settings
   const QgsCoordinateReferenceSystem defaultProjectCrs( QStringLiteral( "EPSG:3857" ) );
@@ -474,14 +474,14 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
 
   if ( sungsanFieldTemplate )
   {
-    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/fieldPackage" ), QStringLiteral( "kr.co.sungsan.mobilegis.field-package/1" ) );
-    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/template" ), QStringLiteral( "field-landstar" ) );
+    createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/fieldPackage" ), QStringLiteral( "kr.co.metaengi.mobilegis.field-package/1" ) );
+    createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/template" ), QStringLiteral( "field-landstar" ) );
     // A newly created generic project cannot know the coordinate system used
     // by a LandStar job.  Projected N/E imports stay locked until a desktop
     // field package records an explicit CRS confirmation.
-    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/landstarCrsConfirmed" ), false );
-    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/landstarCrsAuthId" ), defaultProjectCrs.authid() );
-    createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/landstarCrsNotice" ), QStringLiteral( "LandStar 좌표계는 현재 프로젝트 좌표계와 일치해야 합니다. 다르면 QGIS에서 확인 후 변환하세요." ) );
+    createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/landstarCrsConfirmed" ), false );
+    createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/landstarCrsAuthId" ), defaultProjectCrs.authid() );
+    createdProject->writeEntry( QStringLiteral( "MetaEngiMobileGIS" ), QStringLiteral( "/landstarCrsNotice" ), QStringLiteral( "LandStar 좌표계는 현재 프로젝트 좌표계와 일치해야 합니다. 다르면 QGIS에서 확인 후 변환하세요." ) );
     createdProject->writeEntry( QStringLiteral( "qfieldsync" ), QStringLiteral( "initialMapMode" ), QStringLiteral( "digitize" ) );
   }
 
@@ -489,7 +489,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
 
   if ( sungsanFieldTemplate )
   {
-    const QString fieldFilepath = QStringLiteral( "%1/sungsan_field.gpkg" ).arg( createdProjectDir );
+    const QString fieldFilepath = QStringLiteral( "%1/metaengi_field.gpkg" ).arg( createdProjectDir );
 
     QgsFields objectFields;
     objectFields.append( QgsField( QStringLiteral( "object_id" ), QMetaType::QString, QString(), 40 ) );
@@ -516,12 +516,12 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
 
     QgsVectorFileWriter::SaveVectorOptions objectWriterOptions;
     objectWriterOptions.driverName = QStringLiteral( "GPKG" );
-    objectWriterOptions.layerName = QStringLiteral( "sungsan_field_objects" );
+    objectWriterOptions.layerName = QStringLiteral( "metaengi_field_objects" );
     QgsVectorFileWriter *objectWriter = QgsVectorFileWriter::create( fieldFilepath, objectFields, Qgis::WkbType::PointZ, defaultProjectCrs, createdProject->transformContext(), objectWriterOptions );
     delete objectWriter;
 
     const QString objectUri = QStringLiteral( "%1|layername=%2" ).arg( fieldFilepath, objectWriterOptions.layerName );
-    sungsanFieldObjectsLayer = new QgsVectorLayer( objectUri, QStringLiteral( "성산_현장객체" ) );
+    sungsanFieldObjectsLayer = new QgsVectorLayer( objectUri, QStringLiteral( "메타이엔지_현장객체" ) );
     if ( !sungsanFieldObjectsLayer->isValid() )
     {
       delete sungsanFieldObjectsLayer;
@@ -566,7 +566,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     sungsanFieldObjectsLayer->setDefaultValueDefinition( createdAtIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( colorIndex, QgsDefaultValue( QStringLiteral( "'#1f5aa6'" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( accuracyIndex, QgsDefaultValue( QStringLiteral( "@gnss_horizontal_accuracy" ), false ) );
-    sungsanFieldObjectsLayer->setDefaultValueDefinition( sourceDeviceIndex, QgsDefaultValue( QStringLiteral( "'성산 GIS'" ), false ) );
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( sourceDeviceIndex, QgsDefaultValue( QStringLiteral( "'메타이엔지 GIS'" ), false ) );
 
     QVariantMap emptyWidgetOptions;
     const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ) };
@@ -629,7 +629,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
       "with_variable('object_name_safe', "
       "regexp_replace(replace(@object_name_raw, char(92), '_'), "
       "'[/:*?\"<>|]', '_'), "
-      "'images/성산_현장객체/' || @object_name_safe || "
+      "'images/메타이엔지_현장객체/' || @object_name_safe || "
       "if(aggregate(@layer, 'count', $id, filter := $id != @current_fid AND coalesce(nullif(trim(\"name\"), ''), nullif(trim(\"landstar_id\"), '')) = "
       "coalesce(nullif(trim(attribute(@parent, 'name')), ''), nullif(trim(attribute(@parent, 'landstar_id')), ''))) > 0, "
       "'_' || left(coalesce(nullif(to_string(\"object_id\"), ''), to_string(@current_fid)), 8), '') || ' (%1).{extension}')))" );
@@ -639,16 +639,16 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     fixedPhotoNaming.insert( QStringLiteral( "photo_other" ), photoNameBaseExpression.arg( 3 ) );
     fixedPhotoNaming.insert( QStringLiteral( "photo_other_2" ), photoNameBaseExpression.arg( 4 ) );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "QFieldSync/attachment_naming" ), QString::fromUtf8( QJsonDocument::fromVariant( fixedPhotoNaming ).toJson( QJsonDocument::Compact ) ) );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/saveFieldPhotosToGallery" ), true );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/managedFieldPhotos" ), true );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ), fixedPhotoFields );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/photoObjectNameField" ), QStringLiteral( "name" ) );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFolder" ), QStringLiteral( "images/성산_현장객체" ) );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/saveFieldPhotosToGallery" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/managedFieldPhotos" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFields" ), fixedPhotoFields );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/photoObjectNameField" ), QStringLiteral( "name" ) );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFolder" ), QStringLiteral( "images/메타이엔지_현장객체" ) );
 
     sungsanFieldObjectsLayer->setDisplayExpression( QStringLiteral( "coalesce(nullif(trim(\"landstar_id\"), ''), nullif(trim(\"name\"), ''), \"category\", '현장 객체')" ) );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), true );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/landstarImportTarget" ), true );
-    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPackage" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/landstarImportTarget" ), true );
+    sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPackage" ), true );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "QFieldSync/cloud_action" ), QStringLiteral( "offline" ) );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "QFieldSync/action" ), QStringLiteral( "offline" ) );
     LayerUtils::setDefaultRenderer( sungsanFieldObjectsLayer, nullptr, QString(), QStringLiteral( "color" ) );
@@ -682,7 +682,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     }
     sungsanFieldObjectsLayer->setEditFormConfig( objectFormConfig );
 
-    QDir( createdProjectDir ).mkpath( QStringLiteral( "images/성산_현장객체" ) );
+    QDir( createdProjectDir ).mkpath( QStringLiteral( "images/메타이엔지_현장객체" ) );
 
     createdProjectLayers << sungsanFieldObjectsLayer;
   }

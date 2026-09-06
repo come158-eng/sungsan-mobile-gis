@@ -1,5 +1,5 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-07.
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-07.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -957,11 +957,11 @@ Page {
       } else {
         var firstRun = !settings.valueBool("/QField/FirstRunDone", false);
         if (firstRun) {
-          welcomeText.text = appIsSungsan ? "성산 모바일 GIS를 시작합니다." : qsTr("Welcome to %1.").arg(appName) + (table.count > 0 ? qsTr("First time using this application? Try the sample projects listed below.") : "");
+          welcomeText.text = appIsSungsan ? "메타이엔지 모바일 GIS를 시작합니다." : qsTr("Welcome to %1.").arg(appName) + (table.count > 0 ? qsTr("First time using this application? Try the sample projects listed below.") : "");
           settings.setValue("/QField/FirstRunDone", true);
           settings.setValue("/QField/showMapCanvasGuide", !appIsSungsan);
         } else {
-          welcomeText.text = appIsSungsan ? "성산 모바일 GIS" : qsTr("Welcome back to %1.").arg(appName);
+          welcomeText.text = appIsSungsan ? "메타이엔지 모바일 GIS" : qsTr("Welcome back to %1.").arg(appName);
         }
       }
     }

@@ -1,4 +1,4 @@
-// Modified for Sungsan Mobile GIS by Sungsan on 2026-08-11.
+// Modified for Meta Engineering GIS by Sungsan on 2026-08-11.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -1144,7 +1144,7 @@ Page {
 
               Label {
                 text: appIsSungsan
-                        ? "성산 모바일 GIS의 네트워크 연결에 프록시 서버를 사용합니다. 사내망이나 VPN 환경에서 필요한 경우에만 설정하세요."
+                        ? "메타이엔지 모바일 GIS의 네트워크 연결에 프록시 서버를 사용합니다. 사내망이나 VPN 환경에서 필요한 경우에만 설정하세요."
                         : qsTr("Configure a network proxy to route QField's traffic through a proxy server. Useful for corporate networks and VPNs.")
                 font: Theme.tipFont
                 color: Theme.secondaryTextColor

@@ -1,5 +1,5 @@
 /*
- * Sungsan Mobile GIS home screen
+ * Meta Engineering GIS home screen
  * SPDX-License-Identifier: GPL-2.0-or-later
  */
 import QtQuick
@@ -85,7 +85,7 @@ Page {
       }
 
       Label {
-        text: "성산 모바일 GIS"
+        text: "메타이엔지 모바일 GIS"
         color: "#ffffff"
         font.pixelSize: 25
         font.bold: true
@@ -151,7 +151,7 @@ Page {
             spacing: 3
 
             Label {
-              text: "현재 현장"
+              text: "현재 프로젝트"
               color: "#64778b"
               font.pixelSize: 12
             }
@@ -185,7 +185,7 @@ Page {
       }
 
       Label {
-        text: "프로젝트 준비"
+        text: "프로젝트 열기"
         color: "#17324d"
         font.pixelSize: 17
         font.bold: true
@@ -200,8 +200,8 @@ Page {
 
         SungsanActionButton {
           Layout.fillWidth: true
-          text: "현장 패키지 가져오기"
-          detailText: "PC에서 만든 ZIP을 선택"
+          text: "프로젝트 가져오기"
+          detailText: "PC에서 만든 QGIS/QField ZIP을 선택"
           iconSource: Theme.getThemeVectorIcon("ic_download_white_24dp")
           emphasized: true
           enabled: root.projectImportAvailable
@@ -211,7 +211,7 @@ Page {
         SungsanActionButton {
           Layout.fillWidth: true
           text: "기기에 있는 프로젝트 열기"
-          detailText: "가져온 프로젝트와 자료 찾기"
+          detailText: "QGIS에서 만든 프로젝트와 자료 찾기"
           iconSource: Theme.getThemeVectorIcon("ic_folder_open_black_24dp")
           onClicked: root.browseProjectsRequested()
         }
@@ -440,7 +440,7 @@ Page {
     y: Math.max(mainWindow.sceneTopMargin, (parent.height - height) / 2)
 
     property string defaultRegionLabel: "경상남도"
-    property string defaultSiteLabel: "성산 기본 현장"
+    property string defaultSiteLabel: "메타이엔지 기본 현장"
     property string siteName: ""
     property string regionName: ""
     property string surveyDate: ""
