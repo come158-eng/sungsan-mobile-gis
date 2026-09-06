@@ -313,11 +313,11 @@ jobs:
     permissions:
       actions: read
 
-    # IMPORTANT: YAML cannot require reviewers. In repository Settings, create
-    # the `metaengi-release` environment, add required reviewers, disallow
-    # administrator bypass, and store all four SUNG_SAN_RELEASE_* secrets there.
+    # Reuse the protected Sungsan signing environment so both separately
+    # installable apps are signed with the same approved key and passwords.
+    # Reviewer protection and administrator bypass rules live in repository settings.
     environment:
-      name: metaengi-release
+      name: sungsan-release
 
     steps:
       # No checkout is permitted in this job. Only the immutable artifact ID is
