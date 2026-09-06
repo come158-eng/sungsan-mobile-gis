@@ -245,6 +245,32 @@ def main() -> int:
         'export APK_VERSION_CODE="${APK_VERSION_CODE:-10201000}"',
         "Meta Engineering release version code is 10201000",
     )
+    workflow = ".github/workflows/metaengi-android.yml"
+    require_text(
+        workflow,
+        "environment:\n      name: sungsan-release",
+        "release signing reuses the protected shared environment",
+    )
+    require_text(
+        workflow,
+        "path: ${{ runner.temp }}/sungsan-vcpkg-cache",
+        "dependency cache restores to the established Sungsan cache path",
+    )
+    require_text(
+        workflow,
+        "key: metaengi-vcpkg-arm64-",
+        "Meta Engineering saves only to its own cache namespace",
+    )
+    require_text(
+        workflow,
+        "sungsan-vcpkg-arm64-",
+        "Meta Engineering may restore the compatible Sungsan dependency cache",
+    )
+    forbid_text(
+        workflow,
+        "name: metaengi-release",
+        "workflow does not require a duplicate signing-secret environment",
+    )
     require_text(
         "platform/android/src/ch/opengis/qfield/QFieldActivity.java",
         'private static final String SUNGSAN_PACKAGE_ID = "kr.co.metaengi.mobilegis";',

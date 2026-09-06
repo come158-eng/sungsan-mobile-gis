@@ -129,10 +129,11 @@ jobs:
         continue-on-error: true
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ${{ runner.temp }}/metaengi-vcpkg-cache
+          path: ${{ runner.temp }}/sungsan-vcpkg-cache
           key: metaengi-vcpkg-arm64-${{ hashFiles('vcpkg.json', 'vcpkg/ports/**', 'vcpkg/triplets/**', '.docker/android_dev/Dockerfile') }}-${{ github.run_id }}
           restore-keys: |
             metaengi-vcpkg-arm64-${{ hashFiles('vcpkg.json', 'vcpkg/ports/**', 'vcpkg/triplets/**', '.docker/android_dev/Dockerfile') }}-
+            sungsan-vcpkg-arm64-${{ hashFiles('vcpkg.json', 'vcpkg/ports/**', 'vcpkg/triplets/**', '.docker/android_dev/Dockerfile') }}-
 
       - name: Build installable debug-key test APK
         if: ${{ success() && inputs.build_mode == 'test_only' }}
@@ -141,7 +142,7 @@ jobs:
           METAENGI_VWORLD_API_KEY: ${{ secrets.SUNG_SAN_VWORLD_API_KEY }}
           METAENGI_ALLOW_UNSIGNED_TEST_BUILD: "1"
           OUTPUT_DIR: ${{ runner.temp }}/metaengi-apk-output
-          CACHE_DIR: ${{ runner.temp }}/metaengi-vcpkg-cache
+          CACHE_DIR: ${{ runner.temp }}/sungsan-vcpkg-cache
           triplet: arm64-android
           install_qt_version: 6.10.3
         run: |
@@ -157,7 +158,7 @@ jobs:
           METAENGI_VWORLD_API_KEY: ${{ secrets.SUNG_SAN_VWORLD_API_KEY }}
           METAENGI_BUILD_UNSIGNED_RELEASE_ONLY: "1"
           OUTPUT_DIR: ${{ runner.temp }}/metaengi-apk-output
-          CACHE_DIR: ${{ runner.temp }}/metaengi-vcpkg-cache
+          CACHE_DIR: ${{ runner.temp }}/sungsan-vcpkg-cache
           triplet: arm64-android
           install_qt_version: 6.10.3
         run: |
@@ -173,7 +174,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
-          path: ${{ runner.temp }}/metaengi-vcpkg-cache
+          path: ${{ runner.temp }}/sungsan-vcpkg-cache
           key: ${{ steps.vcpkg_cache_restore.outputs.cache-primary-key }}
 
       - name: Validate APK and create an exact three-file artifact
