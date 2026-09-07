@@ -188,6 +188,10 @@ ApplicationWindow {
   Connections {
     target: Theme
 
+    Component.onCompleted: {
+      Application.styleHints.colorScheme = Theme.darkTheme ? Qt.ColorScheme.Dark : Qt.ColorScheme.Light;
+    }
+
     function onDarkThemeChanged() {
       Application.styleHints.colorScheme = Theme.darkTheme ? Qt.ColorScheme.Dark : Qt.ColorScheme.Light;
     }
