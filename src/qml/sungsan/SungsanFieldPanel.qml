@@ -71,7 +71,7 @@ Item {
     anchors.right: parent.right
     anchors.top: parent.top
     height: 72 + mainWindow.sceneTopMargin
-    color: "#194793"
+    color: Theme.mainColor
 
     RowLayout {
       anchors.left: parent.left
@@ -101,7 +101,7 @@ Item {
         }
         background: Rectangle {
           radius: 13
-          color: parent.down ? "#153d7d" : "#2a58a0"
+          color: parent.down ? Qt.darker(Theme.mainColor, 1.2) : Qt.lighter(Theme.mainColor, 1.12)
         }
       }
 
@@ -123,7 +123,7 @@ Item {
         }
         background: Rectangle {
           radius: 13
-          color: parent.down ? "#153d7d" : "#2a58a0"
+          color: parent.down ? Qt.darker(Theme.mainColor, 1.2) : Qt.lighter(Theme.mainColor, 1.12)
         }
       }
 
@@ -141,7 +141,7 @@ Item {
         Label {
           Layout.fillWidth: true
           text: root.activeLayerName
-          color: "#dce8fb"
+          color: "#ffe0da"
           font.pixelSize: 11
           elide: Text.ElideRight
         }
@@ -188,9 +188,9 @@ Item {
     anchors.bottom: parent.bottom
     readonly property real contentHeight: dockColumn.implicitHeight + 20 + mainWindow.sceneBottomMargin
     height: Math.min(contentHeight, Math.max(0, root.height - fieldHeader.height - 4))
-    color: "#f7f9fc"
+    color: Theme.mainBackgroundColor
     radius: 22
-    border.color: "#d3dce6"
+    border.color: Theme.controlBorderColor
 
     Flickable {
       id: dockFlickable
@@ -219,7 +219,7 @@ Item {
           Layout.preferredWidth: 9
           Layout.preferredHeight: 9
           radius: 5
-          color: root.gpsPositionValid ? "#20a569" : root.gpsSignalStale ? "#c74444" : root.gpsActive ? "#e5a11a" : "#a4afb9"
+          color: root.gpsPositionValid ? "#20a569" : root.gpsSignalStale ? "#c74444" : root.gpsActive ? "#e5a11a" : Theme.mainTextDisabledColor
         }
         Label {
           Layout.fillWidth: true
@@ -248,7 +248,7 @@ Item {
               return deviceName + " · " + root.gpsConnectionText + " · FIX 대기";
             return root.gpsActive ? deviceName + " 위치 수신 중 · FIX 대기" : "GNSS 꺼짐 · 외부 수신기 연결 가능";
           }
-          color: "#516476"
+          color: Theme.secondaryTextColor
           font.pixelSize: 11
           elide: Text.ElideRight
         }
@@ -328,7 +328,7 @@ Item {
         onClicked: root.moreExpanded = !root.moreExpanded
         contentItem: Label {
           text: parent.text
-          color: "#194793"
+          color: Theme.mainColor
           font.pixelSize: 12
           font.bold: true
           horizontalAlignment: Text.AlignHCenter
@@ -445,7 +445,7 @@ Item {
       Label {
         Layout.fillWidth: true
         text: "어느 장치의 위치를 사용할까요?"
-        color: "#17324d"
+        color: Theme.mainTextColor
         font.pixelSize: 15
         font.bold: true
       }
@@ -474,7 +474,7 @@ Item {
           ? "최근 연결 오류: " + root.gpsLastError
           : "외부 GNSS는 장치 설정에서 BT/BLE 방식과 수신기를 먼저 저장해야 합니다. 연결 후 NMEA 좌표가 들어오면 지도가 자동으로 현재 위치로 이동합니다."
         wrapMode: Text.WordWrap
-        color: "#6e7e8e"
+        color: Theme.secondaryTextColor
         font.pixelSize: 12
       }
     }

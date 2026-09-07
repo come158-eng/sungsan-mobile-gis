@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="MetaEngTheme" parent="MetaEngBaseTheme">
+        <item name="android:windowSplashScreenBackground">@color/metaengLaunchBackground</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/metaengi_mobile_gis_vector</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@android:color/transparent</item>
+    </style>
+</resources>

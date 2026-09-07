@@ -175,6 +175,31 @@ def check_json(relative: str, purpose: str) -> None:
 
 
 def main() -> int:
+    # These screens once bypassed theme.json with a Sungsan wordmark and blue
+    # literals. Validate the UI inputs as well as the launcher resources.
+    for path in (ROOT / "src/qml/sungsan").glob("*.qml"):
+        source = path.read_text(encoding="utf-8")
+        if re.search(r"SUNG\s*SAN|성산", source):
+            FAILURES.append(f"{path.name}: Sungsan branding remains in the Meta UI")
+        for literal in re.findall(r'"#([0-9a-fA-F]{6})"', source):
+            red, green, blue = (int(literal[i:i + 2], 16) for i in (0, 2, 4))
+            if blue > red + 12 and blue > green + 8:
+                FAILURES.append(f"{path.name}: hardcoded blue UI color #{literal}")
+    require_text("src/qml/sungsan/SungsanHomeScreen.qml", "text: appName", "home uses the actual application name")
+    require_text("src/qml/sungsan/SungsanHomeScreen.qml", "color: Theme.mainColor", "home header follows the brand palette")
+    require_text("src/qml/sungsan/SungsanFieldPanel.qml", "color: Theme.mainColor", "field header follows the brand palette")
+    require_text("src/qml/sungsan/SungsanActionButton.qml", "property color accentColor: Theme.mainColor", "field actions follow the brand palette")
+    require_text("scripts/build-metaengi-android.sh", 'export APP_NAME="metaeng mobile gis"', "launcher name matches the requested name exactly")
+    for relative in ("values/colors.xml", "values/styles.xml", "values-v31/styles.xml", "drawable/splash.xml"):
+        check_xml("branding/metaengi/android/res/" + relative, "Meta native " + relative)
+    splash = (ROOT / "branding/metaengi/android/res/drawable/splash.xml").read_text(encoding="utf-8")
+    if "metaengi_splash" in splash or "bitmap" in splash:
+        FAILURES.append("Meta splash must not restore the opaque raster logo")
+    require_text("cmake/Package.cmake", "branding/metaengi/android/res/drawable/splash.xml", "Meta vector splash is actually staged into Android")
+    native_name = ET.parse(ROOT / "branding/metaengi/android/res/values/strings.xml").find("string[@name='app_name']")
+    if native_name is None or native_name.text != "metaeng mobile gis":
+        FAILURES.append("Native app_name does not match metaeng mobile gis")
+
     icon_sizes = {
         "mdpi": (48, 48),
         "hdpi": (72, 72),
@@ -189,7 +214,6 @@ def main() -> int:
             dimensions,
         )
 
-    check_png("branding/metaengi/assets/metaengi_splash.png", (1288, 772))
     check_png("branding/metaengi/plugins/sungsan_vworld/icon.png")
     check_xml(
         "branding/metaengi/assets/android/drawable/metaengi_mobile_gis_vector.xml",
@@ -222,8 +246,8 @@ def main() -> int:
     )
     require_text(
         build,
-        'export APP_SPLASH_PATH="/usr/src/qfield/branding/metaengi/assets/metaengi_splash.png"',
-        "splash uses the reviewed Meta Engineering PNG",
+        'export APP_SPLASH_PATH=""',
+        "splash uses the transparent vector instead of the white raster",
     )
     require_text(
         build,
@@ -237,13 +261,13 @@ def main() -> int:
     )
     require_text(
         build,
-        'export APP_VERSION_STR="${APP_VERSION_STR:-1.2.1}"',
-        "Meta Engineering release version is 1.2.1",
+        'export APP_VERSION_STR="${APP_VERSION_STR:-1.2.2}"',
+        "Meta Engineering release version is 1.2.2",
     )
     require_text(
         build,
-        'export APK_VERSION_CODE="${APK_VERSION_CODE:-10201000}"',
-        "Meta Engineering release version code is 10201000",
+        'export APK_VERSION_CODE="${APK_VERSION_CODE:-10202000}"',
+        "Meta Engineering release version code is 10202000",
     )
     workflow = ".github/workflows/metaengi-android.yml"
     require_text(

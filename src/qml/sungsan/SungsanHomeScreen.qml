@@ -36,7 +36,7 @@ Page {
   focus: visible
 
   background: Rectangle {
-    color: "#f3f6fa"
+    color: Theme.mainBackgroundColor
   }
 
   Rectangle {
@@ -44,8 +44,8 @@ Page {
     anchors.left: parent.left
     anchors.right: parent.right
     anchors.top: parent.top
-    height: Math.max(208, root.height * 0.30)
-    color: "#194793"
+    height: Math.max(180, Math.min(224, root.height * 0.25))
+    color: Theme.mainColor
 
     Rectangle {
       width: 270
@@ -55,7 +55,7 @@ Page {
       anchors.rightMargin: -105
       anchors.top: parent.top
       anchors.topMargin: -115
-      color: "#2557a5"
+      color: Qt.lighter(Theme.mainColor, 1.16)
       opacity: 0.7
     }
 
@@ -68,32 +68,28 @@ Page {
       anchors.topMargin: 22 + mainWindow.sceneTopMargin
       spacing: 4
 
-      Rectangle {
-        Layout.preferredWidth: 168
-        Layout.preferredHeight: 54
-        radius: 27
+      Label {
+        text: "메타이엔지"
         color: "#ffffff"
-
-        Label {
-          anchors.centerIn: parent
-          text: "SUNG SAN"
-          color: "#194793"
-          font.pixelSize: 21
-          font.bold: true
-          font.letterSpacing: 1.5
-        }
+        font.pixelSize: 17
+        font.bold: true
+        font.letterSpacing: 1
+        Layout.bottomMargin: 10
       }
 
       Label {
-        text: "메타이엔지 모바일 GIS"
+        Layout.fillWidth: true
+        text: appName
         color: "#ffffff"
         font.pixelSize: 25
+        minimumPixelSize: 18
+        fontSizeMode: Text.Fit
         font.bold: true
       }
 
       Label {
         text: "QGIS에서 준비한 지도를 현장에서 그대로 조사합니다"
-        color: "#dbe8ff"
+        color: "#ffe0da"
         font.pixelSize: 13
         wrapMode: Text.WordWrap
         Layout.maximumWidth: root.width - 48
@@ -123,8 +119,8 @@ Page {
         Layout.fillWidth: true
         Layout.preferredHeight: visible ? 106 : 0
         radius: 18
-        color: "#ffffff"
-        border.color: "#cfdbea"
+        color: Theme.controlBackgroundColor
+        border.color: Theme.controlBorderColor
 
         RowLayout {
           anchors.fill: parent
@@ -135,12 +131,12 @@ Page {
             Layout.preferredWidth: 48
             Layout.preferredHeight: 48
             radius: 14
-            color: "#e9f1ff"
+            color: Theme.controlBackgroundAlternateColor
 
             Label {
               anchors.centerIn: parent
               text: "▣"
-              color: "#194793"
+              color: Theme.mainColor
               font.pixelSize: 24
               font.bold: true
             }
@@ -152,13 +148,13 @@ Page {
 
             Label {
               text: "현재 프로젝트"
-              color: "#64778b"
+              color: Theme.secondaryTextColor
               font.pixelSize: 12
             }
             Label {
               Layout.fillWidth: true
               text: root.currentProjectName.length > 0 ? root.currentProjectName : "열린 프로젝트"
-              color: "#17324d"
+              color: Theme.mainTextColor
               font.pixelSize: 17
               font.bold: true
               elide: Text.ElideMiddle
@@ -171,7 +167,7 @@ Page {
             onClicked: root.continueSurveyRequested()
             background: Rectangle {
               radius: 13
-              color: parent.down ? "#123975" : "#194793"
+              color: parent.down ? Qt.darker(Theme.mainColor, 1.2) : Theme.mainColor
             }
             contentItem: Label {
               text: parent.text
@@ -186,7 +182,7 @@ Page {
 
       Label {
         text: "프로젝트 열기"
-        color: "#17324d"
+        color: Theme.mainTextColor
         font.pixelSize: 17
         font.bold: true
         Layout.topMargin: 2
@@ -232,7 +228,7 @@ Page {
 
         Label {
           text: "최근 사용한 현장"
-          color: "#17324d"
+          color: Theme.mainTextColor
           font.pixelSize: 17
           font.bold: true
           Layout.fillWidth: true
@@ -241,7 +237,7 @@ Page {
         Label {
           visible: recentProjects.count === 0
           text: "아직 없음"
-          color: "#7a8998"
+          color: Theme.secondaryTextColor
           font.pixelSize: 12
         }
       }
@@ -273,8 +269,8 @@ Page {
           Rectangle {
             anchors.fill: parent
             radius: 15
-            color: recentButtonMouseArea.pressed ? "#e9f0f8" : "#ffffff"
-            border.color: "#d9e1e9"
+            color: recentButtonMouseArea.pressed ? Theme.controlBackgroundAlternateColor : Theme.controlBackgroundColor
+            border.color: Theme.controlBorderColor
           }
 
           RowLayout {
@@ -286,11 +282,11 @@ Page {
               Layout.preferredWidth: 40
               Layout.preferredHeight: 40
               radius: 12
-              color: "#eef3f9"
+              color: Theme.controlBackgroundAlternateColor
               Label {
                 anchors.centerIn: parent
                 text: recentButton.projectType === RecentProjectListModel.LinkProject ? "↓" : "▣"
-                color: "#194793"
+                color: Theme.mainColor
                 font.pixelSize: 22
                 font.bold: true
               }
@@ -301,7 +297,7 @@ Page {
               Label {
                 Layout.fillWidth: true
                 text: recentButton.projectTitle.length > 0 ? recentButton.projectTitle : "이름 없는 프로젝트"
-                color: "#17324d"
+                color: Theme.mainTextColor
                 font.pixelSize: 15
                 font.bold: true
                 elide: Text.ElideRight
@@ -309,14 +305,14 @@ Page {
               Label {
                 Layout.fillWidth: true
                 text: recentButton.projectType === RecentProjectListModel.LinkProject ? "온라인 패키지" : recentButton.projectPath
-                color: "#718293"
+                color: Theme.secondaryTextColor
                 font.pixelSize: 11
                 elide: Text.ElideMiddle
               }
             }
             Label {
               text: "열기  ›"
-              color: "#194793"
+              color: Theme.mainColor
               font.pixelSize: 13
               font.bold: true
             }
@@ -357,7 +353,7 @@ Page {
         Layout.fillWidth: true
         Layout.topMargin: 6
         text: "프로젝트를 열면 심볼·라벨·입력 양식이 그대로 적용됩니다."
-        color: "#6e7e8e"
+        color: Theme.secondaryTextColor
         font.pixelSize: 12
         wrapMode: Text.WordWrap
       }
@@ -374,7 +370,7 @@ Page {
           onClicked: root.settingsRequested()
           contentItem: Label {
             text: parent.text
-            color: "#194793"
+            color: Theme.mainColor
             font.pixelSize: 13
             font.bold: true
             horizontalAlignment: Text.AlignHCenter
@@ -385,7 +381,7 @@ Page {
         Rectangle {
           Layout.preferredWidth: 1
           Layout.preferredHeight: 20
-          color: "#d5dde6"
+          color: Theme.controlBorderColor
         }
 
         Button {
@@ -395,7 +391,7 @@ Page {
           onClicked: root.openSourceInformationRequested()
           contentItem: Label {
             text: parent.text
-            color: "#536b82"
+            color: Theme.secondaryTextColor
             font.pixelSize: 13
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
@@ -488,14 +484,14 @@ Page {
         Layout.fillWidth: true
         text: "지역명/현장명을 입력해 주세요."
         wrapMode: Text.WordWrap
-        color: "#17324d"
+        color: Theme.mainTextColor
         font.pixelSize: 15
       }
 
       Label {
         Layout.fillWidth: true
         text: "예시: 경상남도 / 창녕군 OOO 현장 / 20260821"
-        color: "#6e7e8e"
+        color: Theme.secondaryTextColor
         font.pixelSize: 12
       }
 

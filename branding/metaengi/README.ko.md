@@ -1,8 +1,8 @@
-# Meta Engineering GIS 독립 Android 앱
+# metaeng mobile gis 독립 Android 앱
 
-<!-- Modified for Meta Engineering GIS by Sungsan on 2026-08-11. -->
+<!-- Modified for metaeng mobile gis by Sungsan on 2026-08-11. -->
 
-이 폴더는 `Meta Engineering GIS` 전용 화면·작업 흐름·브랜드 자산과 빌드
+이 폴더는 `metaeng mobile gis` 전용 화면·작업 흐름·브랜드 자산과 빌드
 설정을 담습니다. QField v4.2.11 오픈소스 코드는 QGIS 프로젝트 호환 엔진으로만
 사용하며, 일반 사용 화면은 메타이엔지 전용 현장조사 흐름으로 구성합니다. 공식 QField나
 QFieldSync의 설치 폴더를 덮어쓰지 않습니다. 이 포크 소스는 메타이엔지 전용이며,
@@ -10,14 +10,16 @@ QFieldSync의 설치 폴더를 덮어쓰지 않습니다. 이 포크 소스는 �
 
 ## 분리 기준
 
-- 앱 표시 이름: `Meta Engineering GIS`
+- 앱 표시 이름: `metaeng mobile gis`
 - Android 패키지 ID: `kr.co.metaengi.mobilegis`
 - 딥링크 스킴: `metaengimobilegis://`
 - Android 외부 데이터 하위 폴더: `MetaEngiMobileGIS/`
 - 기본 및 사용자 선택 언어: 한국어(`ko`)
 - Android 네이티브 기본 문구: 한국어 69개 리소스(한국어가 아닌 휴대폰
   시스템 언어에서도 초기 권한·저장소·가져오기 대화상자에 메타이엔지 문구 표시)
-- 기본 테마: 메타이엔지 빨간색(`#ef4a3a`)
+- 기본 테마: 메타이엔지 붉은색(`#c52d26`), 밝은 배경(`#fff7f5`)
+- 1.2.2: 홈·현장 도구를 공통 붉은색 테마에 연결하고 성산 배지를 제거했습니다.
+- 시작 화면은 흰색 사각형 PNG 없이 투명 메타 로고 벡터를 표시합니다.
 - 배경지도: QGIS에서 선택한 설정을 유지하며, 사용자가 VWorld 기능을 명시적으로 활성화한 경우에만 프로젝트 레이어 트리의 가장 아래에 추가
 - 기본 작업 흐름: 프로젝트 가져오기 → 현장조사 시작 → GPS/레이어/객체 입력 →
   자동·수동 저장 → 결과 내보내기
@@ -137,7 +139,7 @@ https://api.vworld.kr/req/wmts/1.0.0/{KEY}/Satellite/{z}/{y}/{x}.jpeg
 
 레이어 표시는 `출처: 국토교통부 브이월드`를 포함합니다. 이 구현은 온라인 표시만
 하며 오프라인 대량 다운로드나 사전 캐시 기능을 제공하지 않습니다. 현장 오프라인
-운용은 PC의 QGIS와 메타이엔지 모바일 GIS 플러그인에서 별도 오프라인 배경지도를
+운용은 PC의 QGIS와 metaeng mobile gis 플러그인에서 별도 오프라인 배경지도를
 준비해야 합니다.
 
 QGIS에서 내보낸 프로젝트에 이미 VWorld 레이어가 있으면 번들 플러그인은 같은 서비스 레이어를 중복 추가하지 않습니다. 번들 플러그인은 최초 실행 때 강제로 켜지지 않으며, 사용자가 명시적으로 활성화한 설정만 다음 실행에도 유지합니다.

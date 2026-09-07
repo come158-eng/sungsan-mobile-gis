@@ -6,13 +6,14 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
 import QtQuick.Layouts
+import Theme
 
 Button {
   id: control
 
   property url iconSource
-  property color accentColor: "#194793"
-  property color foregroundColor: enabled ? "#17324d" : "#8b98a5"
+  property color accentColor: Theme.mainColor
+  property color foregroundColor: enabled ? Theme.mainTextColor : Theme.mainTextDisabledColor
   property string detailText: ""
   property bool emphasized: false
   property bool compact: false
@@ -45,7 +46,7 @@ Button {
         Layout.preferredHeight: control.compact ? control.compactIconBoxSize : 40
         Layout.alignment: Qt.AlignVCenter | (control.compact ? Qt.AlignHCenter : 0)
         radius: 12
-        color: control.emphasized ? "#ffffff" : (control.down ? "#dbe7f7" : "#eaf0f8")
+        color: control.emphasized ? "#ffffff" : (control.down ? Theme.groupBoxSurfaceColor : Theme.controlBackgroundAlternateColor)
 
         IconLabel {
           anchors.centerIn: parent
@@ -77,7 +78,7 @@ Button {
           Layout.fillWidth: true
           visible: !control.compact && control.detailText.length > 0
           text: control.detailText
-          color: control.emphasized ? "#dfeaff" : "#66788a"
+          color: control.emphasized ? "#ffe0da" : Theme.secondaryTextColor
           font.pixelSize: 11
           elide: Text.ElideRight
         }
@@ -89,12 +90,12 @@ Button {
     radius: 16
     color: {
       if (!control.enabled)
-        return "#eef1f4";
+        return Theme.controlBackgroundDisabledColor;
       if (control.emphasized)
-        return control.down ? "#123975" : control.accentColor;
-      return control.down ? "#e2eaf4" : "#ffffff";
+        return control.down ? Qt.darker(Theme.mainColor, 1.2) : control.accentColor;
+      return control.down ? Theme.controlBackgroundAlternateColor : Theme.controlBackgroundColor;
     }
     border.width: control.emphasized ? 0 : 1
-    border.color: control.hovered ? control.accentColor : "#d9e1e9"
+    border.color: control.hovered ? control.accentColor : Theme.controlBorderColor
   }
 }

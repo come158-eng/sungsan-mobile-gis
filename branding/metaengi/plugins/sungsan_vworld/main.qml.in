@@ -34,12 +34,12 @@ Item {
       if (layer) {
         layer.deleteLater();
       }
-      iface.logMessage("Meta Engineering GIS: VWorld 위성영상 레이어를 만들지 못했습니다.");
+      iface.logMessage("metaeng mobile gis: VWorld 위성영상 레이어를 만들지 못했습니다.");
       return;
     }
 
     if (!ProjectUtils.addMapLayerAtBottom(qgisProject, layer)) {
-      iface.logMessage("Meta Engineering GIS: VWorld 위성영상 레이어를 프로젝트에 추가하지 못했습니다.");
+      iface.logMessage("metaeng mobile gis: VWorld 위성영상 레이어를 프로젝트에 추가하지 못했습니다.");
     }
   }
 

@@ -48,6 +48,7 @@
   <application
     android:hardwareAccelerated="true"
     android:name="org.qtproject.qt.android.bindings.QtApplication"
+    android:theme="@APP_ANDROID_THEME@"
     android:label="@APP_NAME@"
     android:icon="@AT@drawable/@APP_ICON@"
     android:usesCleartextTraffic="false"

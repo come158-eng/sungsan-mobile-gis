@@ -120,19 +120,20 @@ def check_android_sdk_alignment() -> None:
 def check_configuration(package_name: str, package_id: str) -> None:
     values = {
         "AT": "@",
+        "APP_ANDROID_THEME": "@android:style/Theme.Material.NoActionBar" if package_name == "qfield" else "@style/MetaEngTheme",
         "APP_PACKAGE_NAME": package_name,
         "APP_PACKAGE_ID": package_id,
         "APP_PACKAGE_PATH": package_id.replace(".", "/"),
         "APP_PACKAGE_JNI_NAME": jni_name(package_id),
-        "APP_NAME": "QField" if package_name == "qfield" else "Meta Engineering GIS",
+        "APP_NAME": "QField" if package_name == "qfield" else "metaeng mobile gis",
         "APP_ICON": "qfield_logo" if package_name == "qfield" else "metaengi_mobile_gis",
         "APP_URL_SCHEME": "qfield" if package_name == "qfield" else "metaengimobilegis",
         "APP_DATA_DIR_NAME": "QField" if package_name == "qfield" else "MetaEngiMobileGIS",
-        "APP_POSITIONING_CHANNEL_NAME": "" if package_name == "qfield" else "Meta Engineering GIS",
+        "APP_POSITIONING_CHANNEL_NAME": "" if package_name == "qfield" else "metaeng mobile gis",
         "APP_POSITIONING_CHANNEL_DESCRIPTION": "" if package_name == "qfield" else "메타이엔지 위치 서비스",
         "APP_POSITIONING_NOTIFICATION_TITLE": "" if package_name == "qfield" else "메타이엔지 위치 서비스",
         "APP_POSITIONING_NOTIFICATION_RUNNING_TEXT": "" if package_name == "qfield" else "메타이엔지 위치 서비스가 실행 중입니다",
-        "APP_CLOUD_CHANNEL_NAME": "" if package_name == "qfield" else "Meta Engineering GIS",
+        "APP_CLOUD_CHANNEL_NAME": "" if package_name == "qfield" else "metaeng mobile gis",
         "APP_CLOUD_CHANNEL_DESCRIPTION": "" if package_name == "qfield" else "메타이엔지 데이터 전송 서비스",
         "APP_CLOUD_NOTIFICATION_TITLE": "" if package_name == "qfield" else "메타이엔지 데이터 전송",
         "APP_CLOUD_NOTIFICATION_RUNNING_TEXT": "" if package_name == "qfield" else "현장 첨부 파일을 전송하고 있습니다",
@@ -190,13 +191,13 @@ def check_configuration(package_name: str, package_id: str) -> None:
         assert '"QFieldCloud"' in cloud
     else:
         for expected_text in (
-            "Meta Engineering GIS",
+            "metaeng mobile gis",
             "메타이엔지 위치 서비스",
             "메타이엔지 위치 서비스가 실행 중입니다",
         ):
             assert expected_text in positioning
         for expected_text in (
-            "Meta Engineering GIS",
+            "metaeng mobile gis",
             "메타이엔지 데이터 전송 서비스",
             "메타이엔지 데이터 전송",
             "현장 첨부 파일을 전송하고 있습니다",
@@ -261,8 +262,8 @@ def check_static_wiring() -> None:
         assert f'export {notification_variable}=' in build_sungsan
         assert f'@{notification_variable}@' in package_cmake
     assert 'APP_PACKAGE_ID="kr.co.metaengi.mobilegis"' in build_sungsan
-    assert 'APP_VERSION_STR="${APP_VERSION_STR:-1.2.1}"' in build_sungsan
-    assert 'APK_VERSION_CODE="${APK_VERSION_CODE:-10201000}"' in build_sungsan
+    assert 'APP_VERSION_STR="${APP_VERSION_STR:-1.2.2}"' in build_sungsan
+    assert 'APK_VERSION_CODE="${APK_VERSION_CODE:-10202000}"' in build_sungsan
     assert 'APP_DEFAULT_LANGUAGE="ko"' in build_sungsan
     assert 'APP_URL_SCHEME="metaengimobilegis"' in build_sungsan
     assert 'APP_DATA_DIR_NAME="MetaEngiMobileGIS"' in build_sungsan

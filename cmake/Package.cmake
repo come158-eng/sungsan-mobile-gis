@@ -125,9 +125,22 @@ if(ANDROID AND ANDROIDDEPLOYQT_EXECUTABLE)
         "${METAENGI_ANDROID_DEFAULT_STRINGS}"
         "${ANDROID_TEMPLATE_FOLDER}/res/values/strings.xml"
         COPYONLY)
+      foreach(METAENGI_NATIVE_RESOURCE
+          values/colors.xml values/styles.xml values-v31/styles.xml)
+        configure_file(
+          "${CMAKE_SOURCE_DIR}/branding/metaengi/android/res/${METAENGI_NATIVE_RESOURCE}"
+          "${ANDROID_TEMPLATE_FOLDER}/res/${METAENGI_NATIVE_RESOURCE}"
+          COPYONLY)
+      endforeach()
     endif()
     file(REMOVE ${ANDROID_TEMPLATE_FOLDER}/res/drawable/splash.xml.in)
     configure_file(${CMAKE_SOURCE_DIR}/platform/android/res/drawable/splash.xml.in ${ANDROID_PACKAGE_SOURCE_DIR}/res/drawable/splash.xml @ONLY)
+    if(APP_PACKAGE_ID STREQUAL "kr.co.metaengi.mobilegis")
+      configure_file(
+        "${CMAKE_SOURCE_DIR}/branding/metaengi/android/res/drawable/splash.xml"
+        "${ANDROID_PACKAGE_SOURCE_DIR}/res/drawable/splash.xml"
+        COPYONLY)
+    endif()
     set(DEFAULT_SRC_FOLDER "${ANDROID_TEMPLATE_FOLDER}/src/ch/opengis/qfield")
     set(SRC_FOLDER "${ANDROID_TEMPLATE_FOLDER}/src/${APP_PACKAGE_PATH}")
     if (NOT APP_PACKAGE_ID STREQUAL "ch.opengis.qfield")
