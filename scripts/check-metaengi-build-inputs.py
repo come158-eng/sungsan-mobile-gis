@@ -179,6 +179,8 @@ def main() -> int:
     # literals. Validate the UI inputs as well as the launcher resources.
     for path in (ROOT / "src/qml/sungsan").glob("*.qml"):
         source = path.read_text(encoding="utf-8")
+        if "Theme." in source and not re.search(r"^import org\.qfield(?:\s|$)", source, re.MULTILINE):
+            FAILURES.append(f"{path.name}: Theme singleton requires import org.qfield (not import Theme)")
         if re.search(r"SUNG\s*SAN|성산", source):
             FAILURES.append(f"{path.name}: Sungsan branding remains in the Meta UI")
         for literal in re.findall(r'"#([0-9a-fA-F]{6})"', source):
@@ -230,6 +232,11 @@ def main() -> int:
     check_xml("platform/android/generated.xml.in", "generated Android build strings")
     check_android_manifest_string_resources()
     check_json("branding/metaengi/theme.json", "Meta Engineering theme")
+    palette = json.loads((ROOT / "branding/metaengi/theme.json").read_text(encoding="utf-8"))
+    if palette.get("forceLightAppearance") is not True:
+        FAILURES.append("Meta must remain light even with saved/system dark appearance")
+    require_text("src/qml/QFieldSettings.qml", "enabled: !Theme.appearanceLocked", "locked brand appearance cannot be changed in settings")
+    require_text("branding/metaengi/android/res/values/styles.xml", '<item name="android:forceDarkAllowed">false</item>', "Android automatic darkening is disabled for Meta")
 
     for relative, purpose in (
         ("branding/metaengi/configure-vworld-plugin.cmake", "VWorld generator"),
@@ -261,13 +268,13 @@ def main() -> int:
     )
     require_text(
         build,
-        'export APP_VERSION_STR="${APP_VERSION_STR:-1.2.2}"',
-        "Meta Engineering release version is 1.2.2",
+        'export APP_VERSION_STR="${APP_VERSION_STR:-1.2.3}"',
+        "Meta Engineering release version is 1.2.3",
     )
     require_text(
         build,
-        'export APK_VERSION_CODE="${APK_VERSION_CODE:-10202000}"',
-        "Meta Engineering release version code is 10202000",
+        'export APK_VERSION_CODE="${APK_VERSION_CODE:-10203000}"',
+        "Meta Engineering release version code is 10203000",
     )
     workflow = ".github/workflows/metaengi-android.yml"
     require_text(

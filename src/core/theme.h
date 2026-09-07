@@ -28,7 +28,7 @@ email                : kaustuv@opengis.ch
  * \ingroup core
  *
  * \brief Provides all color, font scale, and layout constants used throughout
- * the QField UI. Registered as a QML singleton under URI "Theme" 1.0.
+ * the QField UI. Registered as a QML singleton under URI "org.qfield" 1.0.
  *
  * \note Default colors are loaded from :/theme/theme.json
  */
@@ -38,6 +38,7 @@ class QFIELD_CORE_EXPORT Theme final : public QObject
 
     Q_PROPERTY( bool darkTheme READ darkTheme WRITE setDarkTheme NOTIFY darkThemeChanged )
     Q_PROPERTY( QString appearance READ appearance WRITE setAppearance NOTIFY appearanceChanged )
+    Q_PROPERTY( bool appearanceLocked READ appearanceLocked CONSTANT )
 
     // Palette tables, exposed for QML code that reads them directly
     Q_PROPERTY( QVariantMap darkThemeColors READ darkThemeColors CONSTANT )
@@ -284,6 +285,7 @@ class QFIELD_CORE_EXPORT Theme final : public QObject
     QColor processingPreview() const { return mProcessingPreview; }
 
     QString appearance() const { return mAppearance; }
+    bool appearanceLocked() const { return mForceLightAppearance; }
     void setAppearance( const QString &appearance );
 
     bool darkTheme() const { return mDarkTheme; }
@@ -343,6 +345,7 @@ class QFIELD_CORE_EXPORT Theme final : public QObject
 
     QVariantMap mDarkThemeColors;
     QVariantMap mLightThemeColors;
+    bool mForceLightAppearance = false;
 
     QColor mMainColor;
     QColor mMainOverlayColor;

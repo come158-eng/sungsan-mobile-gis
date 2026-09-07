@@ -1,0 +1,1 @@
+<RCC><qresource prefix="/theme"><file alias="theme.json">@THEME_JSON@</file></qresource></RCC>

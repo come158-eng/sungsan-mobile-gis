@@ -6,7 +6,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.impl
 import QtQuick.Layouts
-import Theme
+import org.qfield
 
 Button {
   id: control

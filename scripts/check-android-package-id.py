@@ -262,8 +262,8 @@ def check_static_wiring() -> None:
         assert f'export {notification_variable}=' in build_sungsan
         assert f'@{notification_variable}@' in package_cmake
     assert 'APP_PACKAGE_ID="kr.co.metaengi.mobilegis"' in build_sungsan
-    assert 'APP_VERSION_STR="${APP_VERSION_STR:-1.2.2}"' in build_sungsan
-    assert 'APK_VERSION_CODE="${APK_VERSION_CODE:-10202000}"' in build_sungsan
+    assert 'APP_VERSION_STR="${APP_VERSION_STR:-1.2.3}"' in build_sungsan
+    assert 'APK_VERSION_CODE="${APK_VERSION_CODE:-10203000}"' in build_sungsan
     assert 'APP_DEFAULT_LANGUAGE="ko"' in build_sungsan
     assert 'APP_URL_SCHEME="metaengimobilegis"' in build_sungsan
     assert 'APP_DATA_DIR_NAME="MetaEngiMobileGIS"' in build_sungsan

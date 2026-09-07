@@ -34,6 +34,12 @@ Theme::Theme( QObject *parent )
   mAppearance = QSettings().value( QStringLiteral( "appearance" ), QStringLiteral( "system" ) ).toString();
 
   loadFromJson();
+  if ( mForceLightAppearance )
+  {
+    // Migrate an installed brand build even when its saved appearance is dark.
+    mAppearance = QStringLiteral( "light" );
+    QSettings().setValue( QStringLiteral( "appearance" ), mAppearance );
+  }
   applyAppearance();
 }
 
@@ -54,6 +60,7 @@ void Theme::loadFromJson()
   }
 
   const QJsonObject root = doc.object();
+  mForceLightAppearance = root.value( QStringLiteral( "forceLightAppearance" ) ).toBool( false );
   mDarkThemeColors = root.value( QStringLiteral( "darkThemeColors" ) ).toObject().toVariantMap();
   mLightThemeColors = root.value( QStringLiteral( "lightThemeColors" ) ).toObject().toVariantMap();
 
@@ -110,20 +117,25 @@ void Theme::loadFromJson()
 
 void Theme::setAppearance( const QString &appearance )
 {
-  if ( mAppearance == appearance )
+  const QString effectiveAppearance = mForceLightAppearance ? QStringLiteral( "light" ) : appearance;
+  if ( mAppearance == effectiveAppearance )
   {
     return;
   }
 
-  mAppearance = appearance;
+  mAppearance = effectiveAppearance;
   emit appearanceChanged();
 
-  QSettings().setValue( QStringLiteral( "appearance" ), appearance );
+  QSettings().setValue( QStringLiteral( "appearance" ), mAppearance );
   applyAppearance();
 }
 
 void Theme::applyAppearance( const QVariantMap &extraColors, BaseAppearance baseAppearance )
 {
+  if ( mForceLightAppearance )
+  {
+    baseAppearance = LightAppearance;
+  }
   if ( baseAppearance == UseSettingsAppearance )
   {
     if ( mAppearance == QStringLiteral( "dark" ) )
@@ -468,6 +480,10 @@ void Theme::setErrorColor( const QColor &color )
 
 void Theme::setDarkTheme( bool dark )
 {
+  if ( mForceLightAppearance )
+  {
+    dark = false;
+  }
   if ( mDarkTheme == dark )
   {
     return;

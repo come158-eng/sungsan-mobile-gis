@@ -691,7 +691,7 @@ Page {
 
               QfComboBox {
                 id: appearanceComboBox
-                enabled: true
+                enabled: !Theme.appearanceLocked
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
                 font: Theme.defaultFont

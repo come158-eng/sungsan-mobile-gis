@@ -1,4 +1,5 @@
 {
+  "forceLightAppearance": true,
   "darkThemeColors": {
     "mainColor": "#c52d26",
     "mainOverlayColor": "#ffffff",
