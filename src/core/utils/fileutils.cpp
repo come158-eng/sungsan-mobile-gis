@@ -28,6 +28,7 @@
 #include <QFileInfo>
 #include <QImage>
 #include <QImageReader>
+#include <QImageWriter>
 #include <QMimeDatabase>
 #include <QPainter>
 #include <QPainterPath>
