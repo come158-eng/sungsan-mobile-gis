@@ -260,6 +260,11 @@ EditorWidgetBase {
         && sungsanManagedPhotoFields().indexOf(field.name) !== -1;
   }
 
+  function shouldPublishSungsanPhotoToGallery() {
+    return isSungsanManagedFieldPhoto()
+        && Boolean(currentLayer.customProperty('kr.co.sungsan.mobilegis/saveFieldPhotosToGallery'));
+  }
+
   function rememberSungsanPreviousPhoto() {
     sungsanPendingPreviousPhotoPath = isSungsanManagedFieldPhoto() && currentValue
         ? String(currentValue)
@@ -857,6 +862,14 @@ EditorWidgetBase {
           }
         }
         if (isSungsanManagedFieldPhoto()) {
+          const finalPhotoPath = prefixToRelativePath + filepath;
+          const finalPhotoName = FileUtils.fileName(finalPhotoPath, true);
+          if (!cameraLoader.isVideo && !FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)) {
+            mainWindow.displayToast("사진은 저장했지만 하단 사진명 표지를 넣지 못했습니다.", "warning");
+          }
+          if (!cameraLoader.isVideo && shouldPublishSungsanPhotoToGallery()) {
+            platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName);
+          }
           commitSungsanManagedPhoto(filepath);
         } else {
           valueChangeRequested(filepath, false);

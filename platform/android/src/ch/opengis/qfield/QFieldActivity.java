@@ -45,6 +45,7 @@ import android.content.ActivityNotFoundException;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
@@ -91,6 +92,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.content.FileProvider;
@@ -1827,6 +1829,165 @@ public class QFieldActivity extends QtActivity {
                     }
                 }
             });
+    }
+
+    /**
+     * Copies a completed Sungsan field photo into the public Pictures/성산 GIS
+     * album. The project-relative image remains the authoritative file used by
+     * forms and ZIP export; this second copy exists specifically for the user's
+     * gallery. Android 10+ uses MediaStore so no broad photo-library permission
+     * is needed for images created by this app.
+     */
+    public void publishImageToGallery(String sourcePath, String displayName) {
+        if (!SUNGSAN_PACKAGE_ID.equals(getPackageName()) ||
+            sourcePath == null || displayName == null) {
+            return;
+        }
+
+        final File source = new File(sourcePath);
+        final String safeDisplayName = new File(displayName).getName();
+        if (!isValidCapturedResource(source, false) ||
+            safeDisplayName.trim().isEmpty()) {
+            Log.e("QField", "Gallery publication rejected invalid photo");
+            return;
+        }
+
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    publishImageToMediaStore(source, safeDisplayName);
+                } else {
+                    publishImageToLegacyGallery(source, safeDisplayName);
+                }
+            }
+        });
+    }
+
+    private void publishImageToMediaStore(File source, String displayName) {
+        final ContentResolver resolver = getContentResolver();
+        final Uri collection = MediaStore.Images.Media.getContentUri(
+            MediaStore.VOLUME_EXTERNAL_PRIMARY);
+        final String relativePath =
+            Environment.DIRECTORY_PICTURES + "/성산 GIS/";
+        final String temporaryName =
+            ".sungsan_" + System.currentTimeMillis() + "_" + displayName;
+        Uri newImage = null;
+
+        try {
+            ContentValues values = new ContentValues();
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, temporaryName);
+            values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, relativePath);
+            values.put(MediaStore.Images.Media.IS_PENDING, 1);
+            newImage = resolver.insert(collection, values);
+            if (newImage == null) {
+                throw new IOException("MediaStore insert returned null");
+            }
+
+            try (FileInputStream input = new FileInputStream(source);
+                 OutputStream output = resolver.openOutputStream(newImage,
+                                                                  "w")) {
+                if (output == null ||
+                    !QFieldUtils.inputStreamToOutputStream(
+                        input, output, source.length())) {
+                    throw new IOException("MediaStore photo copy failed");
+                }
+            }
+
+            // Replace only an older copy created by this application, with the
+            // exact same requested name in our own album. The freshly written
+            // temporary row cannot match this selection.
+            try {
+                resolver.delete(
+                    collection,
+                    MediaStore.Images.Media.DISPLAY_NAME + "=? AND " +
+                        MediaStore.Images.Media.RELATIVE_PATH + "=? AND " +
+                        MediaStore.Images.Media.OWNER_PACKAGE_NAME + "=?",
+                    new String[] {displayName, relativePath,
+                                  getPackageName()});
+            } catch (Exception replacementException) {
+                // A reinstall changes MediaStore ownership. Keep the new copy
+                // instead of failing merely because an older copy cannot be
+                // removed without a user confirmation dialog.
+                Log.w("QField", "Older gallery photo was retained",
+                      replacementException);
+            }
+
+            values.clear();
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, displayName);
+            values.put(MediaStore.Images.Media.IS_PENDING, 0);
+            if (resolver.update(newImage, values, null, null) <= 0) {
+                throw new IOException("MediaStore publication update failed");
+            }
+            Log.i("QField", "Published field photo to gallery: " +
+                                displayName);
+            showSungsanGalleryResult(true);
+        } catch (Exception exception) {
+            Log.e("QField", "Unable to publish field photo to gallery",
+                  exception);
+            if (newImage != null) {
+                try {
+                    resolver.delete(newImage, null, null);
+                } catch (Exception cleanupException) {
+                    Log.w("QField", "Unable to remove failed gallery row",
+                          cleanupException);
+                }
+            }
+            showSungsanGalleryResult(false);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void publishImageToLegacyGallery(File source,
+                                             String displayName) {
+        File pictures = Environment.getExternalStoragePublicDirectory(
+            Environment.DIRECTORY_PICTURES);
+        File album = new File(pictures, "성산 GIS");
+        if (!album.exists() && !album.mkdirs()) {
+            Log.e("QField", "Unable to create legacy gallery album");
+            return;
+        }
+
+        File destination = new File(album, displayName);
+        File staged = new File(album, ".sungsan_" +
+                                          System.currentTimeMillis() + ".tmp");
+        try {
+            if (!durableCopy(source, staged)) {
+                throw new IOException("Legacy gallery staging failed");
+            }
+            if (destination.exists() && !destination.delete()) {
+                throw new IOException("Legacy gallery replacement failed");
+            }
+            if (!staged.renameTo(destination)) {
+                throw new IOException("Legacy gallery commit failed");
+            }
+            MediaScannerConnection.scanFile(
+                this, new String[] {destination.getAbsolutePath()},
+                new String[] {"image/jpeg"}, null);
+            showSungsanGalleryResult(true);
+        } catch (Exception exception) {
+            Log.e("QField", "Unable to publish legacy gallery photo",
+                  exception);
+            if (staged.exists() && !staged.delete()) {
+                Log.w("QField", "Unable to remove failed gallery staging");
+            }
+            showSungsanGalleryResult(false);
+        }
+    }
+
+    private void showSungsanGalleryResult(final boolean success) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(
+                    QFieldActivity.this,
+                    success
+                        ? "사진을 갤러리의 '성산 GIS' 앨범에도 저장했습니다."
+                        : "프로젝트 사진은 저장했지만 갤러리 저장에 실패했습니다.",
+                    Toast.LENGTH_SHORT).show();
+            }
+        });
     }
 
     private boolean isValidCapturedResource(File file, boolean isVideo) {

@@ -124,13 +124,20 @@ check("managed photo marker", "kr.co.sungsan.mobilegis/managedFieldPhotos" in UT
 check("managed photo field list", "kr.co.sungsan.mobilegis/fieldPhotoFields" in UTILS)
 check("configured photo object-name field", "kr.co.sungsan.mobilegis/photoObjectNameField" in UTILS)
 check("configured layer photo folder", "kr.co.sungsan.mobilegis/fieldPhotoFolder" in UTILS)
-check("gallery duplicate helper removed", "publishSungsanFieldPhotoToGallery" not in ANDROID_ACTIVITY)
-check("gallery duplicate-copy wording removed", "Keeps a second copy" not in ANDROID_ACTIVITY)
-check("legacy duplicate gallery album removed", '"/성산 GIS/"' not in ANDROID_ACTIVITY)
 check(
-    "no second MediaStore photo is created",
-    "MediaStore.Images.Media.RELATIVE_PATH" not in ANDROID_ACTIVITY
-    and "MediaStore.Images.Media.IS_PENDING" not in ANDROID_ACTIVITY,
+    "default project publishes captured photos to a named gallery album",
+    "kr.co.sungsan.mobilegis/saveFieldPhotosToGallery" in UTILS
+    and "shouldPublishSungsanPhotoToGallery" in EXTERNAL_RESOURCE
+    and "platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName)"
+    in EXTERNAL_RESOURCE
+    and "public void publishImageToGallery" in ANDROID_ACTIVITY
+    and 'Environment.DIRECTORY_PICTURES + "/성산 GIS/"' in ANDROID_ACTIVITY,
+)
+check(
+    "captured photo embeds its filename in a white lower board",
+    "FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)"
+    in EXTERNAL_RESOURCE
+    and "사진명 표지" in EXTERNAL_RESOURCE,
 )
 check(
     "project photo itself is media-scanned",

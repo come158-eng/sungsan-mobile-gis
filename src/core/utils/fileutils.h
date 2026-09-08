@@ -138,6 +138,16 @@ class QFIELD_CORE_EXPORT FileUtils : public QObject
      */
     Q_INVOKABLE static void addImageStamp( const QString &imagePath, const QString &text, const QString &textFormat = QString(), Qgis::TextHorizontalAlignment horizontalAlignment = Qgis::TextHorizontalAlignment::Left, const QString &imageDecoration = QString() );
 
+    /**
+     * Appends a compact white board containing \a photoName below an image.
+     *
+     * The image pixels are auto-oriented before the board is added and existing
+     * EXIF metadata is restored, except for the now-obsolete orientation tag.
+     * This is used by Sungsan field photos so printed and gallery copies remain
+     * identifiable without obscuring the photographed scene.
+     */
+    Q_INVOKABLE static bool addImageNameBoard( const QString &imagePath, const QString &photoName );
+
     static bool copyRecursively( const QString &sourceFolder, const QString &destFolder, QgsFeedback *feedback = nullptr, bool wipeDestFolder = true );
 
     /**

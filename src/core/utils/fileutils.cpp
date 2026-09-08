@@ -44,6 +44,8 @@
 #include <qgstextformat.h>
 #include <qgstextrenderer.h>
 
+#include <algorithm>
+
 #include <filesystem>
 #include <zip.h>
 #include <zlib.h>
@@ -524,6 +526,74 @@ void FileUtils::addImageStamp( const QString &imagePath, const QString &text, co
       QgsExifTools::tagImage( imagePath, key, metadata[key] );
     }
   }
+}
+
+bool FileUtils::addImageNameBoard( const QString &imagePath, const QString &photoName )
+{
+  if ( imagePath.trimmed().isEmpty() || photoName.trimmed().isEmpty()
+       || !QFileInfo::exists( imagePath ) || !isWithinProjectDirectory( imagePath ) )
+  {
+    return false;
+  }
+
+  const QVariantMap metadata = QgsExifTools::readTags( imagePath );
+  QImageReader reader( imagePath );
+  reader.setAutoTransform( true );
+  const QByteArray imageFormat = reader.format();
+  const QImage source = reader.read();
+  if ( source.isNull() )
+  {
+    return false;
+  }
+
+  // Keep the board intentionally small: roughly 4.5 percent of the shorter
+  // image side, bounded so both phone and high-resolution GNSS site photos
+  // remain readable without covering any of the original pixels.
+  const int boardHeight = std::clamp( qRound( std::min( source.width(), source.height() ) * 0.045 ), 42, 120 );
+  QImage result( source.width(), source.height() + boardHeight, QImage::Format_RGB32 );
+  result.fill( Qt::white );
+
+  QPainter painter( &result );
+  painter.setRenderHint( QPainter::TextAntialiasing );
+  painter.drawImage( 0, 0, source );
+  painter.setPen( QColor( 210, 210, 210 ) );
+  painter.drawLine( 0, source.height(), result.width(), source.height() );
+
+  QFont font = painter.font();
+  font.setPixelSize( std::clamp( qRound( boardHeight * 0.38 ), 18, 44 ) );
+  font.setWeight( QFont::Medium );
+  painter.setFont( font );
+  painter.setPen( QColor( 25, 25, 25 ) );
+
+  const int horizontalPadding = std::max( 16, boardHeight / 3 );
+  const QRect textRect( horizontalPadding, source.height(), result.width() - horizontalPadding * 2, boardHeight );
+  const QString displayText = painter.fontMetrics().elidedText( photoName.trimmed(), Qt::ElideMiddle, textRect.width() );
+  painter.drawText( textRect, Qt::AlignCenter | Qt::TextSingleLine, displayText );
+  painter.end();
+
+  QSaveFile saveFile( imagePath );
+  if ( !saveFile.open( QIODevice::WriteOnly ) )
+  {
+    return false;
+  }
+
+  QImageWriter writer( &saveFile, imageFormat.isEmpty() ? QByteArrayLiteral( "jpg" ) : imageFormat );
+  writer.setTransformation( QImageIOHandler::TransformationNone );
+  writer.setQuality( 95 );
+  if ( !writer.write( result ) || !saveFile.commit() )
+  {
+    saveFile.cancelWriting();
+    return false;
+  }
+
+  for ( const QString &key : metadata.keys() )
+  {
+    if ( key != QLatin1String( "Exif.Image.Orientation" ) )
+    {
+      QgsExifTools::tagImage( imagePath, key, metadata[key] );
+    }
+  }
+  return true;
 }
 
 bool FileUtils::isWithinProjectDirectory( const QString &filePath )

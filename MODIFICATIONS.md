@@ -21,10 +21,14 @@ before vcpkg starts. The manual workflow also restores and saves versioned
 vcpkg binary packages so a late application failure does not require rebuilding
 every completed dependency on the next run.
 
-This source is Sungsan Mobile GIS `1.2.1-sungsan-release`
-(`versionCode 10201000`). The production field release adds explicit LandStar
+This source is Sungsan Mobile GIS `1.2.2-sungsan-release`
+(`versionCode 10202000`). The production field release adds explicit LandStar
 CRS confirmation, source evidence retention, external GNSS freshness checks,
 relation-backed unlimited point photos, and the generic field-project template.
+The 1.2.2 field-photo pass appends a compact white filename board without
+covering the captured pixels and publishes the completed managed photo to the
+public `Pictures/성산 GIS` album through scoped MediaStore, while retaining the
+project-relative original used by forms and ZIP export.
 Beta3 removes SVG rendering and Qt Quick graphical
 effects from the initial Sungsan home and field controls after a Fold7 startup
 failure, while preserving the branded Korean workflow. Beta2 adds the archive, project-read, Qt-thread and
@@ -101,7 +105,12 @@ older beta1 artifact name.
   language, package ID, independent Sungsan settings identity and custom data
   directory.
 - `src/core/CMakeLists.txt`, `src/core/platforms/**`: generated branding values,
-  Android package/JNI separation and asset update revision.
+  Android package/JNI separation, asset update revision, and a scoped
+  MediaStore publisher for user-requested gallery copies of field photos.
+- `src/core/utils/fileutils.*`, `src/qml/editorwidgets/ExternalResource.qml`:
+  atomic managed-photo replacement followed by an orientation-safe white
+  filename board and gallery publication using the final `(1)` through `(4)`
+  object filename.
 - `src/core/qgismobileapp.cpp`: configurable application URL scheme, explicit
   Sungsan QML branding flag, branded network user agent and print-layout stamp.
   Beta2 respects `QgsProject::read()` failure, clears incomplete state and

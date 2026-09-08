@@ -778,6 +778,7 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
 
   layer->setCustomProperty( QStringLiteral( "QFieldSync/attachment_naming" ),
                             QString::fromUtf8( QJsonDocument( attachmentNaming ).toJson( QJsonDocument::Compact ) ) );
+  layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/saveFieldPhotosToGallery" ), true );
   layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/managedFieldPhotos" ), true );
   layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ),
                             QString::fromUtf8( QJsonDocument( photoFieldsJson ).toJson( QJsonDocument::Compact ) ) );

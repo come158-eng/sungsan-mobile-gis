@@ -466,14 +466,28 @@ check(
 )
 
 
-# A second MediaStore/Pictures copy violates the single-original contract.
-check("gallery copy helper removed", "publishSungsanFieldPhotoToGallery" not in ANDROID_ACTIVITY)
-check("gallery duplicate-copy wording removed", "Keeps a second copy" not in ANDROID_ACTIVITY)
-check("legacy duplicate gallery album removed", '"/성산 GIS/"' not in ANDROID_ACTIVITY)
 check(
-    "no second MediaStore photo is created",
-    "MediaStore.Images.Media.RELATIVE_PATH" not in ANDROID_ACTIVITY
-    and "MediaStore.Images.Media.IS_PENDING" not in ANDROID_ACTIVITY,
+    "managed photos request a public gallery copy",
+    "shouldPublishSungsanPhotoToGallery" in EXTERNAL_RESOURCE
+    and "platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName)"
+    in EXTERNAL_RESOURCE
+    and "kr.co.sungsan.mobilegis/saveFieldPhotosToGallery" in BRIDGE_CPP,
+)
+check(
+    "Android 10+ gallery copy uses scoped MediaStore",
+    "public void publishImageToGallery" in ANDROID_ACTIVITY
+    and "MediaStore.Images.Media.RELATIVE_PATH" in ANDROID_ACTIVITY
+    and "MediaStore.Images.Media.IS_PENDING" in ANDROID_ACTIVITY
+    and 'Environment.DIRECTORY_PICTURES + "/성산 GIS/"' in ANDROID_ACTIVITY,
+)
+check(
+    "field photo receives a compact white filename board before gallery publication",
+    "Q_INVOKABLE static bool addImageNameBoard" in FILE_UTILS_H
+    and "bool FileUtils::addImageNameBoard" in FILE_UTILS_CPP
+    and "result.fill( Qt::white )" in FILE_UTILS_CPP
+    and "FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)" in EXTERNAL_RESOURCE
+    and EXTERNAL_RESOURCE.find("FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)")
+    < EXTERNAL_RESOURCE.find("platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName)"),
 )
 check("captured file is validated before replacement", "isValidCapturedResource" in ANDROID_ACTIVITY)
 check(

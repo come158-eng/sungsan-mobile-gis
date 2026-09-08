@@ -60,6 +60,7 @@ class AndroidPlatformUtilities : public PlatformUtilities
 
     ResourceSource *getCameraPicture( const QString &prefix, const QString &pictureFilePath, const QString &suffix, QObject *parent = nullptr ) override;
     ResourceSource *getCameraVideo( const QString &prefix, const QString &videoFilePath, const QString &suffix, QObject *parent = nullptr ) override;
+    void publishImageToGallery( const QString &imagePath, const QString &displayName ) const override;
     ResourceSource *getGalleryPicture( const QString &prefix, const QString &pictureFilePath, QObject *parent = nullptr ) override;
     ResourceSource *getGalleryVideo( const QString &prefix, const QString &videoFilePath, QObject *parent = nullptr ) override;
     ResourceSource *getFile( const QString &prefix, const QString &filePath, const QString &mimeType, QObject *parent = nullptr ) override;
