@@ -39,6 +39,8 @@ Item {
   property bool geometryInProgress: false
   property bool geometryValid: false
   property bool moreExpanded: false
+  property bool dockCollapsed: false
+  property real mapRotation: 0
   readonly property real dockHorizontalMargin: 12
   readonly property real actionSpacing: 8
   readonly property real actionButtonHeight: 80
@@ -47,6 +49,7 @@ Item {
   readonly property real reservedTop: fieldHeader.height
 
   signal homeRequested
+  signal northUpRequested
   signal startSurveyRequested
   signal currentLocationRequested(string source)
   signal gnssSettingsRequested
@@ -64,6 +67,43 @@ Item {
 
   visible: projectLoaded
   enabled: visible
+
+  onGeometryInProgressChanged: {
+    if (geometryInProgress)
+      dockCollapsed = false;
+  }
+
+  Button {
+    anchors.top: fieldHeader.bottom
+    anchors.right: parent.right
+    anchors.topMargin: 12
+    anchors.rightMargin: 12 + mainWindow.sceneRightMargin
+    width: 52
+    height: 64
+    Accessible.name: "북쪽을 위로 맞추기"
+    onClicked: root.northUpRequested()
+    background: Rectangle {
+      radius: 14
+      color: parent.down ? "#e4ecf7" : "#ffffff"
+      border.color: "#b9c8db"
+    }
+    contentItem: Column {
+      spacing: 2
+      Label {
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: "▲"
+        rotation: root.mapRotation
+        color: "#194793"
+        font.pixelSize: 22
+      }
+      Label {
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: "북쪽"
+        color: "#194793"
+        font.pixelSize: 11
+      }
+    }
+  }
 
   Rectangle {
     id: fieldHeader
@@ -211,6 +251,29 @@ Item {
         width: Math.max(0, dockFlickable.width - root.dockHorizontalMargin * 2 - mainWindow.sceneLeftMargin - mainWindow.sceneRightMargin)
         spacing: root.actionSpacing
 
+      Button {
+        Layout.fillWidth: true
+        Layout.preferredHeight: 44
+        text: root.dockCollapsed ? "조작 펼치기 ︿" : "패널 내리기 ﹀"
+        Accessible.name: text
+        onClicked: {
+          root.dockCollapsed = !root.dockCollapsed;
+          dockFlickable.contentY = 0;
+        }
+        contentItem: Label {
+          text: parent.text
+          color: "#194793"
+          font.pixelSize: 12
+          font.bold: true
+          horizontalAlignment: Text.AlignHCenter
+          verticalAlignment: Text.AlignVCenter
+        }
+        background: Rectangle {
+          radius: 10
+          color: parent.down ? "#e4ecf7" : "transparent"
+        }
+      }
+
       RowLayout {
         Layout.fillWidth: true
         spacing: 8
@@ -261,6 +324,7 @@ Item {
       }
 
       GridLayout {
+        visible: !root.dockCollapsed
         Layout.fillWidth: true
         columns: root.actionColumns
         columnSpacing: root.actionSpacing
@@ -308,7 +372,7 @@ Item {
       }
 
       SungsanActionButton {
-        visible: root.editableVectorLayer
+        visible: !root.dockCollapsed && root.editableVectorLayer
         Layout.fillWidth: true
         Layout.preferredHeight: root.actionButtonHeight
         text: root.existingFeatureSelectionPending ? "객체 선택 취소" : "객체 사진·속성"
@@ -323,6 +387,7 @@ Item {
       Button {
         Layout.fillWidth: true
         Layout.preferredHeight: 34
+        visible: !root.dockCollapsed
         flat: true
         text: root.moreExpanded ? "간단히 보기 ︿" : "더보기 · 자동저장 / 결과 내보내기 ﹀"
         onClicked: root.moreExpanded = !root.moreExpanded
@@ -337,7 +402,7 @@ Item {
       }
 
       GridLayout {
-        visible: root.moreExpanded
+        visible: !root.dockCollapsed && root.moreExpanded
         Layout.fillWidth: true
         columns: Math.min(2, root.actionColumns)
         columnSpacing: root.actionSpacing
@@ -376,7 +441,7 @@ Item {
       }
 
       GridLayout {
-        visible: root.editMode && root.multiVertexLayer
+        visible: !root.dockCollapsed && root.editMode && root.multiVertexLayer
         Layout.fillWidth: true
         columns: root.actionColumns
         columnSpacing: root.actionSpacing

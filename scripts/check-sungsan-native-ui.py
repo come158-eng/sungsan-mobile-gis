@@ -365,7 +365,7 @@ def check_shell_wiring() -> None:
         FAILURES.append(f"{panel}: layer access must appear exactly once in the field UI")
     else:
         PASSES.append("Sungsan field UI exposes one non-duplicated layer button")
-    require(panel, "visible: root.editMode && root.multiVertexLayer", "line and polygon controls stay hidden for point layers")
+    require(panel, "visible: !root.dockCollapsed && root.editMode && root.multiVertexLayer", "line and polygon controls stay hidden for point layers and collapsed dock")
     require(panel, 'text: root.pointLayer ? "지점 추가" : "객체 추가"', "point capture has one direct add action")
     require(panel, "property bool editableVectorLayer: false", "field panel tracks whether the selected layer is an editable vector layer")
     require(panel, "property bool canEditExistingFeature: false", "field panel exposes generic existing-feature edit capability")
@@ -399,7 +399,7 @@ def check_shell_wiring() -> None:
     require(panel, 'text: "외부 GNSS 연결"', "generic external GNSS setup is exposed in the field panel")
     require(panel, "CHCNAV 포함 표준 NMEA", "GNSS setup describes model-independent NMEA compatibility")
     require(panel, "Bluetooth/BLE · TCP/UDP", "GNSS setup lists the supported receiver transports")
-    require(panel, "visible: root.editableVectorLayer", "existing-feature action covers every editable vector geometry")
+    require(panel, "visible: !root.dockCollapsed && root.editableVectorLayer", "existing-feature action covers every editable vector geometry when expanded")
     require(panel, "enabled: root.canEditExistingFeature", "existing-feature action follows update capability")
     require(panel, "onClicked: root.editExistingFeatureRequested()", "existing-feature action emits the generic request")
     for obsolete_name in (

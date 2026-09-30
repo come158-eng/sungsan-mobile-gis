@@ -5865,6 +5865,13 @@ ApplicationWindow {
 
     onCurrentLocationRequested: mainWindow.sungsanShowCurrentLocation(source)
 
+    mapRotation: mapCanvas.mapSettings.rotation
+    onNorthUpRequested: {
+      positioningSettings.positionFollowMode = PositioningSettings.FollowMode.PositionOnly;
+      mapCanvas.mapSettings.rotation = 0;
+      displayToast("북쪽을 위로 맞췄습니다.");
+    }
+
     onGnssSettingsRequested: {
       qfieldSettings.reset();
       qfieldSettings.currentPanel = 1;
