@@ -1,4 +1,22 @@
-# Sungsan Mobile GIS modifications
+# Meta Engineering GIS modifications
+
+## Meta 1.2.4 / 10204000 (2026-10-07)
+
+All runtime changes in Sungsan release 818600068f7df3c7b166cfb5f42bab1bef6f821e
+since the shared c7d8f4d baseline are carried into the Meta application:
+
+- 1e0d4f7 and ed6108d: append the filename board to newly captured managed
+  photos and publish a gallery copy; preserve orientation and project exports.
+  The album is `Pictures/메타이엔지 GIS`, with Meta package ownership and
+  `kr.co.metaengi.mobilegis` project properties.
+- bb2c37f: collapsible field controls with GPS/save status retained, automatic
+  expansion when digitizing starts, and north-up without stopping GPS tracking.
+- 8186000: stop requesting the removed legacy Android SDK tools package.
+
+Meta's independent package, shared approved release signer, generic device
+approval title, red/light appearance and transparent vector splash are retained.
+Sungsan-only release metadata and blue branding are intentionally not copied.
+Historical upstream modification notes follow.
 
 - 2026-08-19: Stage the configured Android `git_rev` string under
   `res/values/generated.xml` and add an early Manifest resource-link check so

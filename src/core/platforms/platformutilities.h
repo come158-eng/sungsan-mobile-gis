@@ -189,6 +189,16 @@ class QFIELD_CORE_EXPORT PlatformUtilities : public QObject
     Q_INVOKABLE virtual ResourceSource *getCameraVideo( const QString &prefix, const QString &videoFilePath, const QString &suffix, QObject *parent = nullptr );
 
     /**
+     * Publishes a copy of an application image to the platform photo gallery.
+     * Platforms without a public photo collection safely ignore the request.
+     */
+    Q_INVOKABLE virtual void publishImageToGallery( const QString &imagePath, const QString &displayName ) const
+    {
+      Q_UNUSED( imagePath )
+      Q_UNUSED( displayName )
+    }
+
+    /**
      * Get a picture from gallery and copy it to the requested prefix
      * @param prefix The project folder
      * @param pictureFilePath The path (including subfolders and name) of the file

@@ -268,13 +268,13 @@ def main() -> int:
     )
     require_text(
         build,
-        'export APP_VERSION_STR="${APP_VERSION_STR:-1.2.3}"',
-        "Meta Engineering release version is 1.2.3",
+        'export APP_VERSION_STR="${APP_VERSION_STR:-1.2.4}"',
+        "Meta Engineering release version is 1.2.4",
     )
     require_text(
         build,
-        'export APK_VERSION_CODE="${APK_VERSION_CODE:-10203000}"',
-        "Meta Engineering release version code is 10203000",
+        'export APK_VERSION_CODE="${APK_VERSION_CODE:-10204000}"',
+        "Meta Engineering release version code is 10204000",
     )
     workflow = ".github/workflows/metaengi-android.yml"
     require_text(

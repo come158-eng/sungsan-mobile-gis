@@ -507,6 +507,35 @@ ResourceSource *AndroidPlatformUtilities::getCameraVideo( const QString &prefix,
   return processCameraActivity( prefix, videoFilePath, suffix, true, parent );
 }
 
+void AndroidPlatformUtilities::publishImageToGallery( const QString &imagePath, const QString &displayName ) const
+{
+  if ( imagePath.trimmed().isEmpty() || displayName.trimmed().isEmpty() || !mActivity.isValid()
+       || !FileUtils::isWithinProjectDirectory( imagePath ) )
+  {
+    return;
+  }
+
+  // Android 10+ lets an app publish its own MediaStore image without a broad
+  // storage permission. The single supported legacy level (API 28) still
+  // requires WRITE_EXTERNAL_STORAGE at runtime.
+  if ( qtAndroidSkdVersion() < 29
+       && !checkAndAcquirePermissions( { QStringLiteral( "android.permission.WRITE_EXTERNAL_STORAGE" ) } ) )
+  {
+    return;
+  }
+
+  runOnAndroidMainThread( [imagePath, displayName] {
+    auto activity = qtAndroidContext();
+    if ( activity.isValid() )
+    {
+      const QJniObject imagePathJni = QJniObject::fromString( imagePath );
+      const QJniObject displayNameJni = QJniObject::fromString( displayName );
+      activity.callMethod<void>( "publishImageToGallery", "(Ljava/lang/String;Ljava/lang/String;)V",
+                                 imagePathJni.object<jstring>(), displayNameJni.object<jstring>() );
+    }
+  } );
+}
+
 ResourceSource *AndroidPlatformUtilities::processGalleryActivity( const QString &prefix, const QString &filePath, const QString &mimeType, QObject *parent )
 {
   const QFileInfo destinationInfo( prefix + filePath );
