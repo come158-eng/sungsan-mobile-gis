@@ -929,6 +929,15 @@ def main() -> int:
     check_android_bridge()
     check_vworld()
     check_vworld_plugin_restore()
+    # A killed or hanging project must not trap the next ordinary launch.
+    startup = read("src/core/qgismobileapp.cpp").split("void QgisMobileapp::onAfterFirstRendering()", 1)[1].split("void QgisMobileapp::onMapCanvasRefreshed()", 1)[0]
+    if "loadProjectFile(" in startup or "lastProjectFilePath" in startup:
+        FAILURES.append("ordinary startup must not auto-open default/last projects")
+    else:
+        PASSES.append("ordinary startup stays at Home")
+    require("src/qml/sungsan/SungsanFieldPanel.qml", 'objectName: "sungsanNorthButton"', "dedicated north button")
+    require("src/qml/sungsan/SungsanFieldPanel.qml", "anchors.centerIn: parent", "centered north content")
+    forbid("src/qml/sungsan/SungsanFieldPanel.qml", 'text: "▲"', "font-dependent north arrow removed")
 
     if FAILURES:
         print(f"FAIL: {len(FAILURES)} issue(s); {len(PASSES)} static checks passed")

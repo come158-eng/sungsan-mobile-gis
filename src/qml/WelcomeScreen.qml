@@ -760,6 +760,7 @@ Page {
             Layout.leftMargin: 10
             Layout.rightMargin: 10
             Layout.bottomMargin: mainWindow.sceneBottomMargin
+            visible: false // Sungsan always starts at Home for load-failure recovery.
             Label {
               Layout.fillWidth: true
               Layout.alignment: Qt.AlignVCenter

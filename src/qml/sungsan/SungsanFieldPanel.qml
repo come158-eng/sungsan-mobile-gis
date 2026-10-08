@@ -74,12 +74,16 @@ Item {
   }
 
   Button {
+    id: northButton
+    objectName: "sungsanNorthButton"
     anchors.top: fieldHeader.bottom
     anchors.right: parent.right
     anchors.topMargin: 12
     anchors.rightMargin: 12 + mainWindow.sceneRightMargin
-    width: 52
-    height: 64
+    width: 60
+    height: 80
+    padding: 8
+    clip: true
     Accessible.name: "북쪽을 위로 맞추기"
     onClicked: root.northUpRequested()
     background: Rectangle {
@@ -87,20 +91,53 @@ Item {
       color: parent.down ? "#e4ecf7" : "#ffffff"
       border.color: "#b9c8db"
     }
-    contentItem: Column {
-      spacing: 2
-      Label {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: "▲"
-        rotation: root.mapRotation
-        color: "#194793"
-        font.pixelSize: 22
-      }
-      Label {
-        anchors.horizontalCenter: parent.horizontalCenter
-        text: "북쪽"
-        color: "#194793"
-        font.pixelSize: 11
+    contentItem: Item {
+      Column {
+        anchors.centerIn: parent
+        spacing: 5
+        Item {
+          width: 36
+          height: 36
+          anchors.horizontalCenter: parent.horizontalCenter
+          Rectangle {
+            anchors.fill: parent
+            radius: 18
+            color: "#f0f5fc"
+            border.color: "#d5e1ef"
+          }
+          Canvas {
+            anchors.centerIn: parent
+            width: 28
+            height: 28
+            rotation: root.mapRotation
+            onPaint: {
+              const ctx = getContext("2d");
+              ctx.clearRect(0, 0, width, height);
+              ctx.beginPath();
+              ctx.moveTo(14, 2);
+              ctx.lineTo(21, 22);
+              ctx.lineTo(14, 18);
+              ctx.closePath();
+              ctx.fillStyle = "#194793";
+              ctx.fill();
+              ctx.beginPath();
+              ctx.moveTo(14, 2);
+              ctx.lineTo(7, 22);
+              ctx.lineTo(14, 18);
+              ctx.closePath();
+              ctx.fillStyle = "#6b91c7";
+              ctx.fill();
+            }
+          }
+        }
+        Label {
+          anchors.horizontalCenter: parent.horizontalCenter
+          text: "북쪽"
+          color: "#194793"
+          font.pixelSize: 11
+          font.bold: true
+          horizontalAlignment: Text.AlignHCenter
+        }
       }
     }
   }

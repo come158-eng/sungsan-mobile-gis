@@ -742,26 +742,9 @@ void QgisMobileapp::onAfterFirstRendering()
     {
       PlatformUtilities::instance()->loadQgsProject();
     }
-    else
-    {
-      if ( QSettings().value( "/QField/loadProjectOnLaunch", true ).toBool() )
-      {
-        QSettings settings;
-        const QString defaultProject = settings.value( QStringLiteral( "QField/defaultProject" ), QString() ).toString();
-        if ( !defaultProject.isEmpty() && QFileInfo::exists( defaultProject ) )
-        {
-          loadProjectFile( defaultProject );
-        }
-        else
-        {
-          const QString lastProjectFilePath = settings.value( QStringLiteral( "QField/lastProjectFilePath" ), QString() ).toString();
-          if ( !lastProjectFilePath.isEmpty() && QFileInfo::exists( lastProjectFilePath ) )
-          {
-            loadProjectFile( lastProjectFilePath );
-          }
-        }
-      }
-    }
+    // Sungsan safety: ordinary launches always start at Home. Never replay a
+    // default/last project after a provider hangs or the process is killed.
+    // Explicit Android file-open actions above are still honored.
     rootObjects().first()->setProperty( "sceneLoaded", true );
     mFirstRenderingFlag = false;
   }
@@ -812,7 +795,10 @@ bool QgisMobileapp::loadProjectFile( const QString &path, const QString &name )
 void QgisMobileapp::reloadProjectFile()
 {
   if ( mProjectFilePath.isEmpty() )
+  {
     QgsMessageLog::logMessage( tr( "No project file currently opened" ), QStringLiteral( "QField" ), Qgis::Warning );
+    return;
+  }
 
   emit loadProjectTriggered( mProjectFilePath, mProjectFileName );
 }
@@ -831,8 +817,6 @@ void QgisMobileapp::readProjectFile()
     emit loadProjectEnded( QString(), QString() );
     return;
   }
-
-  QSettings().setValue( QStringLiteral( "QField/lastProjectFilePath" ), mProjectFilePath );
 
   const QString suffix = fi.suffix().toLower();
 
@@ -1263,6 +1247,8 @@ void QgisMobileapp::readProjectFile()
   }
 
   ProjectInfo::restoreSettings( mProjectFilePath, mProject, mMapCanvas, mFlatLayerTree );
+  // Keep history only after reading finishes; it is not an autoload target.
+  QSettings().setValue( QStringLiteral( "QField/lastProjectFilePath" ), mProjectFilePath );
   emit loadProjectEnded( mProjectFilePath, mProjectFileName );
   mTrackingModel->createProjectTrackers( mProject );
 

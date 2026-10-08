@@ -5341,6 +5341,8 @@ ApplicationWindow {
       busyOverlay.state = "hidden";
       dashBoard.layerTree.unfreeze(true);
       if (path === '') {
+        qfieldAuthRequestHandler.isProjectLoading = false;
+        messageLogModel.unsuppress({"WFS": [], "WMS": [], "PostGIS": []});
         projectInfo.filePath = '';
         welcomeScreen.visible = true;
         welcomeScreen.focus = true;

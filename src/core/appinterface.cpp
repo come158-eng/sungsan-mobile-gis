@@ -188,17 +188,7 @@ bool AppInterface::hasProjectOnLaunch() const
   {
     return true;
   }
-  else
-  {
-    if ( QSettings().value( "/QField/loadProjectOnLaunch", true ).toBool() )
-    {
-      const QString lastProjectFilePath = QSettings().value( QStringLiteral( "QField/lastProjectFilePath" ), QString() ).toString();
-      if ( !lastProjectFilePath.isEmpty() && QFileInfo::exists( lastProjectFilePath ) )
-      {
-        return true;
-      }
-    }
-  }
+  // Ordinary starts show Home even if an older installation enabled autoload.
   return false;
 }
 
