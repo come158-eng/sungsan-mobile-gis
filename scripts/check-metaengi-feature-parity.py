@@ -13,6 +13,10 @@ photos = read("src/qml/editorwidgets/ExternalResource.qml")
 utils = read("src/core/utils/fileutils.cpp")
 bridge = read("src/core/sungsansurveybridge.cpp")
 checks = {
+    "contained two-tone red compass, not a text triangle": all(s in panel for s in (
+        'objectName: "fieldNorthUpButton"', "width: 60", "height: 80", "padding: 8",
+        "clip: true", "Canvas {", "ctx.fillStyle = Theme.mainColor;",
+        "ctx.fillStyle = Qt.lighter(Theme.mainColor, 1.65);")) and 'text: "▲"' not in panel,
     "foldable dock with persistent GPS/save status": all(s in panel for s in (
         "property bool dockCollapsed: false", "조작 펼치기", "패널 내리기",
         "dockFlickable.contentY = 0", "visible: !root.dockCollapsed && root.moreExpanded")),

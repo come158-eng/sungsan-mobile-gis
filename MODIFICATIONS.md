@@ -1,5 +1,13 @@
 # Meta Engineering GIS modifications
 
+## Meta 1.2.5 / 10205000 (2026-10-12)
+
+Port the compass layout from Sungsan 0c83ef0: centered circular backing,
+two-tone vector needle, explicit padding and clipping inside a 60x80 button.
+Use Meta red theme colors instead of Sungsan blue. Preserve map rotation,
+north-up click behavior, GPS tracking and the independent Meta package.
+This release changes the compass design only, not project startup behavior.
+
 ## Meta 1.2.4 / 10204000 (2026-10-07)
 
 All runtime changes in Sungsan release 818600068f7df3c7b166cfb5f42bab1bef6f821e
