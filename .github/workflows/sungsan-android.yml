@@ -34,7 +34,7 @@ jobs:
     steps:
       # actions/checkout v6.1.0 - official GitHub verified release commit.
       - name: Checkout the selected source without persistent credentials
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 1
           submodules: false
@@ -288,7 +288,7 @@ jobs:
       # actions/upload-artifact v7.0.1 - official GitHub verified release commit.
       - name: Upload verified debug-key test artifact
         if: ${{ success() && inputs.build_mode == 'test_only' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: Sungsan-Mobile-GIS-v1.2.2-arm64-DEBUG-KEY-TEST-ONLY-${{ github.run_id }}
           path: ${{ steps.package.outputs.dist_dir }}
@@ -301,7 +301,7 @@ jobs:
       - name: Upload unsigned release signing input by immutable ID
         id: upload_unsigned
         if: ${{ success() && inputs.build_mode == 'signed_release' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: Sungsan-Mobile-GIS-v1.2.2-arm64-UNSIGNED-SIGNING-INPUT-${{ github.run_id }}
           path: ${{ steps.package.outputs.dist_dir }}
@@ -328,7 +328,7 @@ jobs:
       # No checkout is permitted in this job. Only the immutable artifact ID is
       # downloaded. actions/download-artifact v8.0.1, official verified commit.
       - name: Download unsigned input by immutable artifact ID
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
           artifact-ids: ${{ needs.build_arm64.outputs.unsigned_release_artifact_id }}
           path: ${{ runner.temp }}/sungsan-unsigned-input
@@ -615,7 +615,7 @@ jobs:
 
       # actions/upload-artifact v7.0.1 - official GitHub verified release commit.
       - name: Upload verified signed release artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: Sungsan-Mobile-GIS-v1.2.2-arm64-SIGNED-RELEASE-${{ github.run_id }}
           path: ${{ steps.signed.outputs.dist_dir }}
