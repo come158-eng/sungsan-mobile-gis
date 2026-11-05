@@ -1152,7 +1152,7 @@ ApplicationWindow {
           canvasMenuFeatureListInstantiator.active = true;
         } else {
           if (mainWindow.sungsanExistingFeatureEditPending) {
-            const activeLayer = dashBoard.activeLayer;
+            let activeLayer = dashBoard.activeLayer;
             const featureIds = [];
             if (activeLayer) {
               for (let i = 0; i < featureListForm.model.count; ++i) {
@@ -1165,8 +1165,27 @@ ApplicationWindow {
             }
 
             if (featureIds.length === 0) {
-              displayToast("선택한 조사 레이어의 객체를 찾지 못했습니다. 객체를 다시 눌러 주세요.", "warning");
-              return;
+              const candidates = [];
+              for (let i = 0; i < featureListForm.model.count; ++i) {
+                const index = featureListForm.model.index(i, 0);
+                const layer = featureListForm.model.data(index, MultiFeatureListModel.LayerRole);
+                if (dashBoard.canEditLayerAttributes(layer) && candidates.indexOf(layer) === -1)
+                  candidates.push(layer);
+              }
+              if (candidates.length !== 1) {
+                displayToast(candidates.length > 1
+                  ? "여러 레이어의 객체가 겹칩니다. ‘레이어’에서 수정할 레이어를 선택해 주세요."
+                  : "이 위치에 편집 가능한 객체가 없습니다. 새 지점은 ‘지점 추가’를 눌러 주세요.", "warning");
+                return;
+              }
+              activeLayer = candidates[0];
+              dashBoard.activeLayer = activeLayer;
+              mainWindow.sungsanPrepareFieldPhotoLayer(activeLayer, true);
+              for (let i = 0; i < featureListForm.model.count; ++i) {
+                const index = featureListForm.model.index(i, 0);
+                if (featureListForm.model.data(index, MultiFeatureListModel.LayerRole) === activeLayer)
+                  featureIds.push(featureListForm.model.data(index, MultiFeatureListModel.FeatureIdRole));
+              }
             }
 
             const idFilter = featureIds.length === 1 ? "@id = " + featureIds[0] : "@id IN (" + featureIds.join(",") + ")";
@@ -3675,6 +3694,8 @@ ApplicationWindow {
     Component.onCompleted: focusstack.addFocusTaker(this)
 
     onActiveLayerChanged: {
+      mainWindow.sungsanExistingFeatureEditPending = false;
+      featureListForm.editExistingAfterSelection = false;
       if (appIsSungsan && activeLayer) {
         sungsanPhotoLayerPreparationTimer.restart();
       }
@@ -3736,6 +3757,17 @@ ApplicationWindow {
     // If they press cancel, nothing will happen, but if they press discard, we will discard their digitizing.
     // We will also use `shouldReturnHome` to know that we need to return home as well or not.
     property bool shouldReturnHome: false
+
+    function canEditLayerAttributes(layer) {
+      if (!layer || layer.readOnly || !projectInfo.editRights)
+        return false;
+      for (let i = 0; i < layerTree.rowCount(); ++i) {
+        const index = layerTree.index(i, 0);
+        if (layerTree.data(index, FlatLayerTreeModel.VectorLayerPointer) === layer)
+          return layerTree.data(index, FlatLayerTreeModel.AttributeEditingLocked) === false;
+      }
+      return false;
+    }
 
     function ensureEditableLayerSelected(requireFeatureAddition) {
       const additionRequired = requireFeatureAddition === true;
@@ -5858,6 +5890,8 @@ ApplicationWindow {
     onHomeRequested: mainWindow.openWelcomeScreen()
 
     onStartSurveyRequested: {
+      mainWindow.sungsanExistingFeatureEditPending = false;
+      featureListForm.editExistingAfterSelection = false;
       if (stateMachine.state === "digitize") {
         mainWindow.toggleDigitizeMode();
       } else {
@@ -5898,6 +5932,8 @@ ApplicationWindow {
         displayToast("GNSS 수신이 끊겨 이전 좌표가 남아 있습니다. FIX가 다시 들어온 뒤 지점을 추가해 주세요.", "warning");
         return;
       }
+      mainWindow.sungsanExistingFeatureEditPending = false;
+      featureListForm.editExistingAfterSelection = false;
       if (!mainWindow.sungsanStartSurvey(true)) {
         return;
       }
@@ -5940,6 +5976,14 @@ ApplicationWindow {
       }
       if (stateMachine.state === "digitize") {
         featureListForm.editExistingAfterSelection = false;
+        const selectedIndex = featureListForm.selection.focusedItem;
+        if (selectedIndex >= 0 && selectedIndex < featureListForm.model.count) {
+          const modelIndex = featureListForm.model.index(selectedIndex, 0);
+          if (featureListForm.model.data(modelIndex, MultiFeatureListModel.LayerRole) === dashBoard.activeLayer) {
+            featureListForm.state = "FeatureFormEdit";
+            return;
+          }
+        }
         mainWindow.sungsanExistingFeatureEditPending = true;
         displayToast("기존 객체의 근경·원경·기타·기타2 사진과 속성을 입력하려면 지도에서 객체를 눌러 주세요.");
       }
@@ -6047,21 +6091,8 @@ ApplicationWindow {
     }
 
     onDeleteRecentProjectRequested: (path, projectType, title) => {
-      if (qgisProject && qgisProject.fileName === path) {
-        iface.clearProject();
-      }
       welcomeScreen.model.removeRecentProject(path);
-      if (projectType !== RecentProjectListModel.LinkProject && path.length > 0 && path.indexOf("://") === -1) {
-        const projectFolder = FileUtils.absolutePath(path);
-        if (projectFolder.length > 0) {
-          platformUtilities.removeFolder(projectFolder);
-          displayToast(`프로젝트가 삭제 요청되었습니다. '${title.length > 0 ? title : "이름 없는 프로젝트"}'`, "info");
-        } else {
-          displayToast(`최근 목록에서 제거했습니다. '${title.length > 0 ? title : "이름 없는 프로젝트"}'`, "info");
-        }
-      } else {
-        displayToast(`최근 목록에서 제거했습니다. '${title.length > 0 ? title : "이름 없는 프로젝트"}'`, "info");
-      }
+      displayToast(`최근 목록에서만 제거했습니다. 파일은 유지됩니다. '${title.length > 0 ? title : "이름 없는 프로젝트"}'`, "info");
       welcomeScreen.model.reloadModel();
     }
 

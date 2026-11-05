@@ -521,7 +521,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     delete objectWriter;
 
     const QString objectUri = QStringLiteral( "%1|layername=%2" ).arg( fieldFilepath, objectWriterOptions.layerName );
-    sungsanFieldObjectsLayer = new QgsVectorLayer( objectUri, QStringLiteral( "성산_현장객체" ) );
+    sungsanFieldObjectsLayer = new QgsVectorLayer( objectUri, QStringLiteral( "현장객체" ) );
     if ( !sungsanFieldObjectsLayer->isValid() )
     {
       delete sungsanFieldObjectsLayer;
