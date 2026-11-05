@@ -18,6 +18,7 @@
  ***************************************************************************/
 
 #include <QApplication>
+#include <QTemporaryDir>
 
 #ifndef _MSC_VER
 #include <unistd.h>
@@ -220,6 +221,7 @@
 #include <qgsvectorlayer.h>
 #include <qgsvectorlayereditbuffer.h>
 #include <qgsvectorlayertemporalproperties.h>
+#include <qgsziputils.h>
 
 
 #define QUOTE( string ) _QUOTE( string )
@@ -772,6 +774,45 @@ bool QgisMobileapp::loadProjectFile( const QString &path, const QString &name )
   }
 
   const QString suffix = fi.suffix().toLower();
+  // A project ZIP must be opened as a project, not as a GDAL dataset archive.
+  // The latter reads only the GPKG and replaces QGIS styles/labels with defaults.
+  if ( suffix == QStringLiteral( "zip" ) )
+  {
+    const QStringList entries = QgsZipUtils::files( path );
+    QStringList projects;
+    for ( const QString &entry : entries )
+    {
+      const QString clean = QDir::cleanPath( entry );
+      if ( QDir::isAbsolutePath( entry ) || clean == QStringLiteral( ".." ) || clean.startsWith( QStringLiteral( "../" ) ) || entry.contains( QLatin1Char( '\\' ) ) || entry.contains( QLatin1Char( ':' ) ) )
+      {
+        QgsMessageLog::logMessage( tr( "Unsafe path in project archive" ), QStringLiteral( "QField" ), Qgis::Critical );
+        return false;
+      }
+      if ( SUPPORTED_PROJECT_EXTENSIONS.contains( QFileInfo( clean ).suffix().toLower() ) && !entry.endsWith( QLatin1Char( '/' ) ) )
+        projects << clean;
+    }
+    if ( !projects.isEmpty() )
+    {
+      if ( projects.size() != 1 )
+      {
+        QgsMessageLog::logMessage( tr( "This archive contains multiple projects. Import the folder and select a project." ), QStringLiteral( "QField" ), Qgis::Warning );
+        return false;
+      }
+      const QString root = PlatformUtilities::instance()->applicationDirectory() + QStringLiteral( "/Imported Projects" );
+      if ( !QDir().mkpath( root ) )
+        return false;
+      QTemporaryDir imported( root + QStringLiteral( "/project-XXXXXX" ) );
+      QStringList extracted;
+      if ( !imported.isValid() || !FileUtils::unzip( path, imported.path(), extracted, true ) )
+        return false;
+      const QString projectPath = QDir( imported.path() ).filePath( projects.constFirst() );
+      if ( !QFileInfo( projectPath ).isFile() )
+        return false;
+      // Retain the whole folder for relative GPKG/photo paths and field edits.
+      imported.setAutoRemove( false );
+      return loadProjectFile( projectPath, name.isEmpty() ? fi.completeBaseName() : name );
+    }
+  }
   if ( SUPPORTED_PROJECT_EXTENSIONS.contains( suffix ) || SUPPORTED_VECTOR_EXTENSIONS.contains( suffix ) || SUPPORTED_RASTER_EXTENSIONS.contains( suffix ) )
   {
     saveProjectPreviewImage();
