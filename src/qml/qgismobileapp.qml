@@ -3814,6 +3814,8 @@ ApplicationWindow {
   }
 
   function openWelcomeScreen() {
+    mainWindow.sungsanExistingFeatureEditPending = false;
+    featureListForm.editExistingAfterSelection = false;
     mainMenu.close();
     dashBoard.close();
     welcomeScreen.visible = true;
@@ -5958,6 +5960,17 @@ ApplicationWindow {
         mainWindow.sungsanExistingFeatureEditPending = false;
         displayToast("기존 객체 선택을 취소했습니다.");
         return;
+      }
+      // A focused identify result is already an explicit feature selection,
+      // even when the dashboard still points at an empty default survey layer.
+      const focusedIndex = featureListForm.selection.focusedItem;
+      if (focusedIndex >= 0 && focusedIndex < featureListForm.model.count) {
+        const modelIndex = featureListForm.model.index(focusedIndex, 0);
+        const selectedLayer = featureListForm.model.data(modelIndex, MultiFeatureListModel.LayerRole);
+        if (selectedLayer !== dashBoard.activeLayer && dashBoard.canEditLayerAttributes(selectedLayer)) {
+          dashBoard.activeLayer = selectedLayer;
+          mainWindow.sungsanPrepareFieldPhotoLayer(selectedLayer, true);
+        }
       }
       if (!dashBoard.activeLayer || !(dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Line || dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Polygon)) {
         displayToast("먼저 수정할 포인트·선·면 레이어를 선택해 주세요.", "warning");
