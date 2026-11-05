@@ -318,29 +318,47 @@ Page {
             }
             Button {
               id: deleteRecentButton
+              objectName: "removeRecentProjectButton"
               Layout.preferredWidth: 44
               Layout.preferredHeight: 44
-              icon.source: Theme.getThemeVectorIcon("ic_delete_forever_white_24dp")
+              Layout.minimumWidth: 44
               text: ""
               display: AbstractButton.TextOnly
               highlighted: false
               flat: true
               focusPolicy: Qt.NoFocus
+              Accessible.name: "최근 목록에서 제거 (파일 유지)"
               onClicked: {
                 root.deleteRecentProjectRequested(projectPath, projectType, projectTitle);
               }
               background: Rectangle {
                 anchors.fill: parent
-                color: deleteRecentButton.pressed ? "#fff0f0" : "transparent"
+                color: deleteRecentButton.pressed ? "#f8d4cf" : "#fce7e3"
+                border.color: "#e6a49b"
                 radius: 12
               }
 
               contentItem: Item {
-                Image {
+                Item {
                   anchors.centerIn: parent
                   width: 20
                   height: 20
-                  source: deleteRecentButton.icon.source
+                  Rectangle {
+                    anchors.centerIn: parent
+                    width: 18
+                    height: 2
+                    radius: 1
+                    rotation: 45
+                    color: "#a82720"
+                  }
+                  Rectangle {
+                    anchors.centerIn: parent
+                    width: 18
+                    height: 2
+                    radius: 1
+                    rotation: -45
+                    color: "#a82720"
+                  }
                 }
               }
               Layout.alignment: Qt.AlignVCenter

@@ -1,5 +1,17 @@
 # Meta Engineering GIS modifications
 
+## Meta 1.2.6 / 10206000 (2026-11-05)
+
+- Normalize recognized default field-object layer display names to 현장객체;
+  adopt legacy desktop metadata without moving files or changing attributes.
+- Split the standard object form into basic input and details, preserving
+  relationship editors and leaving unrelated custom forms unchanged.
+- Clear existing-object selection state when switching layer/action; reuse a
+  focused object and resolve a uniquely identified editable layer when the
+  selected empty field-object layer has no hit. Preserve editing/addition locks.
+- Render a high-contrast recent-list X. Remove the recent entry only, never
+  the project directory or its photos.
+
 ## Meta 1.2.5 / 10205000 (2026-10-12)
 
 Port the compass layout from Sungsan 0c83ef0: centered circular backing,

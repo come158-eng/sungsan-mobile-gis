@@ -393,6 +393,33 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   if ( !layer || !layer->isValid() )
     return result( false, false, QString(), tr( "사진 기능을 준비할 유효한 조사 레이어가 없습니다." ) );
 
+  const QString originalLayerName = layer->name();
+  const QStringList defaultObjectNames = {
+    QStringLiteral( "성산_현장객체" ), QStringLiteral( "성산 현장 객체" ),
+    QStringLiteral( "성산 현장객체" ), QStringLiteral( "메타_현장객체" ),
+    QStringLiteral( "메타이엔지_현장객체" ), QStringLiteral( "현장객체" ) };
+  const bool standardObjectLayer = defaultObjectNames.contains( originalLayerName )
+    && layer->fields().lookupField( QStringLiteral( "object_id" ) ) >= 0
+    && layer->fields().lookupField( QStringLiteral( "name" ) ) >= 0
+    && layer->fields().lookupField( QStringLiteral( "photo_near" ) ) >= 0;
+  if ( standardObjectLayer )
+  {
+    // Adopt desktop metadata without moving files or changing stored attributes.
+    const QStringList properties = { QStringLiteral( "fieldPhotoFields" ), QStringLiteral( "photoObjectNameField" ),
+      QStringLiteral( "fieldPhotoFolder" ), QStringLiteral( "fieldObjects" ), QStringLiteral( "landstarImportTarget" ) };
+    for ( const QString &key : properties )
+    {
+      const QString target = QStringLiteral( "kr.co.metaengi.mobilegis/" ) + key;
+      const QVariant legacy = layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/" ) + key );
+      if ( !layer->customProperty( target ).isValid() && legacy.isValid() )
+        layer->setCustomProperty( target, legacy );
+    }
+    layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ), true );
+    if ( !layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/photoObjectNameField" ) ).isValid() )
+      layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/photoObjectNameField" ), QStringLiteral( "name" ) );
+    layer->setName( QStringLiteral( "현장객체" ) );
+  }
+
   const Qgis::GeometryType geometryType = QgsWkbTypes::geometryType( layer->wkbType() );
   if ( geometryType != Qgis::GeometryType::Point
        && geometryType != Qgis::GeometryType::Line
@@ -727,6 +754,42 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   // missing photo fields to one "현장사진" container. Auto-generated and UI
   // file forms need no tree changes and will discover the new fields normally.
   QgsEditFormConfig formConfig = layer->editFormConfig();
+  if ( standardObjectLayer
+       && !layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/compactFieldFormV1" ), false ).toBool() )
+  {
+    QList<QgsAttributeEditorElement *> savedRelations;
+    for ( QgsAttributeEditorElement *element : formConfig.invisibleRootContainer()->findElements( Qgis::AttributeEditorType::Relation ) )
+      savedRelations.append( element->clone( nullptr ) );
+    formConfig.clearTabs();
+    formConfig.setLayout( Qgis::AttributeFormLayout::DragAndDrop );
+    QgsAttributeEditorContainer *root = formConfig.invisibleRootContainer();
+    auto *basic = new QgsAttributeEditorContainer( tr( "기본 입력" ), root );
+    auto *details = new QgsAttributeEditorContainer( tr( "상세정보" ), root );
+    QStringList basicFields{ QStringLiteral( "name" ) };
+    basicFields.append( photoFields );
+    basicFields.append( QStringLiteral( "memo" ) );
+    for ( const QString &name : std::as_const( basicFields ) )
+    {
+      const int index = layer->fields().lookupField( name );
+      if ( index >= 0 )
+        basic->addChildElement( new QgsAttributeEditorField( name, index, basic ) );
+    }
+    for ( int index = 0; index < layer->fields().size(); ++index )
+    {
+      const QString name = layer->fields().at( index ).name();
+      if ( !basicFields.contains( name ) && name != QLatin1String( "fid" ) && name != QLatin1String( "object_id" ) )
+        details->addChildElement( new QgsAttributeEditorField( name, index, details ) );
+    }
+    root->addChildElement( basic );
+    for ( QgsAttributeEditorElement *element : std::as_const( savedRelations ) )
+    {
+      details->addChildElement( element->clone( details ) );
+      delete element;
+    }
+    root->addChildElement( details );
+    layer->setEditFormConfig( formConfig );
+    layer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/compactFieldFormV1" ), true );
+  }
   if ( formConfig.layout() == Qgis::AttributeFormLayout::DragAndDrop )
   {
     QgsAttributeEditorContainer *formRoot = formConfig.invisibleRootContainer();

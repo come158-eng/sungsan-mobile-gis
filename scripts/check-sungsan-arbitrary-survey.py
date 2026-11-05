@@ -339,7 +339,9 @@ check(
     and "fieldsInForm.contains( fieldName )" in prepare_layer
     and "addChildElement" in prepare_layer
     and "layer->setEditFormConfig( formConfig )" in prepare_layer
-    and "clearTabs" not in prepare_layer,
+    and "if ( standardObjectLayer" in prepare_layer
+    and "compactFieldFormV1" in prepare_layer
+    and "savedRelations" in prepare_layer,
 )
 check(
     "missing photos are grouped in the field form",
