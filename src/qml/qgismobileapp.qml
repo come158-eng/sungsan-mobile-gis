@@ -3775,7 +3775,10 @@ ApplicationWindow {
 
     function ensureEditableLayerSelected(requireFeatureAddition) {
       const additionRequired = requireFeatureAddition === true;
+      if (!(additionRequired ? (projectInfo.editRights || projectInfo.insertRights) : projectInfo.editRights))
+        return { "ok": false, "selectionRequired": false, "candidateCount": 0 };
       var editableLayers = [];
+      var fieldObjectLayers = [];
       var activeLayerIsEditable = false;
       for (var i = 0; i < layerTree.rowCount(); i++) {
         var index = layerTree.index(i, 0);
@@ -3791,20 +3794,31 @@ ApplicationWindow {
                 : layerTree.data(index, FlatLayerTreeModel.AttributeEditingLocked) === false);
         if (layerIsEditable) {
           editableLayers.push(vectorLayer);
+          const name = String(vectorLayer.name || "");
+          const defaultObjectNames = ["현장객체", "성산_현장객체", "성산 현장 객체", "성산 현장객체", "메타_현장객체", "메타이엔지_현장객체"];
+          if (vectorLayer.customProperty("kr.co.metaengi.mobilegis/fieldObjects") === true
+              || vectorLayer.customProperty("kr.co.sungsan.mobilegis/fieldObjects") === true
+              || (geometryType === Qgis.GeometryType.Point && defaultObjectNames.indexOf(name) !== -1))
+            fieldObjectLayers.push(vectorLayer);
         }
         if (activeLayer != null && activeLayer === vectorLayer) {
           activeLayerIsEditable = layerIsEditable;
         }
       }
 
-      // Never silently switch away from a valid user-selected layer. When no
-      // valid layer is selected, automatic selection is only safe if there is
-      // exactly one candidate; otherwise the surveyor must choose explicitly.
+      // Keep an editable user selection. Otherwise prefer the one designated
+      // field-object layer over background CAD layers, with the same locks.
       if (activeLayerIsEditable) {
+        return { "ok": true, "selectionRequired": false, "candidateCount": editableLayers.length };
+      }
+      if (fieldObjectLayers.length === 1) {
+        activeLayer = fieldObjectLayers[0];
+        projectInfo.activeLayer = activeLayer;
         return { "ok": true, "selectionRequired": false, "candidateCount": editableLayers.length };
       }
       if (editableLayers.length === 1) {
         activeLayer = editableLayers[0];
+        projectInfo.activeLayer = activeLayer;
         return { "ok": true, "selectionRequired": false, "candidateCount": 1 };
       }
       return { "ok": false, "selectionRequired": editableLayers.length > 1, "candidateCount": editableLayers.length };

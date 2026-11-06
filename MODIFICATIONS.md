@@ -1,3 +1,9 @@
+## Meta Engineering v1.2.7 (2026-11-06)
+
+- Open project ZIPs through their QGIS project, preserving desktop symbology, labels, and relative data paths instead of loading the archive as raw data.
+- Preserve an editable selected layer; otherwise choose a unique designated field-object layer over CAD background layers, respecting project and layer edit/add locks.
+- Retain v1.2.6 visible recent-list X and list-only removal.
+
 # Meta Engineering GIS modifications
 
 ## Meta 1.2.6 / 10206000 (2026-11-05)
