@@ -752,12 +752,12 @@ def check_android_bridge() -> None:
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APP_VERSION_STR="${APP_VERSION_STR:-1.2.8}"',
+        'APP_VERSION_STR="${APP_VERSION_STR:-1.2.9}"',
         "Sungsan product version name",
     )
     require(
         "scripts/build-sungsan-android.sh",
-        'APK_VERSION_CODE="${APK_VERSION_CODE:-10208000}"',
+        'APK_VERSION_CODE="${APK_VERSION_CODE:-10209000}"',
         "monotonically increased Android version code",
     )
     require(

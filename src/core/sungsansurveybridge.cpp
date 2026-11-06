@@ -35,6 +35,7 @@
 #include <qgscoordinatetransformcontext.h>
 #include <qgsabstractgeometry.h>
 #include <qgseditformconfig.h>
+#include <qgsdefaultvalue.h>
 #include <qgsexception.h>
 #include <qgseditorwidgetsetup.h>
 #include <qgsexpression.h>
@@ -753,9 +754,24 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
   // their tree. Preserve the operator's complete form and append just the
   // missing photo fields to one "현장사진" container. Auto-generated and UI
   // file forms need no tree changes and will discover the new fields normally.
+  const QStringList hiddenSurveyFields = { QStringLiteral( "gps_accuracy_m" ), QStringLiteral( "landstar_id" ),
+    QStringLiteral( "landstar_code" ), QStringLiteral( "northing" ), QStringLiteral( "easting" ),
+    QStringLiteral( "elevation" ), QStringLiteral( "fix_status" ) };
+  if ( standardObjectLayer )
+  {
+    for ( const QString &name : hiddenSurveyFields )
+    {
+      const int index = layer->fields().lookupField( name );
+      if ( index >= 0 )
+        layer->setEditorWidgetSetup( index, QgsEditorWidgetSetup( QStringLiteral( "Hidden" ), QVariantMap() ) );
+    }
+    const int timeIndex = layer->fields().lookupField( QStringLiteral( "surveyed_at" ) );
+    if ( timeIndex >= 0 )
+      layer->setDefaultValueDefinition( timeIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
+  }
   QgsEditFormConfig formConfig = layer->editFormConfig();
   if ( standardObjectLayer
-       && !layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/compactFieldFormV1" ), false ).toBool() )
+       && !layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/compactFieldFormV2" ), false ).toBool() )
   {
     QList<QgsAttributeEditorElement *> savedRelations;
     for ( QgsAttributeEditorElement *element : formConfig.invisibleRootContainer()->findElements( Qgis::AttributeEditorType::Relation ) )
@@ -777,7 +793,7 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
     for ( int index = 0; index < layer->fields().size(); ++index )
     {
       const QString name = layer->fields().at( index ).name();
-      if ( !basicFields.contains( name ) && name != QLatin1String( "fid" ) && name != QLatin1String( "object_id" ) )
+      if ( !basicFields.contains( name ) && !hiddenSurveyFields.contains( name ) && name != QLatin1String( "fid" ) && name != QLatin1String( "object_id" ) )
         details->addChildElement( new QgsAttributeEditorField( name, index, details ) );
     }
     root->addChildElement( basic );
@@ -788,7 +804,7 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
     }
     root->addChildElement( details );
     layer->setEditFormConfig( formConfig );
-    layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/compactFieldFormV1" ), true );
+    layer->setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/compactFieldFormV2" ), true );
   }
   if ( formConfig.layout() == Qgis::AttributeFormLayout::DragAndDrop )
   {

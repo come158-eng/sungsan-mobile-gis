@@ -561,15 +561,19 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     const int createdAtIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "created_at" ) );
     const int colorIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "color" ) );
     const int accuracyIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "gps_accuracy_m" ) );
+    const int surveyedAtIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "surveyed_at" ) );
     const int sourceDeviceIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "source_device" ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( objectIdIndex, QgsDefaultValue( QStringLiteral( "uuid()" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( createdAtIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( surveyedAtIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( colorIndex, QgsDefaultValue( QStringLiteral( "'#1f5aa6'" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( accuracyIndex, QgsDefaultValue( QStringLiteral( "@gnss_horizontal_accuracy" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( sourceDeviceIndex, QgsDefaultValue( QStringLiteral( "'성산 GIS'" ), false ) );
 
     QVariantMap emptyWidgetOptions;
-    const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ) };
+    const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ),
+      QStringLiteral( "gps_accuracy_m" ), QStringLiteral( "landstar_id" ), QStringLiteral( "landstar_code" ),
+      QStringLiteral( "northing" ), QStringLiteral( "easting" ), QStringLiteral( "elevation" ), QStringLiteral( "fix_status" ) };
     for ( const QString &fieldName : hiddenObjectFields )
     {
       const int fieldIndex = sungsanFieldObjectsLayer->fields().indexOf( fieldName );

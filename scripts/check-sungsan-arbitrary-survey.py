@@ -340,7 +340,7 @@ check(
     and "addChildElement" in prepare_layer
     and "layer->setEditFormConfig( formConfig )" in prepare_layer
     and "if ( standardObjectLayer" in prepare_layer
-    and "compactFieldFormV1" in prepare_layer
+    and "compactFieldFormV2" in prepare_layer
     and "savedRelations" in prepare_layer,
 )
 check(
@@ -458,13 +458,11 @@ check(
     and EXTERNAL_RESOURCE.count("commitSungsanManagedPhoto(") >= 3,
 )
 check(
-    "portable camera fallback replaces an existing photo atomically",
-    "FileUtils.replaceFileSafely(path, destinationPath)" in EXTERNAL_RESOURCE
-    and "Q_INVOKABLE static bool replaceFileSafely" in FILE_UTILS_H
-    and "QSaveFile destinationFile( destinationFilePath )" in FILE_UTILS_CPP
-    and "destinationFile.commit()" in FILE_UTILS_CPP
-    and FILE_UTILS_CPP.find("destinationFile.commit()")
-    < FILE_UTILS_CPP.find("QFile::remove( sourceFilePath )"),
+    "portable camera fallback preserves an existing photo transactionally",
+    "FileUtils.storeCapturedPhoto(path, destinationPath)" in EXTERNAL_RESOURCE
+    and "Q_INVOKABLE static QVariantMap storeCapturedPhoto" in FILE_UTILS_H
+    and "ManagedPhotoStore::save" in FILE_UTILS_CPP
+    and (ROOT / "test/test_managedphotostore.cpp").exists(),
 )
 
 

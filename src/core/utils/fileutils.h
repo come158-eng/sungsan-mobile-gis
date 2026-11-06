@@ -106,6 +106,9 @@ class QFIELD_CORE_EXPORT FileUtils : public QObject
      */
     Q_INVOKABLE static bool replaceFileSafely( const QString &sourceFilePath, const QString &destinationFilePath );
 
+    //! Save a completed capture, returning ok/code/error without losing the previous photo.
+    Q_INVOKABLE static QVariantMap storeCapturedPhoto( const QString &sourceFilePath, const QString &destinationFilePath );
+
     /**
     * Gets detailed information about a file including MD5 hash and metadata.
     * Optionally includes the file content when fetchContent is true.

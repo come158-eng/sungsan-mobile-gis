@@ -16,6 +16,7 @@
  ***************************************************************************/
 
 #include "fileutils.h"
+#include "managedphotostore.h"
 #include "gnsspositioninformation.h"
 #include "platforms/platformutilities.h"
 #include "qfield.h"
@@ -95,7 +96,7 @@ QString FileUtils::fileSuffix( const QString &filePath )
 
 bool FileUtils::fileExists( const QString &filePath )
 {
-  QFileInfo fileInfo( filePath );
+  QFileInfo fileInfo( ManagedPhotoStore::localPath( filePath ) );
   return ( fileInfo.exists() && fileInfo.isFile() );
 }
 
@@ -754,85 +755,22 @@ bool FileUtils::writeFileContent( const QString &filePath, const QByteArray &con
   }
 }
 
+QVariantMap FileUtils::storeCapturedPhoto( const QString &sourceFilePath, const QString &destinationFilePath )
+{
+  QgsProject *project = QgsProject::instance();
+  const QString projectPath = project ? ManagedPhotoStore::localPath( project->fileName() ) : QString();
+  if ( projectPath.isEmpty() || !QFileInfo::exists( projectPath ) )
+    return { { QStringLiteral( "ok" ), false }, { QStringLiteral( "code" ), QStringLiteral( "project" ) },
+             { QStringLiteral( "error" ), QStringLiteral( "먼저 프로젝트 파일을 저장한 뒤 사진을 촬영해 주세요." ) } };
+  const QVariantMap result = ManagedPhotoStore::save( sourceFilePath, destinationFilePath, QFileInfo( projectPath ).absolutePath() );
+  if ( !result.value( QStringLiteral( "ok" ) ).toBool() )
+    QgsMessageLog::logMessage( QStringLiteral( "Photo save [%1]: %2" ).arg( result.value( QStringLiteral( "code" ) ).toString(), result.value( QStringLiteral( "error" ) ).toString() ), QStringLiteral( "Field photos" ), Qgis::MessageLevel::Warning );
+  return result;
+}
+
 bool FileUtils::replaceFileSafely( const QString &sourceFilePath, const QString &destinationFilePath )
 {
-  const QFileInfo sourceInfo( sourceFilePath );
-  const QFileInfo destinationInfo( destinationFilePath );
-  if ( !sourceInfo.exists() || !sourceInfo.isFile() || sourceInfo.size() <= 0
-       || destinationFilePath.trimmed().isEmpty() || !isWithinProjectDirectory( destinationFilePath ) )
-  {
-    return false;
-  }
-
-  if ( QDir::cleanPath( sourceInfo.absoluteFilePath() ).compare(
-         QDir::cleanPath( destinationInfo.absoluteFilePath() ),
-#ifdef Q_OS_WIN
-         Qt::CaseInsensitive
-#else
-         Qt::CaseSensitive
-#endif
-         ) == 0 )
-  {
-    return true;
-  }
-
-  QDir destinationDirectory( destinationInfo.absolutePath() );
-  if ( !destinationDirectory.mkpath( QStringLiteral( "." ) ) )
-  {
-    return false;
-  }
-
-  QFile sourceFile( sourceFilePath );
-  if ( !sourceFile.open( QIODevice::ReadOnly ) )
-  {
-    return false;
-  }
-
-  const qint64 expectedSize = sourceFile.size();
-  QSaveFile destinationFile( destinationFilePath );
-  if ( !destinationFile.open( QIODevice::WriteOnly ) )
-  {
-    return false;
-  }
-
-  QByteArray buffer;
-  buffer.resize( 64 * 1024 );
-  qint64 totalWritten = 0;
-  while ( !sourceFile.atEnd() )
-  {
-    const qint64 bytesRead = sourceFile.read( buffer.data(), buffer.size() );
-    if ( bytesRead <= 0 )
-    {
-      destinationFile.cancelWriting();
-      return false;
-    }
-    if ( destinationFile.write( buffer.constData(), bytesRead ) != bytesRead )
-    {
-      destinationFile.cancelWriting();
-      return false;
-    }
-    totalWritten += bytesRead;
-  }
-  sourceFile.close();
-
-  if ( totalWritten != expectedSize || !destinationFile.commit() )
-  {
-    return false;
-  }
-
-  const QFileInfo committedInfo( destinationFilePath );
-  if ( !committedInfo.exists() || !committedInfo.isFile() || committedInfo.size() != expectedSize )
-  {
-    return false;
-  }
-
-  if ( !QFile::remove( sourceFilePath ) )
-  {
-    QgsMessageLog::logMessage(
-      QObject::tr( "The replacement was saved, but the temporary camera file could not be removed: %1" ).arg( sourceFilePath ),
-      QString(), Qgis::MessageLevel::Warning );
-  }
-  return true;
+  return storeCapturedPhoto( sourceFilePath, destinationFilePath ).value( QStringLiteral( "ok" ) ).toBool();
 }
 
 QVariantMap FileUtils::getFileInfo( const QString &filePath, bool fetchContent )

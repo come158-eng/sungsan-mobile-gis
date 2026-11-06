@@ -88,7 +88,7 @@ check("field object marker", "kr.co.sungsan.mobilegis/fieldObjects" in UTILS)
 check("LandStar target marker", "kr.co.sungsan.mobilegis/landstarImportTarget" in UTILS)
 check(
     "only technical parent fields hidden",
-    'const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ) }'
+    'const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ),'
     in UTILS,
 )
 check("external resource editor", 'QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" )' in UTILS)

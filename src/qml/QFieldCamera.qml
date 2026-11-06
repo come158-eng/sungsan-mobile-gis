@@ -19,6 +19,7 @@ Popup {
   property bool isPortraitMode: mainWindow.height > mainWindow.width
 
   property string currentPath: ''
+  property bool capturePending: false
   property var currentPosition: PositioningUtils.createEmptyGnssPositionInformation()
   property var currentProjectedPosition: undefined
 
@@ -72,6 +73,7 @@ Popup {
 
   onAboutToShow: {
     currentPath = "";
+    capturePending = false;
     lastStableDeviceOrientation = OrientationReading.Undefined;
     photoPreview.source = "";
     videoPreview.stop();
@@ -264,14 +266,26 @@ Popup {
               quality: ImageCapture.VeryHighQuality
 
               onImageSaved: (requestId, path) => {
-                currentPath = path;
+                capturePending = false;
+                const savedPath = String(path).indexOf("file:") === 0 ? UrlUtils.toLocalFile(path) : String(path);
+                if (!FileUtils.fileExists(savedPath)) {
+                  mainWindow.displayToast("촬영 파일이 아직 준비되지 않았습니다. 다시 촬영해 주세요.", "error");
+                  cameraItem.state = "PhotoCapture";
+                  return;
+                }
+                currentPath = savedPath;
                 orientationNormalizer.normalizeImageOrientation(currentPath);
-                photoPreview.source = "file://" + currentPath;
-              }
-
-              onPreviewChanged: {
+                photoPreview.source = UrlUtils.fromString(currentPath);
                 cameraItem.state = "PhotoPreview";
               }
+
+              onErrorOccurred: (requestId, error, errorString) => {
+                capturePending = false;
+                currentPath = "";
+                cameraItem.state = "PhotoCapture";
+                mainWindow.displayToast("촬영 파일 저장 실패: " + errorString, "error");
+              }
+
             }
 
             recorder: MediaRecorder {
@@ -506,6 +520,7 @@ Popup {
 
               anchors.centerIn: parent
               visible: captureLoader.status == Loader.Ready && captureLoader.item
+              enabled: !cameraItem.capturePending && (cameraItem.state !== "PhotoCapture" || (captureLoader.item && captureLoader.item.imageCapture.readyForCapture))
 
               round: true
               roundborder: true
@@ -525,7 +540,10 @@ Popup {
                   captureLoader.item.orientationNormalizer.recordCaptureDeviceOrientation(
                       cameraItem.lastStableDeviceOrientation,
                       !cameraItem.isPortraitMode);
-                  captureLoader.item.imageCapture.captureToFile(qgisProject.homePath + '/DCIM/');
+                  currentPath = "";
+                  capturePending = true;
+                  const captureName = "capture_" + Date.now() + "_" + Math.floor(Math.random() * 0x100000000).toString(16) + ".jpg";
+                  captureLoader.item.imageCapture.captureToFile(qgisProject.homePath + '/DCIM/' + captureName);
                   captureFlashAnimation.start();
                   if (positionSource.active) {
                     currentPosition = positionSource.positionInformation;

@@ -57,7 +57,7 @@ EditorWidgetBase {
       if (!path.endsWith("/"))
         path = path + "/";
     }
-    return path;
+    return String(path).indexOf("file:") === 0 ? UrlUtils.toLocalFile(path) : path;
   }
 
   property ResourceSource __resourceSource
@@ -846,13 +846,13 @@ EditorWidgetBase {
       onFinished: path => {
         const filepath = StringUtils.replaceFilenameTags(getResourceFilePath(), path);
         const destinationPath = prefixToRelativePath + filepath;
-        const moved = isSungsanManagedFieldPhoto()
-            ? FileUtils.replaceFileSafely(path, destinationPath)
-            : platformUtilities.renameFile(path, destinationPath);
-        if (isSungsanManagedFieldPhoto() && (!moved || !FileUtils.fileExists(prefixToRelativePath + filepath))) {
-          sungsanPendingPreviousPhotoPath = "";
-          mainWindow.displayToast("새 사진을 안전하게 저장하지 못했습니다. 기존 사진은 유지됩니다.", "error");
-          close();
+        const managed = isSungsanManagedFieldPhoto();
+        const saveResult = managed
+            ? FileUtils.storeCapturedPhoto(path, destinationPath)
+            : { ok: platformUtilities.renameFile(path, destinationPath) };
+        if (managed && (!saveResult.ok || !FileUtils.fileExists(destinationPath))) {
+          mainWindow.displayToast("사진 저장 실패: " + (saveResult.error || "저장된 파일을 확인할 수 없습니다.") + " 기존 사진은 유지됩니다.", "error");
+          // Retain the captured source and the preview so the user can retry.
           return;
         }
         if (!cameraLoader.isVideo) {
@@ -867,10 +867,13 @@ EditorWidgetBase {
           if (!cameraLoader.isVideo && !FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)) {
             mainWindow.displayToast("사진은 저장했지만 하단 사진명 표지를 넣지 못했습니다.", "warning");
           }
-          if (!cameraLoader.isVideo && shouldPublishSungsanPhotoToGallery()) {
+          const publishToGallery = !cameraLoader.isVideo && shouldPublishSungsanPhotoToGallery();
+          if (!commitSungsanManagedPhoto(filepath)) {
+            return;
+          }
+          if (publishToGallery) {
             platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName);
           }
-          commitSungsanManagedPhoto(filepath);
         } else {
           valueChangeRequested(filepath, false);
         }
