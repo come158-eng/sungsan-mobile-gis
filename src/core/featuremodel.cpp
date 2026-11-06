@@ -22,6 +22,7 @@
 #include "vertexmodel.h"
 
 #include <QJSValue>
+#include <QDateTime>
 #include <QMutex>
 #include <qgscurvepolygon.h>
 #include <qgsexpressioncontextutils.h>
@@ -834,6 +835,17 @@ bool FeatureModel::suppressFeatureForm() const
     return false;
 
   return mLayer->editFormConfig().suppress() == Qgis::AttributeFormSuppression::On;
+}
+
+void FeatureModel::stampFieldSurveyTime()
+{
+  if ( !mLayer || !FID_IS_NEW( mFeature.id() )
+       || !( mLayer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), false ).toBool()
+             || mLayer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ), false ).toBool() ) )
+    return;
+  const int fieldIndex = mLayer->fields().lookupField( QStringLiteral( "surveyed_at" ) );
+  if ( fieldIndex >= 0 )
+    setData( index( fieldIndex ), QDateTime::currentDateTime(), AttributeValue );
 }
 
 void FeatureModel::resetFeature()

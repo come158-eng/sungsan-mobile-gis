@@ -3527,6 +3527,7 @@ ApplicationWindow {
             overlayFeatureFormDrawer.featureModel.geometry = digitizingFeature.geometry;
             overlayFeatureFormDrawer.featureModel.applyGeometry();
             overlayFeatureFormDrawer.featureModel.resetAttributes();
+            overlayFeatureFormDrawer.featureModel.stampFieldSurveyTime();
             overlayFeatureFormDrawer.open();
             overlayFeatureFormDrawer.state = "Add";
           } else {
@@ -3534,6 +3535,7 @@ ApplicationWindow {
               overlayFeatureFormDrawer.featureModel.geometry = digitizingFeature.geometry;
               overlayFeatureFormDrawer.featureModel.applyGeometry();
               overlayFeatureFormDrawer.featureModel.resetAttributes();
+              overlayFeatureFormDrawer.featureModel.stampFieldSurveyTime();
               if (!overlayFeatureFormDrawer.featureForm.featureAdditionLocked) {
                 if (!overlayFeatureFormDrawer.featureModel.create()) {
                   displayToast(qsTr("Failed to create feature"), 'error');

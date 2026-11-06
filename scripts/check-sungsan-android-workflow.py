@@ -106,7 +106,7 @@ def main() -> int:
         run_blocks = shell_run_blocks(source)
     except ValueError:
         run_blocks = []
-    require(len(run_blocks) == 13, "all 13 literal shell blocks are structurally found")
+    require(len(run_blocks) == 14, "all 14 literal shell blocks are structurally found")
     shell_syntax_ok = bool(run_blocks)
     for block in run_blocks:
         result = subprocess.run(
