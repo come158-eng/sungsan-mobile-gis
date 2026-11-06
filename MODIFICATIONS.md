@@ -1,3 +1,9 @@
+## Meta Engineering v1.2.8 (2026-11-06)
+
+- Replace the recent-project removal Controls button with a fixed 44px painted action anchored to the card edge, outside the text row. Draw a white X on solid red, independent of Android button styling.
+- Keep list-only removal, keyboard activation and accessibility action.
+- Preserve v1.2.7 project ZIP styles and default survey-layer selection.
+
 ## Meta Engineering v1.2.7 (2026-11-06)
 
 - Open project ZIPs through their QGIS project, preserving desktop symbology, labels, and relative data paths instead of loading the archive as raw data.

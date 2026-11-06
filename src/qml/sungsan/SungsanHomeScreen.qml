@@ -277,7 +277,7 @@ Page {
             spacing: 12
             anchors.fill: parent
             anchors.leftMargin: 14
-            anchors.rightMargin: 14
+            anchors.rightMargin: 70
             Rectangle {
               Layout.preferredWidth: 40
               Layout.preferredHeight: 40
@@ -316,52 +316,53 @@ Page {
               font.pixelSize: 13
               font.bold: true
             }
-            Button {
-              id: deleteRecentButton
-              objectName: "removeRecentProjectButton"
-              Layout.preferredWidth: 44
-              Layout.preferredHeight: 44
-              Layout.minimumWidth: 44
-              text: ""
-              display: AbstractButton.TextOnly
-              highlighted: false
-              flat: true
-              focusPolicy: Qt.NoFocus
-              Accessible.name: "최근 목록에서 제거 (파일 유지)"
-              onClicked: {
-                root.deleteRecentProjectRequested(projectPath, projectType, projectTitle);
-              }
-              background: Rectangle {
-                anchors.fill: parent
-                color: deleteRecentButton.pressed ? "#f8d4cf" : "#fce7e3"
-                border.color: "#e6a49b"
-                radius: 12
-              }
+          }
 
-              contentItem: Item {
-                Item {
-                  anchors.centerIn: parent
-                  width: 20
-                  height: 20
-                  Rectangle {
-                    anchors.centerIn: parent
-                    width: 18
-                    height: 2
-                    radius: 1
-                    rotation: 45
-                    color: "#a82720"
-                  }
-                  Rectangle {
-                    anchors.centerIn: parent
-                    width: 18
-                    height: 2
-                    radius: 1
-                    rotation: -45
-                    color: "#a82720"
-                  }
-                }
-              }
-              Layout.alignment: Qt.AlignVCenter
+          // Reserve the right edge independently of row sizing and the
+          // Android Controls style. This action must always paint its own X.
+          Rectangle {
+            id: deleteRecentButton
+            objectName: "removeRecentProjectButton"
+            anchors.right: parent.right
+            anchors.rightMargin: 14
+            anchors.verticalCenter: parent.verticalCenter
+            width: 44
+            height: 44
+            z: 1
+            radius: 12
+            color: removeRecentMouseArea.pressed ? "#9e211c" : "#c52d26"
+            border.color: activeFocus ? "#64201a" : "#a82720"
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: "최근 목록에서 제거 (파일 유지)"
+            Accessible.onPressAction: removeFromRecent()
+            Keys.onSpacePressed: removeFromRecent()
+            Keys.onReturnPressed: removeFromRecent()
+
+            function removeFromRecent() {
+              root.deleteRecentProjectRequested(recentButton.projectPath, recentButton.projectType, recentButton.projectTitle);
+            }
+
+            Rectangle {
+              anchors.centerIn: parent
+              width: 18
+              height: 2.5
+              radius: 1
+              rotation: 45
+              color: "#ffffff"
+            }
+            Rectangle {
+              anchors.centerIn: parent
+              width: 18
+              height: 2.5
+              radius: 1
+              rotation: -45
+              color: "#ffffff"
+            }
+            MouseArea {
+              id: removeRecentMouseArea
+              anchors.fill: parent
+              onClicked: deleteRecentButton.removeFromRecent()
             }
           }
         }

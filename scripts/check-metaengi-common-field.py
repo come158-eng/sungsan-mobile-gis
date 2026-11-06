@@ -9,7 +9,10 @@ remove = app.split('onDeleteRecentProjectRequested:', 1)[1].split('onOpenRecentP
 assert 'removeRecentProject(path)' in remove
 assert 'removeFolder' not in remove and 'clearProject' not in remove
 assert 'ic_delete_forever_white_24dp' not in home
-assert 'removeRecentProjectButton' in home and '#a82720' in home and '#fce7e3' in home
+assert 'removeRecentProjectButton' in home and '#c52d26' in home and '#ffffff' in home
+assert 'anchors.rightMargin: 70' in home and 'function removeFromRecent()' in home
+assert 'Keys.onSpacePressed: removeFromRecent()' in home
+assert 'Layout.preferredWidth: 44' not in home.split('id: deleteRecentButton', 1)[1].split('MouseArea {', 1)[0]
 assert 'enabled: root.canAddFeature && !root.geometryInProgress' in panel
 for start, end in [('onAddFeatureRequested:', 'onEditExistingFeatureRequested:'),
                    ('onStartSurveyRequested:', 'onCurrentLocationRequested:'),
