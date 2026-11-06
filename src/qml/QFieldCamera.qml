@@ -264,13 +264,22 @@ Popup {
               quality: ImageCapture.VeryHighQuality
 
               onImageSaved: (requestId, path) => {
-                currentPath = path;
+                currentPath = UrlUtils.toLocalFile(String(path));
+                if (!FileUtils.fileExists(currentPath)) {
+                  currentPath = "";
+                  cameraItem.state = "PhotoCapture";
+                  mainWindow.displayToast("촬영 사진 파일을 확인하지 못했습니다. 다시 촬영해 주세요.", "error");
+                  return;
+                }
                 orientationNormalizer.normalizeImageOrientation(currentPath);
-                photoPreview.source = "file://" + currentPath;
+                photoPreview.source = UrlUtils.fromString(currentPath);
+                cameraItem.state = "PhotoPreview";
               }
 
-              onPreviewChanged: {
-                cameraItem.state = "PhotoPreview";
+              onErrorOccurred: (requestId, error, message) => {
+                currentPath = "";
+                cameraItem.state = "PhotoCapture";
+                mainWindow.displayToast("사진 촬영에 실패했습니다: " + message, "error");
               }
             }
 
@@ -525,7 +534,11 @@ Popup {
                   captureLoader.item.orientationNormalizer.recordCaptureDeviceOrientation(
                       cameraItem.lastStableDeviceOrientation,
                       !cameraItem.isPortraitMode);
-                  captureLoader.item.imageCapture.captureToFile(qgisProject.homePath + '/DCIM/');
+                  if (!captureLoader.item.imageCapture.readyForCapture)
+                    return;
+                  currentPath = "";
+                  const capturePath = qgisProject.homePath + '/DCIM/capture_' + Date.now() + '_' + Math.floor(Math.random() * 1000000) + '.jpg';
+                  captureLoader.item.imageCapture.captureToFile(capturePath);
                   captureFlashAnimation.start();
                   if (positionSource.active) {
                     currentPosition = positionSource.positionInformation;

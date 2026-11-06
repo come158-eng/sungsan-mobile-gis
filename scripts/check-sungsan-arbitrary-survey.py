@@ -459,7 +459,7 @@ check(
 )
 check(
     "portable camera fallback replaces an existing photo atomically",
-    "FileUtils.replaceFileSafely(path, destinationPath)" in EXTERNAL_RESOURCE
+    "FileUtils.storeCameraPhoto(UrlUtils.toLocalFile(String(path)), destinationPath)" in EXTERNAL_RESOURCE
     and "Q_INVOKABLE static bool replaceFileSafely" in FILE_UTILS_H
     and "QSaveFile destinationFile( destinationFilePath )" in FILE_UTILS_CPP
     and "destinationFile.commit()" in FILE_UTILS_CPP

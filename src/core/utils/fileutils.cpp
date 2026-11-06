@@ -33,6 +33,7 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QSaveFile>
+#include <QUrl>
 #include <QStandardPaths>
 #include <qgis.h>
 #include <qgsapplication.h>
@@ -756,13 +757,27 @@ bool FileUtils::writeFileContent( const QString &filePath, const QByteArray &con
 
 bool FileUtils::replaceFileSafely( const QString &sourceFilePath, const QString &destinationFilePath )
 {
+  return storeCameraPhoto( sourceFilePath, destinationFilePath ).value( QStringLiteral( "ok" ) ).toBool();
+}
+
+QVariantMap FileUtils::storeCameraPhoto( const QString &sourcePath, const QString &destinationPath )
+{
+  const auto localPath = []( const QString &path ) {
+    const QUrl url( path );
+    return QDir::cleanPath( url.isLocalFile() ? url.toLocalFile() : path );
+  };
+  const QString sourceFilePath = localPath( sourcePath );
+  const QString destinationFilePath = localPath( destinationPath );
+  const auto failure = []( const QString &message ) {
+    QgsMessageLog::logMessage( message, QStringLiteral( "Field photos" ), Qgis::MessageLevel::Warning );
+    return QVariantMap{ { QStringLiteral( "ok" ), false }, { QStringLiteral( "error" ), message } };
+  };
   const QFileInfo sourceInfo( sourceFilePath );
   const QFileInfo destinationInfo( destinationFilePath );
-  if ( !sourceInfo.exists() || !sourceInfo.isFile() || sourceInfo.size() <= 0
-       || destinationFilePath.trimmed().isEmpty() || !isWithinProjectDirectory( destinationFilePath ) )
-  {
-    return false;
-  }
+  if ( !sourceInfo.exists() || !sourceInfo.isFile() || sourceInfo.size() <= 0 )
+    return failure( QObject::tr( "촬영한 임시 사진 파일을 읽을 수 없습니다. 사진 촬영을 다시 시도해 주세요." ) );
+  if ( destinationPath.trimmed().isEmpty() || !isWithinProjectDirectory( destinationFilePath ) )
+    return failure( QObject::tr( "사진 저장 경로가 프로젝트 폴더 안에 있지 않습니다. 프로젝트를 저장한 뒤 다시 촬영해 주세요." ) );
 
   if ( QDir::cleanPath( sourceInfo.absoluteFilePath() ).compare(
          QDir::cleanPath( destinationInfo.absoluteFilePath() ),
@@ -772,67 +787,41 @@ bool FileUtils::replaceFileSafely( const QString &sourceFilePath, const QString 
          Qt::CaseSensitive
 #endif
          ) == 0 )
-  {
-    return true;
-  }
+    return QVariantMap{ { QStringLiteral( "ok" ), true }, { QStringLiteral( "path" ), destinationFilePath } };
 
   QDir destinationDirectory( destinationInfo.absolutePath() );
-  if ( !destinationDirectory.mkpath( QStringLiteral( "." ) ) )
-  {
-    return false;
-  }
+  if ( !destinationDirectory.mkpath( QStringLiteral( "." ) ) || !isWithinProjectDirectory( destinationFilePath ) )
+    return failure( QObject::tr( "프로젝트 사진 폴더를 만들 수 없습니다. 저장 공간과 폴더 접근 권한을 확인해 주세요." ) );
 
   QFile sourceFile( sourceFilePath );
   if ( !sourceFile.open( QIODevice::ReadOnly ) )
-  {
-    return false;
-  }
-
+    return failure( QObject::tr( "촬영 사진을 열지 못했습니다: %1" ).arg( sourceFile.errorString() ) );
   const qint64 expectedSize = sourceFile.size();
   QSaveFile destinationFile( destinationFilePath );
   if ( !destinationFile.open( QIODevice::WriteOnly ) )
-  {
-    return false;
-  }
+    return failure( QObject::tr( "프로젝트 사진 파일을 만들지 못했습니다: %1" ).arg( destinationFile.errorString() ) );
 
-  QByteArray buffer;
-  buffer.resize( 64 * 1024 );
+  QByteArray buffer( 64 * 1024, '\0' );
   qint64 totalWritten = 0;
   while ( !sourceFile.atEnd() )
   {
     const qint64 bytesRead = sourceFile.read( buffer.data(), buffer.size() );
-    if ( bytesRead <= 0 )
+    if ( bytesRead <= 0 || destinationFile.write( buffer.constData(), bytesRead ) != bytesRead )
     {
       destinationFile.cancelWriting();
-      return false;
-    }
-    if ( destinationFile.write( buffer.constData(), bytesRead ) != bytesRead )
-    {
-      destinationFile.cancelWriting();
-      return false;
+      return failure( QObject::tr( "사진 복사 중 오류가 발생했습니다. 기존 사진은 유지됩니다." ) );
     }
     totalWritten += bytesRead;
   }
   sourceFile.close();
-
   if ( totalWritten != expectedSize || !destinationFile.commit() )
-  {
-    return false;
-  }
-
+    return failure( QObject::tr( "사진 저장을 완료하지 못했습니다: %1" ).arg( destinationFile.errorString() ) );
   const QFileInfo committedInfo( destinationFilePath );
   if ( !committedInfo.exists() || !committedInfo.isFile() || committedInfo.size() != expectedSize )
-  {
-    return false;
-  }
-
+    return failure( QObject::tr( "저장된 사진 파일의 크기를 확인하지 못했습니다." ) );
   if ( !QFile::remove( sourceFilePath ) )
-  {
-    QgsMessageLog::logMessage(
-      QObject::tr( "The replacement was saved, but the temporary camera file could not be removed: %1" ).arg( sourceFilePath ),
-      QString(), Qgis::MessageLevel::Warning );
-  }
-  return true;
+    QgsMessageLog::logMessage( QObject::tr( "The replacement was saved, but the temporary camera file could not be removed: %1" ).arg( sourceFilePath ), QString(), Qgis::MessageLevel::Warning );
+  return QVariantMap{ { QStringLiteral( "ok" ), true }, { QStringLiteral( "path" ), destinationFilePath } };
 }
 
 QVariantMap FileUtils::getFileInfo( const QString &filePath, bool fetchContent )

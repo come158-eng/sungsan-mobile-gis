@@ -498,13 +498,6 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     objectFields.append( QgsField( QStringLiteral( "memo" ), QMetaType::QString, QString(), 500 ) );
     objectFields.append( QgsField( QStringLiteral( "color" ), QMetaType::QString, QString(), 20 ) );
     objectFields.append( QgsField( QStringLiteral( "created_at" ), QMetaType::QDateTime ) );
-    objectFields.append( QgsField( QStringLiteral( "gps_accuracy_m" ), QMetaType::Double, QString(), 12, 2 ) );
-    objectFields.append( QgsField( QStringLiteral( "landstar_id" ), QMetaType::QString, QString(), 80 ) );
-    objectFields.append( QgsField( QStringLiteral( "landstar_code" ), QMetaType::QString, QString(), 80 ) );
-    objectFields.append( QgsField( QStringLiteral( "northing" ), QMetaType::Double, QString(), 18, 4 ) );
-    objectFields.append( QgsField( QStringLiteral( "easting" ), QMetaType::Double, QString(), 18, 4 ) );
-    objectFields.append( QgsField( QStringLiteral( "elevation" ), QMetaType::Double, QString(), 14, 4 ) );
-    objectFields.append( QgsField( QStringLiteral( "fix_status" ), QMetaType::QString, QString(), 30 ) );
     objectFields.append( QgsField( QStringLiteral( "surveyed_at" ), QMetaType::QDateTime ) );
     objectFields.append( QgsField( QStringLiteral( "source_device" ), QMetaType::QString, QString(), 40 ) );
     // Fixed field-photo slots keep capture simple in the field: no child-row
@@ -536,13 +529,6 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
       { QStringLiteral( "memo" ), QStringLiteral( "메모" ) },
       { QStringLiteral( "color" ), QStringLiteral( "표시 색상" ) },
       { QStringLiteral( "created_at" ), QStringLiteral( "작성 시간" ) },
-      { QStringLiteral( "gps_accuracy_m" ), QStringLiteral( "GPS 정확도(m)" ) },
-      { QStringLiteral( "landstar_id" ), QStringLiteral( "LandStar 측점명" ) },
-      { QStringLiteral( "landstar_code" ), QStringLiteral( "LandStar 코드" ) },
-      { QStringLiteral( "northing" ), QStringLiteral( "북ing(N)" ) },
-      { QStringLiteral( "easting" ), QStringLiteral( "동ing(E)" ) },
-      { QStringLiteral( "elevation" ), QStringLiteral( "표고(Z)" ) },
-      { QStringLiteral( "fix_status" ), QStringLiteral( "측량 고정상태" ) },
       { QStringLiteral( "surveyed_at" ), QStringLiteral( "측량 시간" ) },
       { QStringLiteral( "source_device" ), QStringLiteral( "측량 장비" ) },
       { QStringLiteral( "photo_near" ), QStringLiteral( "근경 사진" ) },
@@ -560,13 +546,14 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     const int objectIdIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "object_id" ) );
     const int createdAtIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "created_at" ) );
     const int colorIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "color" ) );
-    const int accuracyIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "gps_accuracy_m" ) );
+    const int surveyedAtIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "surveyed_at" ) );
     const int sourceDeviceIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "source_device" ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( objectIdIndex, QgsDefaultValue( QStringLiteral( "uuid()" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( createdAtIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( colorIndex, QgsDefaultValue( QStringLiteral( "'#1f5aa6'" ), false ) );
-    sungsanFieldObjectsLayer->setDefaultValueDefinition( accuracyIndex, QgsDefaultValue( QStringLiteral( "@gnss_horizontal_accuracy" ), false ) );
     sungsanFieldObjectsLayer->setDefaultValueDefinition( sourceDeviceIndex, QgsDefaultValue( QStringLiteral( "'메타이엔지 GIS'" ), false ) );
+
+    sungsanFieldObjectsLayer->setDefaultValueDefinition( surveyedAtIndex, QgsDefaultValue( QStringLiteral( "now()" ), false ) );
 
     QVariantMap emptyWidgetOptions;
     const QStringList hiddenObjectFields = { QStringLiteral( "fid" ), QStringLiteral( "object_id" ) };
@@ -625,13 +612,13 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
 
     const QString photoNameBaseExpression = QStringLiteral(
       "with_variable('current_fid', $id, "
-      "with_variable('object_name_raw', coalesce(nullif(trim(\"name\"), ''), nullif(trim(\"landstar_id\"), ''), nullif(to_string(\"object_id\"), ''), to_string($id)), "
+      "with_variable('object_name_raw', coalesce(nullif(trim(\"name\"), ''), nullif(to_string(\"object_id\"), ''), to_string($id)), "
       "with_variable('object_name_safe', "
       "regexp_replace(replace(@object_name_raw, char(92), '_'), "
       "'[/:*?\"<>|]', '_'), "
       "'images/메타이엔지_현장객체/' || @object_name_safe || "
-      "if(aggregate(@layer, 'count', $id, filter := $id != @current_fid AND coalesce(nullif(trim(\"name\"), ''), nullif(trim(\"landstar_id\"), '')) = "
-      "coalesce(nullif(trim(attribute(@parent, 'name')), ''), nullif(trim(attribute(@parent, 'landstar_id')), ''))) > 0, "
+      "if(aggregate(@layer, 'count', $id, filter := $id != @current_fid AND nullif(trim(\"name\"), '') = "
+      "nullif(trim(attribute(@parent, 'name')), '')) > 0, "
       "'_' || left(coalesce(nullif(to_string(\"object_id\"), ''), to_string(@current_fid)), 8), '') || ' (%1).{extension}')))" );
     QVariantMap fixedPhotoNaming;
     fixedPhotoNaming.insert( QStringLiteral( "photo_near" ), photoNameBaseExpression.arg( 1 ) );
@@ -645,7 +632,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/photoObjectNameField" ), QStringLiteral( "name" ) );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPhotoFolder" ), QStringLiteral( "images/메타이엔지_현장객체" ) );
 
-    sungsanFieldObjectsLayer->setDisplayExpression( QStringLiteral( "coalesce(nullif(trim(\"landstar_id\"), ''), nullif(trim(\"name\"), ''), \"category\", '현장 객체')" ) );
+    sungsanFieldObjectsLayer->setDisplayExpression( QStringLiteral( "coalesce(nullif(trim(\"name\"), ''), \"category\", '현장 객체')" ) );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ), true );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/landstarImportTarget" ), true );
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldPackage" ), true );
@@ -669,10 +656,8 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     objectFormRoot->addChildElement( photoContainer );
 
     const QStringList orderedObjectFields = {
-      QStringLiteral( "landstar_id" ), QStringLiteral( "landstar_code" ),
       QStringLiteral( "category" ), QStringLiteral( "memo" ), QStringLiteral( "color" ),
-      QStringLiteral( "northing" ), QStringLiteral( "easting" ), QStringLiteral( "elevation" ),
-      QStringLiteral( "fix_status" ), QStringLiteral( "gps_accuracy_m" ), QStringLiteral( "surveyed_at" ),
+      QStringLiteral( "surveyed_at" ),
       QStringLiteral( "source_device" ), QStringLiteral( "created_at" ) };
     for ( const QString &fieldName : orderedObjectFields )
     {

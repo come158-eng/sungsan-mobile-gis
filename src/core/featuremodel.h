@@ -219,6 +219,9 @@ class FeatureModel : public QAbstractListModel
      */
     Q_INVOKABLE void resetAttributes( bool partialReset = false );
 
+    //! Called only when a new field object's digitized geometry is confirmed.
+    Q_INVOKABLE void stampFieldSurveyTime();
+
     Q_INVOKABLE void resetFeature();
 
     Q_INVOKABLE void resetFeatureId();

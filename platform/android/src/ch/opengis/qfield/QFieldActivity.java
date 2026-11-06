@@ -1849,6 +1849,7 @@ public class QFieldActivity extends QtActivity {
         if (!isValidCapturedResource(source, false) ||
             safeDisplayName.trim().isEmpty()) {
             Log.e("QField", "Gallery publication rejected invalid photo");
+            showSungsanGalleryResult(false);
             return;
         }
 
@@ -1946,6 +1947,7 @@ public class QFieldActivity extends QtActivity {
         File album = new File(pictures, "메타이엔지 GIS");
         if (!album.exists() && !album.mkdirs()) {
             Log.e("QField", "Unable to create legacy gallery album");
+            showSungsanGalleryResult(false);
             return;
         }
 

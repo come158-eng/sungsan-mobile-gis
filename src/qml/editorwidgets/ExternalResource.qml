@@ -846,13 +846,12 @@ EditorWidgetBase {
       onFinished: path => {
         const filepath = StringUtils.replaceFilenameTags(getResourceFilePath(), path);
         const destinationPath = prefixToRelativePath + filepath;
-        const moved = isSungsanManagedFieldPhoto()
-            ? FileUtils.replaceFileSafely(path, destinationPath)
-            : platformUtilities.renameFile(path, destinationPath);
-        if (isSungsanManagedFieldPhoto() && (!moved || !FileUtils.fileExists(prefixToRelativePath + filepath))) {
-          sungsanPendingPreviousPhotoPath = "";
-          mainWindow.displayToast("새 사진을 안전하게 저장하지 못했습니다. 기존 사진은 유지됩니다.", "error");
-          close();
+        const storageResult = isSungsanManagedFieldPhoto()
+            ? FileUtils.storeCameraPhoto(UrlUtils.toLocalFile(String(path)), destinationPath)
+            : { "ok": platformUtilities.renameFile(path, destinationPath) };
+        if (isSungsanManagedFieldPhoto() && (!storageResult.ok || !FileUtils.fileExists(destinationPath))) {
+          mainWindow.displayToast(storageResult.error || "저장된 사진을 확인하지 못했습니다. 다시 시도해 주세요.", "error");
+          // Keep the capture preview and previous field value so it can be retried.
           return;
         }
         if (!cameraLoader.isVideo) {
@@ -867,10 +866,11 @@ EditorWidgetBase {
           if (!cameraLoader.isVideo && !FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)) {
             mainWindow.displayToast("사진은 저장했지만 하단 사진명 표지를 넣지 못했습니다.", "warning");
           }
+          if (!commitSungsanManagedPhoto(filepath))
+            return;
           if (!cameraLoader.isVideo && shouldPublishSungsanPhotoToGallery()) {
             platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName);
           }
-          commitSungsanManagedPhoto(filepath);
         } else {
           valueChangeRequested(filepath, false);
         }

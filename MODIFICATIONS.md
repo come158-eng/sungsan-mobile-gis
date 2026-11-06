@@ -1,3 +1,11 @@
+## Meta Engineering v1.2.9 (2026-11-06)
+
+- Remove seven unused survey columns from new field-object schemas and hide them in existing default forms without deleting stored values.
+- Stamp surveyed_at when new geometry is confirmed; never refresh existing objects when edited.
+- Give each camera capture an explicit JPEG filename, normalize returned file URLs, wait for saved-image readiness and preserve previews on save failure.
+- Copy photos atomically with specific failure messages; publish to the gallery only after the project attachment succeeds.
+- Run the actual production file-storage functions in a Qt runtime regression.
+
 ## Meta Engineering v1.2.8 (2026-11-06)
 
 - Replace the recent-project removal Controls button with a fixed 44px painted action anchored to the card edge, outside the text row. Draw a white X on solid red, independent of Android button styling.
