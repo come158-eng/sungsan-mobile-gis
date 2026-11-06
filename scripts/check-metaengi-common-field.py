@@ -31,6 +31,8 @@ for name in ('gps_accuracy_m', 'landstar_id', 'landstar_code', 'northing', 'east
     assert '"' + name + '"' not in schema
 assert 'compactFieldFormV2' in bridge and '!removedSurveyFields.contains( name )' in bridge
 assert app.count('overlayFeatureFormDrawer.featureModel.stampFieldSurveyTime();') == 2
+feature_model = (root / 'src/core/featuremodel.cpp').read_text(encoding='utf-8')
+assert 'FID_IS_NULL( mFeature.id() ) || FID_IS_NEW( mFeature.id() )' in feature_model
 camera = (root / 'src/qml/QFieldCamera.qml').read_text(encoding='utf-8')
 assert "'/DCIM/capture_'" in camera and 'currentPath = UrlUtils.toLocalFile(String(path))' in camera
 assert "captureToFile(qgisProject.homePath + '/DCIM/');" not in camera

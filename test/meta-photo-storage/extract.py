@@ -17,3 +17,6 @@ Path(sys.argv[2]).write_text('\n\n'.join(function(s) for s in (
     'bool FileUtils::replaceFileSafely(',
     'QVariantMap FileUtils::storeCameraPhoto(',
 )), encoding='utf-8')
+source = (Path(sys.argv[1]).parents[1] / 'featuremodel.cpp').read_text(encoding='utf-8')
+Path(sys.argv[2]).with_name('production-fieldtime.inc').write_text(
+    function('void FeatureModel::stampFieldSurveyTime()'), encoding='utf-8')

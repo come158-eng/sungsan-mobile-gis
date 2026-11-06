@@ -839,7 +839,7 @@ bool FeatureModel::suppressFeatureForm() const
 
 void FeatureModel::stampFieldSurveyTime()
 {
-  if ( !mLayer || !FID_IS_NEW( mFeature.id() )
+  if ( !mLayer || !( FID_IS_NULL( mFeature.id() ) || FID_IS_NEW( mFeature.id() ) )
        || !( mLayer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ), false ).toBool()
              || mLayer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), false ).toBool() ) )
     return;
