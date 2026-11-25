@@ -339,9 +339,10 @@ check(
     and "fieldsInForm.contains( fieldName )" in prepare_layer
     and "addChildElement" in prepare_layer
     and "layer->setEditFormConfig( formConfig )" in prepare_layer
-    and "if ( standardObjectLayer" in prepare_layer
-    and "compactFieldFormV2" in prepare_layer
-    and "savedRelations" in prepare_layer,
+    and "if ( standardForm" in prepare_layer
+    and "isStockCompactForm" in prepare_layer
+    and "setDefaultFieldForm( layer, photoFields )" in prepare_layer
+    and "compactFieldFormV2" in BRIDGE_CPP and "savedRelations" in BRIDGE_CPP,
 )
 check(
     "missing photos are grouped in the field form",

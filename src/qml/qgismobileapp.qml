@@ -3875,12 +3875,18 @@ ApplicationWindow {
       return false;
     }
     if (qgisProject.fileName) {
-      mainWindow.sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, true);
+      const preparation = mainWindow.sungsanPrepareFieldPhotoLayer(dashBoard.activeLayer, true);
+      if (preparation && preparation.requiresManagedPhotos && !preparation.prepared)
+        return false;
     } else {
       displayToast("조사는 시작할 수 있지만 사진을 상대경로로 저장하려면 프로젝트를 먼저 저장해 주세요.", "warning");
     }
     changeMode("digitize");
     return stateMachine.state === "digitize";
+  }
+
+  function sungsanRequiresManagedPhotos(layer) {
+    return appIsSungsan && sungsanSurveyBridge.isDefaultFieldLayer(qgisProject, layer);
   }
 
   function sungsanPrepareFieldPhotoLayer(layer, showWarnings) {
@@ -3901,7 +3907,9 @@ ApplicationWindow {
         displayToast(preparation.error, "warning");
       }
     } else if (preparation && preparation.warning && showWarnings) {
-      displayToast(preparation.warning, "warning");
+      displayToast(preparation.requiresManagedPhotos && !preparation.prepared
+                  ? "현장사진 4칸을 준비하지 못했습니다. 레이어의 편집 권한과 저장 상태를 확인한 뒤 다시 시도해 주세요."
+                  : preparation.warning, "warning");
     }
     return preparation;
   }

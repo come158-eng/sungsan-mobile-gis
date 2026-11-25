@@ -930,6 +930,15 @@ EditorWidgetBase {
 
   function capturePhoto() {
     Qt.inputMethod.hide();
+    if (appIsSungsan && currentLayer && !isSungsanManagedFieldPhoto()
+        && ["photo_near", "photo_far", "photo_other", "photo_other_2", "ss_photo4"].indexOf(field.name) !== -1
+        && mainWindow.sungsanRequiresManagedPhotos(currentLayer)) {
+      const prepared = mainWindow.sungsanPrepareFieldPhotoLayer(currentLayer, true);
+      if (!prepared || !prepared.prepared || !isSungsanManagedFieldPhoto()) {
+        mainWindow.displayToast("현장사진 칸을 준비하지 못했습니다. 레이어의 편집 상태를 확인한 후 다시 촬영해 주세요.", "warning");
+        return;
+      }
+    }
     if (isSungsanManagedFieldPhoto()) {
       const objectName = sungsanObjectNameEvaluator.evaluate();
       if (objectName === undefined || objectName === null || FeatureUtils.attributeIsNull(objectName) || String(objectName).trim().length === 0) {

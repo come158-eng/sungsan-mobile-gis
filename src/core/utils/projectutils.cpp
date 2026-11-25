@@ -20,6 +20,7 @@
 #include "fileutils.h"
 #include "positioningutils.h"
 #include "projectutils.h"
+#include "sungsansurveybridge.h"
 
 #include <qgsattributeeditorcontainer.h>
 #include <qgsattributeeditorfield.h>
@@ -664,34 +665,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     sungsanFieldObjectsLayer->setCustomProperty( QStringLiteral( "QFieldSync/action" ), QStringLiteral( "offline" ) );
     LayerUtils::setDefaultRenderer( sungsanFieldObjectsLayer, nullptr, QString(), QStringLiteral( "color" ) );
 
-    QgsEditFormConfig objectFormConfig = sungsanFieldObjectsLayer->editFormConfig();
-    objectFormConfig.clearTabs();
-    objectFormConfig.setLayout( Qgis::AttributeFormLayout::DragAndDrop );
-    QgsAttributeEditorContainer *objectFormRoot = objectFormConfig.invisibleRootContainer();
-    const int nameFieldIndex = sungsanFieldObjectsLayer->fields().indexOf( QStringLiteral( "name" ) );
-    objectFormRoot->addChildElement( new QgsAttributeEditorField( QStringLiteral( "name" ), nameFieldIndex, objectFormRoot ) );
-
-    QgsAttributeEditorContainer *photoContainer = new QgsAttributeEditorContainer( QStringLiteral( "현장사진" ), objectFormRoot );
-    for ( const QString &fieldName : fixedPhotoFields )
-    {
-      const int fieldIndex = sungsanFieldObjectsLayer->fields().indexOf( fieldName );
-      photoContainer->addChildElement( new QgsAttributeEditorField( fieldName, fieldIndex, photoContainer ) );
-    }
-    objectFormRoot->addChildElement( photoContainer );
-
-    const QStringList orderedObjectFields = {
-      QStringLiteral( "landstar_id" ), QStringLiteral( "landstar_code" ),
-      QStringLiteral( "category" ), QStringLiteral( "memo" ), QStringLiteral( "color" ),
-      QStringLiteral( "northing" ), QStringLiteral( "easting" ), QStringLiteral( "elevation" ),
-      QStringLiteral( "fix_status" ), QStringLiteral( "gps_accuracy_m" ), QStringLiteral( "surveyed_at" ),
-      QStringLiteral( "source_device" ), QStringLiteral( "created_at" ) };
-    for ( const QString &fieldName : orderedObjectFields )
-    {
-      const int fieldIndex = sungsanFieldObjectsLayer->fields().indexOf( fieldName );
-      if ( fieldIndex >= 0 )
-        objectFormRoot->addChildElement( new QgsAttributeEditorField( fieldName, fieldIndex, objectFormRoot ) );
-    }
-    sungsanFieldObjectsLayer->setEditFormConfig( objectFormConfig );
+    SungsanSurveyBridge::setDefaultFieldForm( sungsanFieldObjectsLayer, fixedPhotoFields );
 
     QDir( createdProjectDir ).mkpath( QStringLiteral( "images/성산_현장객체" ) );
 

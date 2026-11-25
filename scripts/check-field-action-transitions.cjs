@@ -28,6 +28,38 @@ function timer() {
   return { armed: false, restart() { this.armed = true; }, stop() { this.armed = false; } };
 }
 
+{
+  const selected = {};
+  let prepared = false, managed = false, switched = false, warnings = 0;
+  const window = {
+    sungsanRequiresManagedPhotos: () => true,
+    sungsanPrepareFieldPhotoLayer: () => ({requiresManagedPhotos:true, prepared}),
+    displayToast: () => ++warnings
+  };
+  const ctx = context({ qgisProject:{fileName:"1111.qgz"}, welcomeScreen:{}, mainWindow:window,
+    dashBoard:{activeLayer:selected, ensureEditableLayerSelected:() => ({ok:true})},
+    digitizingToolbar:{digitizingAllowed:true}, changeMode:() => { switched=true; },
+    stateMachine:{state:"digitize"}, Qt:{inputMethod:{hide(){}}}, appIsSungsan:true,
+    currentLayer:selected, field:{name:"photo_near"}, isSungsanManagedFieldPhoto:() => managed,
+    sungsanObjectNameEvaluator:{evaluate:() => "QA"}, FeatureUtils:{attributeIsNull:() => false}, cameraLoader:{} });
+  const start = handler(ctx,"function sungsanStartSurvey","requireFeatureAddition");
+  const resource = fs.readFileSync(path.join(__dirname,"../src/qml/editorwidgets/ExternalResource.qml"), "utf8");
+  const camera = vm.runInContext("(function()"+body("function capturePhoto()",0,resource)+")",ctx);
+  assert.equal(start(true),false);
+  assert.equal(switched,false);
+  camera();
+  assert.equal(ctx.cameraLoader.active,undefined);
+  assert.equal(warnings,1);
+  prepared = true;
+  assert.equal(start(true),true);
+  camera(); // provider ready but the requested slot is still unbound
+  assert.equal(ctx.cameraLoader.active,undefined);
+  managed = true;
+  camera();
+  assert.equal(ctx.cameraLoader.active,true);
+  console.log("PASS cold restored field layer: survey and camera wait for the prepared photo mapping");
+}
+
 const state = {}, internal = { positioningDevice: "", positioningDeviceName: "Internal device" };
 const receiver = { active: true, deviceId: "", positionInformation: {isValid: true, latitudeValid: true, longitudeValid: true}, projectedPosition: {x: 0, y: 24} };
 const switching = timer(), activating = timer();

@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[1]
 HOME = (ROOT / "src/qml/sungsan/SungsanHomeScreen.qml").read_text(encoding="utf-8")
 APP = (ROOT / "src/qml/qgismobileapp.qml").read_text(encoding="utf-8")
 UTILS = (ROOT / "src/core/utils/projectutils.cpp").read_text(encoding="utf-8")
+SURVEY = (ROOT / "src/core/sungsansurveybridge.cpp").read_text(encoding="utf-8")
 HEADER = (ROOT / "src/core/utils/projectutils.h").read_text(encoding="utf-8")
 ANDROID_ACTIVITY = (
     ROOT / "platform/android/src/ch/opengis/qfield/QFieldActivity.java"
@@ -110,7 +111,11 @@ check(
         )
     ),
 )
-check("photo section follows object name", UTILS.index('QStringLiteral( "name" ), nameFieldIndex') < UTILS.index('QStringLiteral( "현장사진" )'))
+check("generated project uses the same name, four photos and memo form on creation and reopen",
+      "setDefaultFieldForm( sungsanFieldObjectsLayer, fixedPhotoFields )" in UTILS
+      and SURVEY.index('QStringList basicFields{ QStringLiteral( "name" ) }')
+          < SURVEY.index("basicFields.append( photoFields )")
+          < SURVEY.index('basicFields.append( QStringLiteral( "memo" ) )'))
 check("no plus-button photo relation", "현장 사진 · 근경/원경/기타/추가" not in UTILS)
 check("layer photo directory created", 'mkpath( QStringLiteral( "images/성산_현장객체" ) )' in UTILS)
 check("legacy photo directories removed", all(path not in UTILS for path in (

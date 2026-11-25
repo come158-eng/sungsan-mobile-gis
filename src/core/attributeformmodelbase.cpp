@@ -180,6 +180,23 @@ void AttributeFormModelBase::setFeatureModel( FeatureModel *featureModel )
 
 void AttributeFormModelBase::onCurrentLayerChanged()
 {
+  disconnect( mFormLayoutConnection );
+  if ( QgsVectorLayer *layer = mFeatureModel->layer() )
+  {
+    mFormLayoutConnection = connect( layer, &QgsVectorLayer::editFormConfigChanged, this, [this, layer] {
+      // A restored layer can have been rendered before its managed form was
+      // prepared. A remember-value change while editing must not reset it.
+      if ( mLayer == layer && !mHasTabs && layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/compactFieldFormV2" ) ).toBool() )
+      {
+        auto form = layer->editFormConfig();
+        const auto tabs = form.invisibleRootContainer()->children();
+        if ( tabs.size() != 2 || tabs[0]->type() != Qgis::AttributeEditorType::Container
+             || tabs[0]->name() != QStringLiteral( "기본 입력" ) ) return;
+        resetModel();
+        applyFeatureModel();
+      }
+    }, Qt::QueuedConnection );
+  }
   setIsWizard( QgsProject::instance()->readBoolEntry( QStringLiteral( "qfieldsync" ), QStringLiteral( "featureFormWizardModeEnabled" ), false ) );
   resetModel();
 }

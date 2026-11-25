@@ -1309,6 +1309,15 @@ void QgisMobileapp::readProjectFile()
   }
 
   ProjectInfo::restoreSettings( mProjectFilePath, mProject, mMapCanvas, mFlatLayerTree );
+  if ( qfield::isSungsanBuild && projectLoaded )
+  {
+    // The active layer and digitizing mode may be restored before the QML timer
+    // fires. Rehydrate the desktop project's photo mapping before returning to it.
+    SungsanSurveyBridge bridge;
+    for ( QgsVectorLayer *layer : mProject->layers<QgsVectorLayer *>() )
+      if ( SungsanSurveyBridge::isDefaultFieldLayer( mProject, layer ) )
+        bridge.prepareFieldSurveyLayer( mProject, layer );
+  }
   // Keep history only after reading finishes; it is not an autoload target.
   QSettings().setValue( QStringLiteral( "QField/lastProjectFilePath" ), mProjectFilePath );
   emit loadProjectEnded( mProjectFilePath, mProjectFileName );

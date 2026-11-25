@@ -165,6 +165,7 @@ class AttributeFormModelBase : public QStandardItemModel
 
     FeatureModel *mFeatureModel = nullptr;
     QPointer<QgsVectorLayer> mLayer;
+    QMetaObject::Connection mFormLayoutConnection;
     std::unique_ptr<QgsAttributeEditorContainer> mTemporaryContainer;
 
     bool mIsWizard = false;

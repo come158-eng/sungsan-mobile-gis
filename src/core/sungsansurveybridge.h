@@ -69,6 +69,8 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
 
     // Widget configuration for a desktop-compatible copy of a legacy field project.
     static QString returnPhotoSettings( QgsProject *project );
+    Q_INVOKABLE static bool isDefaultFieldLayer( QgsProject *project, QgsVectorLayer *layer );
+    static void setDefaultFieldForm( QgsVectorLayer *layer, const QStringList &photoFields );
 
     /**
      * Writes all point features in a layer as

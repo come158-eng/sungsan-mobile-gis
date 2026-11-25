@@ -94,7 +94,7 @@ final class FieldPhotoProject {
     }
 
     private static boolean isManagedObject(Element qgis, Element layer) {
-        if (!LEGACY_OBJECT_NAMES.contains(text(layer,"layername")) || !"vector".equals(layer.getAttribute("type"))
+        if ((!LEGACY_OBJECT_NAMES.contains(text(layer,"layername")) && !"현장객체".equals(text(layer,"layername"))) || !"vector".equals(layer.getAttribute("type"))
                 || !"Point".equals(layer.getAttribute("geometry")) || !"ogr".equals(text(layer,"provider"))) return false;
         String source = text(layer,"datasource");
         if (source.startsWith("./")) source = source.substring(2);
@@ -121,7 +121,36 @@ final class FieldPhotoProject {
         return false;
     }
 
-    private static void normalizeLegacyObjectName(Element qgis) {
+    private static boolean hasUserFormCode(Element layer) {
+        return !text(layer,"editform").trim().isEmpty() || !text(layer,"editforminit").trim().isEmpty()
+                || !text(layer,"editforminitcode").trim().isEmpty();
+    }
+
+    // Templates written by the old plugin show physical fields in schema order.
+    // A reordered field, nested group or additional control belongs to the user.
+    private static boolean stockFlatForm(Element layer) {
+        if (hasUserFormCode(layer)) return false;
+        Element form=child(layer,"attributeEditorForm");
+        String layout=text(layer,"editorlayout");
+        if (form==null) return layout.isEmpty() || "generatedlayout".equals(layout);
+        List<String> shown=new ArrayList<>(), expected=new ArrayList<>();
+        for (Node n=form.getFirstChild(); n!=null; n=n.getNextSibling()) {
+            if (!(n instanceof Element)) continue;
+            Element item=(Element)n;
+            if ("attributeEditorField".equals(item.getTagName())) shown.add(item.getAttribute("name"));
+            else if (!"attributeEditorRelation".equals(item.getTagName()) && !"labelStyle".equals(item.getTagName())) return false;
+        }
+        if (layout.isEmpty() || "generatedlayout".equals(layout)) return shown.isEmpty();
+        if (!"tablayout".equals(layout)) return false;
+        for (Element field:children(child(layer,"fieldConfiguration"),"field")) {
+            String name=field.getAttribute("name");
+            if (("fid".equals(name) || "ss_photo4".equals(name) || "photo_other_2".equals(name)) && !shown.contains(name)) continue;
+            expected.add(name);
+        }
+        return shown.equals(expected);
+    }
+
+    private static void normalizeLegacyObjectName(Element qgis, Map<String,Element> settings) {
         Element object = null;
         for (Element layer : children(child(qgis,"projectlayers"),"maplayer")) {
             if (!isManagedObject(qgis,layer)) continue;
@@ -130,6 +159,7 @@ final class FieldPhotoProject {
         }
         if (object == null || text(object,"id").isEmpty()) return;
         String id = text(object,"id");
+        if (hasUserFormCode(object) || (!stockFlatForm(object) && child(settings.get(id),"managedForm")==null)) return;
         String oldName = text(object,"layername");
         child(object,"layername").setTextContent("현장객체");
         Element tree = child(qgis,"layer-tree-group");
@@ -294,12 +324,15 @@ final class FieldPhotoProject {
         if (pending.isEmpty() && !"1".equals(spec.getDocumentElement().getAttribute("sourcesOnly")))
             throw new IOException("Missing photo layer settings");
         repairLayerSources(qgis,dir,true);
-        normalizeLegacyObjectName(qgis);
+        normalizeLegacyObjectName(qgis,pending);
         for (Element layer : children(child(qgis,"projectlayers"), "maplayer")) {
             Element layerId = child(layer, "id");
             if (layerId == null) continue;
             Element updates = pending.remove(layerId.getTextContent());
-            if (updates != null) patchFields(layer, updates);
+            if (updates != null) {
+                patchManagedForm(qgis,layer,updates);
+                patchFields(layer, updates);
+            }
         }
         if (!pending.isEmpty()) throw new IOException("Active photo layer not found in returned project");
         Transformer writer = TransformerFactory.newInstance().newTransformer();
@@ -308,6 +341,44 @@ final class FieldPhotoProject {
         if (type != null && type.getSystemId() != null) writer.setOutputProperty(OutputKeys.DOCTYPE_SYSTEM, type.getSystemId());
         if (type != null && type.getPublicId() != null) writer.setOutputProperty(OutputKeys.DOCTYPE_PUBLIC, type.getPublicId());
         writer.transform(new DOMSource(project), new StreamResult(out));
+    }
+
+    private static void patchManagedForm(Element qgis, Element layer, Element updates) throws Exception {
+        Element layoutSpec=child(updates,"managedForm");
+        if (layoutSpec==null || !isManagedObject(qgis,layer) || !stockFlatForm(layer)) return;
+        Element form=child(layer,"attributeEditorForm");
+        List<Element> tabs=children(layoutSpec,"tab");
+        if (tabs.size()!=2 || !"기본 입력".equals(tabs.get(0).getAttribute("name"))
+                || !"상세정보".equals(tabs.get(1).getAttribute("name"))) throw new IOException("Invalid managed survey form");
+        form=container(layer,"attributeEditorForm");
+        Map<String,Element> existing=new HashMap<>();
+        for (Element f:children(form,"attributeEditorField")) {
+            existing.put(f.getAttribute("name"),f);
+            form.removeChild(f);
+        }
+        List<Element> relations=children(form,"attributeEditorRelation");
+        for (int i=0;i<tabs.size();++i) {
+            Element group=append(form,"attributeEditorContainer");
+            group.setAttribute("name",tabs.get(i).getAttribute("name"));
+            group.setAttribute("type","Tab");
+            group.setAttribute("groupBox","0");
+            group.setAttribute("columnCount","1");
+            for (Element spec:children(tabs.get(i),"field")) {
+                String name=spec.getAttribute("name");
+                Element field=existing.get(name);
+                if (field==null) {
+                    Element alias=match(child(layer,"aliases"),"alias","field",name);
+                    Element added=match(updates,"field","name",name);
+                    if (alias==null && added==null) throw new IOException("Unresolved managed survey field: " + name);
+                    field=append(group,"attributeEditorField");
+                    field.setAttribute("name",name);
+                    field.setAttribute("index",alias!=null?alias.getAttribute("index"):added.getAttribute("index"));
+                    field.setAttribute("showLabel","1");
+                } else group.appendChild(field);
+            }
+            if (i==1) for (Element relation:relations) group.appendChild(relation);
+        }
+        container(layer,"editorlayout").setTextContent("tablayout");
     }
 
     private static void patchFields(Element layer, Element updates) throws Exception {
