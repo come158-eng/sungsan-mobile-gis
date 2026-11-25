@@ -220,9 +220,17 @@ bool Flusher::flush( const QString &filename, bool force )
 
   int logFrames = -1;
   int checkpointedFrames = -1;
-  status = sqlite3_wal_checkpoint_v2( db.get(), nullptr, SQLITE_CHECKPOINT_FULL, &logFrames, &checkpointedFrames );
+  // A newly opened connection has not loaded the schema yet. A checkpoint
+  // on that connection can report OK with -1 frames even when the latest
+  // feature and its photo references exist only in the WAL.
+  if ( force )
+    sqlite3_busy_timeout( db.get(), 1000 );
+  status = sqlite3_exec( db.get(), "PRAGMA main.schema_version", nullptr, nullptr, nullptr );
+  if ( status == SQLITE_OK )
+    status = sqlite3_wal_checkpoint_v2( db.get(), "main", SQLITE_CHECKPOINT_FULL, &logFrames, &checkpointedFrames );
 
-  if ( status == SQLITE_OK && ( logFrames < 0 || checkpointedFrames >= logFrames ) )
+  const bool noWalData = logFrames < 0 && QFileInfo( filename + QStringLiteral( "-wal" ) ).size() == 0;
+  if ( status == SQLITE_OK && ( noWalData || ( logFrames >= 0 && checkpointedFrames >= logFrames ) ) )
   {
     if ( QTimer *timer = mScheduledFlushes.take( filename ) )
     {

@@ -322,12 +322,18 @@ public class QFieldUtils {
      * @return            returns True if the operation was successful
      */
     public static boolean folderToZip(String folder, String archivePath) {
+        return folderToZip(folder, archivePath, null, null);
+    }
+
+    public static boolean folderToZip(String folder, String archivePath, File selected, File replacement) {
+        boolean[] substituted = {false};
         try (ZipOutputStream zip = new ZipOutputStream(
                  new FileOutputStream(archivePath))) {
             File sourceRoot = new File(folder).getCanonicalFile();
-            if (!sourceRoot.isDirectory() ||
-                !addFolderToZip(zip, sourceRoot.getPath(),
-                                sourceRoot.getPath())) {
+            if ((selected == null) != (replacement == null) || !sourceRoot.isDirectory() ||
+                !addFolderToZip(zip, sourceRoot.getPath(), sourceRoot.getPath(),
+                                selected == null ? null : selected.getCanonicalFile(), replacement, substituted) ||
+                (selected != null && !substituted[0])) {
                 return false;
             }
             zip.finish();
@@ -348,7 +354,8 @@ public class QFieldUtils {
      * @return           returns True if the operation was successful
      */
     private static boolean addFolderToZip(ZipOutputStream zip, String folder,
-                                          String rootFolder) {
+                                          String rootFolder, File selected,
+                                          File replacement, boolean[] substituted) {
         File dir;
         File root;
         try {
@@ -398,12 +405,17 @@ public class QFieldUtils {
 
             if (file.isDirectory()) {
                 boolean success =
-                    addFolderToZip(zip, file.getPath(), rootFolder);
+                    addFolderToZip(zip, file.getPath(), rootFolder, selected, replacement, substituted);
                 if (!success) {
                     return false;
                 }
             } else {
                 try {
+                    if (selected != null && file.getCanonicalFile().equals(selected)) {
+                        if (substituted[0] || !replacement.isFile()) return false;
+                        file = replacement;
+                        substituted[0] = true;
+                    }
                     ZipEntry zipFile = new ZipEntry(pathPrefix + fileName);
                     zip.putNextEntry(zipFile);
                     try (InputStream input = new FileInputStream(file)) {

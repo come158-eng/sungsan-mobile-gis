@@ -5,6 +5,11 @@ import org.qfield
 TestCase {
   name: "Positioning"
 
+  Component {
+    id: independentReceiver
+    Positioning {}
+  }
+
   Positioning {
     id: positioning
     deviceId: 'udp:localhost:1958'
@@ -234,5 +239,18 @@ TestCase {
       compare(positioningInformations.itemAt(index + 6).name, expected.name);
       compare(positioningInformations.itemAt(index + 6).value, expected.value);
     });
+  }
+
+  function test_08_independentForegroundReceiver() {
+    const original = positioning.deviceId;
+    const receiver = createTemporaryObject(independentReceiver, this, { deviceId: "udp:localhost:1958" });
+    verify(receiver !== null);
+    receiver.active = true;
+    tryCompare(receiver, "active", true);
+    tryVerify(() => receiver.positionInformation.latitudeValid, 5000);
+    compare(positioning.deviceId, original);
+    receiver.active = false;
+    tryCompare(receiver, "active", false);
+    compare(positioning.active, true);
   }
 }

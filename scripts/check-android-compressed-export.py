@@ -53,7 +53,7 @@ def main() -> int:
     source = ACTIVITY.read_text(encoding="utf-8")
     utils_source = UTILS.read_text(encoding="utf-8")
     export = method_body(
-        source, "private void sendCompressedFolderTo(String path)"
+        source, "private void sendCompressedFolderTo(String path, String projectPath, String photoSettings)"
     )
     validate = method_body(
         source, "private boolean isNonEmptyReadableZip(File archive)"

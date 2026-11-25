@@ -24,7 +24,6 @@
 
 #include <QObject>
 #include <QRemoteObjectDynamicReplica>
-#include <QRemoteObjectHost>
 #include <QRemoteObjectNode>
 #include <qgscoordinatereferencesystem.h>
 #include <qgscoordinatetransformcontext.h>
@@ -414,13 +413,15 @@ class Positioning : public QObject
 
   private:
     void setupSource();
+    void clearSource();
+    void connectSource( QObject *source );
     bool isSourceAvailable() const;
 
     void processProjectedPosition();
     double adjustOrientation( double orientation ) const;
 
     PositioningSource *mPositioningSource = nullptr;
-    QRemoteObjectHost mHost;
+    QObject *mSourceEndpoint = nullptr;
 
     std::unique_ptr<QRemoteObjectNode> mNode;
     QSharedPointer<QRemoteObjectDynamicReplica> mPositioningSourceReplica; //skip-keyword-check

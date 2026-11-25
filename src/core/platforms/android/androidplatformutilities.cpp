@@ -23,6 +23,7 @@
 #include "androidresourcesource.h"
 #include "androidviewstatus.h"
 #include "appinterface.h"
+#include "sungsansurveybridge.h"
 #include "fileutils.h"
 #include "qfield.h"
 #include "qfield_android.h"
@@ -67,6 +68,7 @@ inline void runOnAndroidMainThread( const std::function<void()> &runnable )
 #include <QThread>
 #include <QTimer>
 #include <qgsfileutils.h>
+#include <qgsproject.h>
 
 #include <android/bitmap.h>
 #include <android/log.h>
@@ -384,12 +386,36 @@ void AndroidPlatformUtilities::sendCompressedFolderTo( const QString &path ) con
 {
   if ( mActivity.isValid() )
   {
-    runOnAndroidMainThread( [path] {
+    QString photoSettings;
+    QString projectFile;
+    QgsProject *project = QgsProject::instance();
+    if ( qfield::isSungsanBuild && project && !project->fileName().isEmpty() )
+    {
+      const QFileInfo file( project->fileName() );
+      const QString suffix = file.suffix().toLower();
+      const auto sourceVersion = project->lastSaveVersion();
+      if ( ( suffix == QStringLiteral( "qgz" ) || suffix == QStringLiteral( "qgs" ) ) && file.canonicalPath() == QFileInfo( path ).canonicalFilePath()
+           && !sourceVersion.isNull() && sourceVersion.majorVersion() < Qgis::version().section( '.', 0, 0 ).toInt() )
+      {
+        projectFile = file.canonicalFilePath();
+        photoSettings = SungsanSurveyBridge::returnPhotoSettings( project );
+      }
+    }
+    runOnAndroidMainThread( [path, projectFile, photoSettings] {
       auto activity = qtAndroidContext();
       if ( activity.isValid() )
       {
         QJniObject pathJni = QJniObject::fromString( path );
-        activity.callMethod<void>( "sendCompressedFolderTo", "(Ljava/lang/String;)V", pathJni.object<jstring>() );
+        if ( photoSettings.isEmpty() )
+        {
+          activity.callMethod<void>( "sendCompressedFolderTo", "(Ljava/lang/String;)V", pathJni.object<jstring>() );
+        }
+        else
+        {
+          const auto fileJni = QJniObject::fromString( projectFile );
+          const auto settingsJni = QJniObject::fromString( photoSettings );
+          activity.callMethod<void>( "sendCompressedFolderTo", "(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V", pathJni.object<jstring>(), fileJni.object<jstring>(), settingsJni.object<jstring>() );
+        }
       }
     } );
   }

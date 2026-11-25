@@ -1471,6 +1471,10 @@ public class QFieldActivity extends QtActivity {
     }
 
     private void sendCompressedFolderTo(String path) {
+        sendCompressedFolderTo(path, null, null);
+    }
+
+    private void sendCompressedFolderTo(String path, String projectPath, String photoSettings) {
         showBlockingProgressDialog(getString(R.string.processing_message));
 
         executorService.execute(new Runnable() {
@@ -1480,6 +1484,8 @@ public class QFieldActivity extends QtActivity {
                 final File temporaryFile =
                     new File(getCacheDir(), file.getName() + ".zip");
                 boolean archiveReady = false;
+                File selected = null;
+                File projectCopy = null;
 
                 try {
                     // Never allow a previous successful export to mask a new
@@ -1488,14 +1494,26 @@ public class QFieldActivity extends QtActivity {
                         Log.w("QField", "Could not remove stale project ZIP.");
                     }
 
+                    if (projectPath != null) {
+                        selected = new File(projectPath).getCanonicalFile();
+                        if (!file.getCanonicalFile().equals(selected.getParentFile())) {
+                            throw new IOException("Selected project is outside its export folder");
+                        }
+                        projectCopy = File.createTempFile("field-return-", ".tmp", getCacheDir());
+                        FieldPhotoProject.writeCopy(selected, photoSettings, projectCopy);
+                    }
                     archiveReady =
                         file.isDirectory() &&
                         QFieldUtils.folderToZip(file.getPath(),
-                                                temporaryFile.getPath()) &&
+                                                temporaryFile.getPath(), selected, projectCopy) &&
                         isNonEmptyReadableZip(temporaryFile);
                 } catch (Exception e) {
-                    Log.e("QField", "Could not create project ZIP.", e);
+                    Log.e("QField", "Could not create field project ZIP", e);
                     archiveReady = false;
+                } finally {
+                    if (projectCopy != null && projectCopy.exists() && !projectCopy.delete()) {
+                        Log.w("QField", "Could not remove temporary project copy");
+                    }
                 }
 
                 if (!archiveReady && temporaryFile.exists() &&

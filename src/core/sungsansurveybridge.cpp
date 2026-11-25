@@ -15,6 +15,7 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
+#include <QDomDocument>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -52,6 +53,7 @@
 #include <qgsvectorlayer.h>
 #include <qgsvertexid.h>
 #include <qgswkbtypes.h>
+#include <qgsxmlutils.h>
 
 namespace
 {
@@ -1361,4 +1363,55 @@ QVariantMap SungsanSurveyBridge::exportCadText( QgsVectorLayer *layer, const QSt
     { QStringLiteral( "path" ), outputPath },
     { QStringLiteral( "count" ), count },
   };
+}
+
+QString SungsanSurveyBridge::returnPhotoSettings( QgsProject *project )
+{
+  QDomDocument doc;
+  QDomElement root = doc.createElement( QStringLiteral( "photoExport" ) );
+  doc.appendChild( root );
+  const auto layers = project->layers<QgsVectorLayer *>();
+  for ( QgsVectorLayer *layer : layers )
+  {
+    if ( !layer->isValid() || !layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/managedFieldPhotos" ) ).toBool() )
+      continue;
+
+    const auto fields = QJsonDocument::fromJson( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldPhotoFields" ) ).toString().toUtf8() ).array();
+    QDomElement entry = doc.createElement( QStringLiteral( "layer" ) );
+    entry.setAttribute( QStringLiteral( "id" ), layer->id() );
+    QSet<QString> seen;
+    QStringList occupied;
+    for ( const QJsonValue &field : fields )
+    {
+      const QString name = field.toString();
+      const int index = layer->fields().indexFromName( name );
+      if ( index < 0 || seen.contains( name ) )
+        return QStringLiteral( "<invalid/>" );
+      const QgsEditorWidgetSetup setup = layer->editorWidgetSetup( index );
+      if ( setup.type() != QStringLiteral( "ExternalResource" ) )
+        return QStringLiteral( "<invalid/>" );
+      seen.insert( name );
+      occupied << QStringLiteral( "coalesce(%1, '') <> ''" ).arg( QgsExpression::quotedColumnRef( name ) );
+      QDomElement slot = doc.createElement( QStringLiteral( "field" ) );
+      slot.setAttribute( QStringLiteral( "name" ), name );
+      slot.setAttribute( QStringLiteral( "index" ), index );
+      slot.setAttribute( QStringLiteral( "alias" ), layer->attributeAlias( index ) );
+      slot.appendChild( QgsXmlUtils::writeVariant( setup.config(), doc ) );
+      entry.appendChild( slot );
+    }
+    if ( fields.size() != 4 )
+      return QStringLiteral( "<invalid/>" );
+    // The automatic survey preparation pass can inspect every CAD layer. Do not
+    // modify those legacy forms unless a field photo is actually in use.
+    if ( !layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ) ).toBool() )
+    {
+      QgsFeature used;
+      QgsFeatureRequest request;
+      request.setFilterExpression( occupied.join( QStringLiteral( " OR " ) ) ).setLimit( 1 ).setFlags( Qgis::FeatureRequestFlag::NoGeometry ).setNoAttributes();
+      if ( !layer->getFeatures( request ).nextFeature( used ) )
+        continue;
+    }
+    root.appendChild( entry );
+  }
+  return root.hasChildNodes() ? doc.toString( -1 ) : QString();
 }

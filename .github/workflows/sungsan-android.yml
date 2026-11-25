@@ -67,6 +67,9 @@ jobs:
           python3 scripts/check-sungsan-gnss.py
           node scripts/check-field-action-transitions.cjs
           python3 scripts/check-android-compressed-export.py
+          mkdir -p "$RUNNER_TEMP/return-photo-test"
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/return-photo-test" platform/android/src/ch/opengis/qfield/FieldPhotoProject.java test/TestFieldPhotoProject.java
+          java -cp "$RUNNER_TEMP/return-photo-test" ch.opengis.qfield.TestFieldPhotoProject "$RUNNER_TEMP/return-photo-test"
           python3 scripts/check-android-project-archive-import.py
           python3 scripts/check-project-zip-routing.py
           python3 scripts/check-android-package-id.py

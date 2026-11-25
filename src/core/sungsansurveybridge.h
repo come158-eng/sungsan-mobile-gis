@@ -67,6 +67,9 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
      */
     Q_INVOKABLE QVariantMap prepareFieldSurveyProject( QgsProject *project );
 
+    // Widget configuration for a desktop-compatible copy of a legacy field project.
+    static QString returnPhotoSettings( QgsProject *project );
+
     /**
      * Writes all point features in a layer as
      * point-name,northing,easting,elevation,code.
