@@ -29,7 +29,7 @@ function timer() {
 }
 
 const state = {}, internal = { positioningDevice: "", positioningDeviceName: "Internal device" };
-const receiver = { active: true, deviceId: "", positionInformation: {latitudeValid: true, longitudeValid: true}, projectedPosition: {x: 0, y: 24} };
+const receiver = { active: true, deviceId: "", positionInformation: {isValid: true, latitudeValid: true, longitudeValid: true}, projectedPosition: {x: 0, y: 24} };
 const switching = timer(), activating = timer();
 let mapJumps = 0;
 const gps = context({
@@ -62,6 +62,8 @@ state.sungsanPositionSwitchPending = false; gps.deviceId = "old"; sample();
 assert.equal(state.sungsanGnssFresh, false);
 gps.deviceId = ""; receiver.positionInformation.latitudeValid = false; sample();
 assert.equal(state.sungsanGnssFresh, false);
+receiver.positionInformation.latitudeValid = true; receiver.positionInformation.isValid = false; sample();
+assert.equal(state.sungsanGnssFresh, false, "finite coordinates from an invalid NMEA fix accepted");
 console.log("PASS phone/external switch reversal during each timer, valid/invalid/mismatched fixes and zero easting");
 
 const cad = {name: "CAD", geometryType: () => 0}, survey = {name: "field", geometryType: () => 0};

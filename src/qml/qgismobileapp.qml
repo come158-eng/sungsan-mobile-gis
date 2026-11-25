@@ -468,6 +468,7 @@ ApplicationWindow {
       if (active && !mainWindow.sungsanPositionSwitchPending && deviceId === (positioningSettings.positioningDevice || "")) {
         mainWindow.sungsanLastGnssReceiptMs = Date.now();
         mainWindow.sungsanGnssFresh = !!positionSource.positionInformation
+          && positionSource.positionInformation.isValid
           && positionSource.positionInformation.latitudeValid
           && positionSource.positionInformation.longitudeValid;
         if (jumpToPosition && mainWindow.sungsanGnssFresh && Number.isFinite(positionSource.projectedPosition.x) && Number.isFinite(positionSource.projectedPosition.y)) {
@@ -606,6 +607,7 @@ ApplicationWindow {
         // Use local receipt time for both Android locations and external NMEA.
         // Receiver UTC values can legitimately be incomplete or offset.
         mainWindow.sungsanGnssFresh = positionSource.active
+          && positionSource.positionInformation.isValid
           && positionSource.positionInformation.latitudeValid
           && positionSource.positionInformation.longitudeValid
           && Number.isFinite(mainWindow.sungsanLastGnssReceiptMs)

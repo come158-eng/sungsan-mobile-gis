@@ -97,13 +97,14 @@ void InternalGnssReceiver::handlePositionUpdated( const QGeoPositionInfo &positi
     }
   }
 
-  const QGeoPositionInfo pickedPositionInfo = mSatellitePositionReceived ? satellitePosition : positionInfo;
-  if ( mLastGnssPositionValid && !pickedPositionInfo.coordinate().isValid() )
+  const QGeoPositionInfo pickedPositionInfo = mSatellitePositionReceived && satellitePosition.isValid() && satellitePosition.timestamp() >= positionInfo.timestamp() ? satellitePosition : positionInfo;
+  if ( !pickedPositionInfo.isValid() )
   {
     return;
   }
 
-  bool updatePositionInformation = false;
+  // A stationary receiver can keep the same coordinates while sending fresh fixes.
+  bool updatePositionInformation = pickedPositionInfo.timestamp() != mLastGnssPositionInformation.utcDateTime();
 
   double latitude = mLastGnssPositionInformation.latitude();
   if ( !qgsDoubleNear( pickedPositionInfo.coordinate().latitude(), latitude ) )
