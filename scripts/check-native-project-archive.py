@@ -14,6 +14,24 @@ flags = shlex.split(subprocess.check_output(["pkg-config", "--cflags", "--libs",
 
 with tempfile.TemporaryDirectory() as tmp:
     folder = Path(tmp)
+    queue_header = root / "src/core/platforms/android/androidprojectopenrequests.h"
+    qt_package = qt.removesuffix("Core")
+    # Match qfield_core's AUTOMOC build so the receiver's queued signal is tested.
+    (folder / "CMakeLists.txt").write_text(f'''cmake_minimum_required(VERSION 3.16)
+project(project_open_test LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_AUTOMOC ON)
+find_package({qt_package} REQUIRED COMPONENTS Core)
+find_package(Threads REQUIRED)
+add_executable(project_open "{(root / "test/test_androidprojectopenrequests.cpp").as_posix()}" "{queue_header.as_posix()}")
+target_include_directories(project_open PRIVATE "{(root / "src/core").as_posix()}")
+target_link_libraries(project_open PRIVATE {qt_package}::Core Threads::Threads)
+''', encoding="utf-8")
+    build_dir = folder / "queue_build"
+    subprocess.run(["cmake", "-S", str(folder), "-B", str(build_dir), "-DCMAKE_BUILD_TYPE=Debug"], check=True)
+    subprocess.run(["cmake", "--build", str(build_dir)], check=True)
+    subprocess.run([str(build_dir / "project_open")], timeout=15, check=True)
+    print("PASS: nonblocking project delivery, startup, thread affinity, busy duplicate, failure, retry, receiver lifetime")
     landstar = folder / "landstar"
     subprocess.run(["g++", "-std=c++17", "-fPIC", "-I" + str(root / "src/core"),
                     str(root / "test/test_landstarpointfile.cpp"), "-o", str(landstar), *flags], check=True)

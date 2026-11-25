@@ -20,8 +20,45 @@ public class TestFieldPhotoProject {
         if (!value) throw new AssertionError();
     }
 
+    private static void legacyDisplayName(Path temp) throws Exception {
+        String old = "성산_현장객체", ns = "kr.co.sungsan.mobilegis";
+        String uri = "./data/field_data.gpkg|layername=" + old;
+        StringBuilder properties = new StringBuilder(), fields = new StringBuilder();
+        for (String name : Arrays.asList("fieldObjects","fieldPackage","landstarImportTarget"))
+            properties.append("<Option name='"+ns+"/"+name+"' type='bool' value='true'/>");
+        for (String name : Arrays.asList("object_id","name","memo","surveyed_at","photo_near","photo_far","photo_other"))
+            fields.append("<field name='"+name+"'/>");
+        String layer = "<maplayer type='vector' geometry='Point'><id>managed</id><layername>"+old+"</layername>"
+                +"<provider>ogr</provider><datasource>"+uri+"</datasource><fieldConfiguration>"+fields+"</fieldConfiguration>"
+                +"<customproperties><Option type='Map'>"+properties+"</Option></customproperties></maplayer>";
+        String user = layer.replace("<id>managed","<id>user").replace(ns+"/fieldObjects","user/fieldObjects");
+        String wrongTable = layer.replace("<id>managed","<id>table").replace(uri, "./data/user.gpkg|layername="+old);
+        String renamed = layer.replace("<id>managed","<id>renamed").replace("<layername>"+old,"<layername>업무용");
+        String tree="<layer-tree-group><layer-tree-group><layer-tree-layer id='managed' name='"+old+"'/>"
+                +"<layer-tree-layer id='user' name='"+old+"'/><layer-tree-layer id='managed' name='범례 별칭'/></layer-tree-group></layer-tree-group>";
+        String xml="<qgis version='3.40'>"+tree+"<properties><SungsanMobileGIS><fieldPackage>"+ns+".field-package/1"
+                +"</fieldPackage></SungsanMobileGIS></properties><projectlayers>"+layer+user+wrongTable+renamed
+                +"</projectlayers><action name='"+old+"'/></qgis>";
+        Path input=temp.resolve("legacy-display.qgs"),output=temp.resolve("returned-display.qgs");
+        for (boolean duplicate : new boolean[]{false,true}) {
+            String data=duplicate?xml.replace("</projectlayers>",layer.replace("<id>managed","<id>duplicate")+"</projectlayers>"):xml;
+            Files.writeString(input,data, StandardCharsets.UTF_8);
+            FieldPhotoProject.writeCopy(input.toFile(),settings("managed"),output.toFile());
+            Document doc=DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(output.toFile());
+            NodeList names=doc.getElementsByTagName("layername"), nodes=doc.getElementsByTagName("layer-tree-layer");
+            String expected=duplicate?old:"현장객체";
+            require(expected.equals(names.item(0).getTextContent()) && old.equals(names.item(1).getTextContent())
+                    && old.equals(names.item(2).getTextContent()) && "업무용".equals(names.item(3).getTextContent()));
+            require(expected.equals(((Element)nodes.item(0)).getAttribute("name")) && old.equals(((Element)nodes.item(1)).getAttribute("name"))
+                    && "범례 별칭".equals(((Element)nodes.item(2)).getAttribute("name")));
+            require(uri.equals(doc.getElementsByTagName("datasource").item(0).getTextContent())
+                    && old.equals(((Element)doc.getElementsByTagName("action").item(0)).getAttribute("name")));
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         Path temp = Paths.get(args[0]);
+        legacyDisplayName(temp);
         String original = "<?xml version='1.0'?><!DOCTYPE qgis SYSTEM 'http://example.invalid/qgis.dtd'><qgis version='3.40'>"
           +"<projectlayers><maplayer><id>other</id><renderer-v2 type='custom'/></maplayer><maplayer><id>active</id>"
           +"<fieldConfiguration><field name='p1'/><field name='p2'/><field name='p3'/></fieldConfiguration>"

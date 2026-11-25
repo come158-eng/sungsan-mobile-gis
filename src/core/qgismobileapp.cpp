@@ -42,6 +42,9 @@
 #endif
 #include "appexpressioncontextscopesgenerator.h"
 #include "appinterface.h"
+#ifdef Q_OS_ANDROID
+#include "platforms/android/androidplatformutilities.h"
+#endif
 #include "attributeformmodel.h"
 #include "audioanalyzer.h"
 #include "audiorecorder.h"
@@ -749,6 +752,9 @@ void QgisMobileapp::onAfterFirstRendering()
     // Explicit Android file-open actions above are still honored.
     rootObjects().first()->setProperty( "sceneLoaded", true );
     mFirstRenderingFlag = false;
+#ifdef Q_OS_ANDROID
+    AndroidPlatformUtilities::startProjectOpenRequests( mIface );
+#endif
   }
 }
 

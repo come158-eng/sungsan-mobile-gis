@@ -3779,8 +3779,12 @@ ApplicationWindow {
         return false;
       for (let i = 0; i < layerTree.rowCount(); ++i) {
         const index = layerTree.index(i, 0);
-        if (layerTree.data(index, FlatLayerTreeModel.VectorLayerPointer) === layer)
-          return layerTree.data(index, FlatLayerTreeModel.AttributeEditingLocked) === false;
+        if (layerTree.data(index, FlatLayerTreeModel.Type) !== FlatLayerTreeModel.Layer)
+          continue;
+        const vectorLayer = layerTree.data(index, FlatLayerTreeModel.VectorLayerPointer);
+        if (vectorLayer && vectorLayer.id === layer.id)
+          return layerTree.data(index, FlatLayerTreeModel.ReadOnly) === false
+              && layerTree.data(index, FlatLayerTreeModel.AttributeEditingLocked) === false;
       }
       return false;
     }
@@ -3793,20 +3797,22 @@ ApplicationWindow {
       var activeLayerIsEditable = false;
       for (var i = 0; i < layerTree.rowCount(); i++) {
         var index = layerTree.index(i, 0);
+        // A symbol row points to its parent vector layer but has no editing roles.
+        if (layerTree.data(index, FlatLayerTreeModel.Type) !== FlatLayerTreeModel.Layer)
+          continue;
         var vectorLayer = layerTree.data(index, FlatLayerTreeModel.VectorLayerPointer);
         var geometryType = vectorLayer ? vectorLayer.geometryType() : Qgis.GeometryType.Null;
         var supportedGeometry = geometryType === Qgis.GeometryType.Point || geometryType === Qgis.GeometryType.Line || geometryType === Qgis.GeometryType.Polygon;
-        var layerIsEditable = layerTree.data(index, FlatLayerTreeModel.Type) === FlatLayerTreeModel.Layer
-            && vectorLayer != null
+        var layerIsEditable = vectorLayer != null
             && supportedGeometry
             && layerTree.data(index, FlatLayerTreeModel.ReadOnly) === false
             && (additionRequired
                 ? layerTree.data(index, FlatLayerTreeModel.FeatureAdditionLocked) === false
                 : layerTree.data(index, FlatLayerTreeModel.AttributeEditingLocked) === false);
-        if (layerIsEditable) {
+        if (layerIsEditable && editableLayers.indexOf(vectorLayer) === -1) {
           editableLayers.push(vectorLayer);
         }
-        if (activeLayer != null && activeLayer === vectorLayer) {
+        if (activeLayer && vectorLayer && activeLayer.id === vectorLayer.id) {
           activeLayerIsEditable = layerIsEditable;
         }
       }

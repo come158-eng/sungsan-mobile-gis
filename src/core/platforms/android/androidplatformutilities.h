@@ -23,10 +23,13 @@
 
 #include <QJniObject>
 
+class AppInterface;
+
 class AndroidPlatformUtilities : public PlatformUtilities
 {
   public:
     AndroidPlatformUtilities();
+    static void startProjectOpenRequests( AppInterface *iface );
 
     PlatformUtilities::Capabilities capabilities() const override;
     void afterUpdate() override;

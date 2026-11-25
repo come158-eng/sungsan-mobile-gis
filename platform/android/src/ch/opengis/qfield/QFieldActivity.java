@@ -143,6 +143,7 @@ public class QFieldActivity extends QtActivity {
     private static final int IMPORT_DATASET = 300;
     private static final int IMPORT_PROJECT_FOLDER = 301;
     private static final int IMPORT_PROJECT_ARCHIVE = 302;
+    private boolean archivePickerPending = false;
     private static final int IMPORT_LANDSTAR_POINTS = 303;
 
     private static final int UPDATE_PROJECT_FROM_ARCHIVE = 400;
@@ -1341,6 +1342,8 @@ public class QFieldActivity extends QtActivity {
     }
 
     private void triggerImportProjectArchive() {
+        if (archivePickerPending)
+            return;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION |
                         Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
@@ -1348,8 +1351,10 @@ public class QFieldActivity extends QtActivity {
         intent.addFlags(Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         intent.setType("application/zip");
         try {
+            archivePickerPending = true;
             startActivityForResult(intent, IMPORT_PROJECT_ARCHIVE);
-        } catch (ActivityNotFoundException e) {
+        } catch (ActivityNotFoundException | SecurityException e) {
+            archivePickerPending = false;
             displayAlertDialog(
                 getString(R.string.operation_unsupported),
                 getString(R.string.import_operation_unsupported));
@@ -2830,6 +2835,8 @@ public class QFieldActivity extends QtActivity {
 
     protected void onActivityResult(int requestCode, int resultCode,
                                      Intent data) {
+        if (requestCode == IMPORT_PROJECT_ARCHIVE)
+            archivePickerPending = false;
         if (requestCode == IMPORT_LANDSTAR_POINTS) {
             if (resultCode == Activity.RESULT_OK && data != null) {
                 importLandStarUri(data.getData());

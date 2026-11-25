@@ -731,10 +731,14 @@ def check_android_bridge() -> None:
     )
     require_regex(
         "src/core/platforms/android/androidplatformutilities.cpp",
-        r"QFieldActivity,\s*openProject.*?QThread::currentThread\s*\(\s*\)\s*==\s*iface->thread\s*\(\s*\).*?"
-        r"QMetaObject::invokeMethod\s*\(\s*iface\s*,\s*loadProject\s*,\s*Qt::BlockingQueuedConnection",
-        "Android project open is completed on the Qt object thread",
+        r"QFieldActivity,\s*openProject\s*\)\([^{}]*\)\s*\{\s*if\s*\( path \)\s*"
+        r"projectOpenRequests\(\)->enqueue\( QJniObject\( path \).toString\(\) \);\s*\}",
+        "Android project open copies the Java path and immediately returns to the Activity",
     )
+    require("src/core/qgismobileapp.cpp", "AndroidPlatformUtilities::startProjectOpenRequests( mIface )",
+            "Qt scene starts delivery of pending Android project paths")
+    require("src/core/platforms/android/androidprojectopenrequests.h", "Qt::QueuedConnection",
+            "Android project opens are queued on the Qt receiver")
     require(
         "scripts/build-sungsan-android.sh",
         'APP_PACKAGE_ID="kr.co.sungsan.mobilegis"',

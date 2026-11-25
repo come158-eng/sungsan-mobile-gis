@@ -19,6 +19,7 @@
  ***************************************************************************/
 
 #include "androidplatformutilities.h"
+#include "androidprojectopenrequests.h"
 #include "androidprojectsource.h"
 #include "androidresourcesource.h"
 #include "androidviewstatus.h"
@@ -57,6 +58,7 @@ inline void runOnAndroidMainThread( const std::function<void()> &runnable )
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGlobalStatic>
 #include <QMap>
 #include <QMimeDatabase>
 #include <QQmlApplicationEngine>
@@ -881,31 +883,23 @@ void AndroidPlatformUtilities::stopPositioningService() const
                                       qtAndroidContext().object() );
 }
 
+Q_GLOBAL_STATIC( AndroidProjectOpenRequests, projectOpenRequests )
+
+void AndroidPlatformUtilities::startProjectOpenRequests( AppInterface *iface )
+{
+  QObject::connect( iface, &AppInterface::loadProjectEnded, iface, []() { projectOpenRequests()->finished(); } );
+  projectOpenRequests()->start( iface, [iface]( const QString &path ) { return iface->loadFile( path ); } );
+}
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 // QFieldActivity class functions
-JNIEXPORT void JNICALL JNI_FUNCTION_NAME( APP_PACKAGE_JNI_NAME, QFieldActivity, openProject )( JNIEnv *env, jobject obj, jstring path )
+JNIEXPORT void JNICALL JNI_FUNCTION_NAME( APP_PACKAGE_JNI_NAME, QFieldActivity, openProject )( JNIEnv *, jobject, jstring path )
 {
-  AppInterface *iface = AppInterface::instance();
-  if ( iface )
-  {
-    const char *pathStr = env->GetStringUTFChars( path, NULL );
-    const QString projectPath = QString::fromUtf8( pathStr );
-    env->ReleaseStringUTFChars( path, pathStr );
-
-    const auto loadProject = [iface, projectPath]() { iface->loadFile( projectPath ); };
-    if ( QThread::currentThread() == iface->thread() )
-    {
-      loadProject();
-    }
-    else if ( !QMetaObject::invokeMethod( iface, loadProject, Qt::BlockingQueuedConnection ) )
-    {
-      qCritical() << "Could not marshal Android project opening to the Qt thread";
-    }
-  }
-  return;
+  if ( path )
+    projectOpenRequests()->enqueue( QJniObject( path ).toString() );
 }
 
 JNIEXPORT jboolean JNICALL JNI_FUNCTION_NAME( APP_PACKAGE_JNI_NAME, QFieldActivity, clearProject )( JNIEnv *env, jobject obj )

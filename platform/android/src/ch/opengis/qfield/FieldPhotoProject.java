@@ -12,9 +12,11 @@ import javax.xml.transform.stream.StreamResult;
 import org.w3c.dom.*;
 import org.xml.sax.InputSource;
 
-/** Apply only active field-photo settings to a cache copy of a legacy QGIS project. */
+/** Make a portable return copy without reserializing the desktop project through mobile QGIS. */
 final class FieldPhotoProject {
     private FieldPhotoProject() {}
+    private static final Set<String> LEGACY_OBJECT_NAMES = new HashSet<>(Arrays.asList(
+            "성산_현장객체", "성산 현장 객체", "성산 현장객체", "메타_현장객체", "메타이엔지_현장객체"));
 
     static void writeCopy(File source, String settings, File output) throws Exception {
         if (source.getCanonicalFile().equals(output.getCanonicalFile())) {
@@ -93,6 +95,61 @@ final class FieldPhotoProject {
         return null;
     }
 
+    private static String text(Element parent, String tag) {
+        Element item = child(parent, tag);
+        return item == null ? "" : item.getTextContent();
+    }
+
+    private static boolean isManagedObject(Element qgis, Element layer) {
+        if (!LEGACY_OBJECT_NAMES.contains(text(layer,"layername")) || !"vector".equals(layer.getAttribute("type"))
+                || !"Point".equals(layer.getAttribute("geometry")) || !"ogr".equals(text(layer,"provider"))) return false;
+        String source = text(layer,"datasource");
+        if (source.startsWith("./")) source = source.substring(2);
+        String prefix = "data/field_data.gpkg|layername=";
+        boolean packageTable = source.startsWith(prefix) && (LEGACY_OBJECT_NAMES.contains(source.substring(prefix.length()))
+                || "현장객체".equals(source.substring(prefix.length())));
+        if (!packageTable && !"sungsan_field.gpkg|layername=sungsan_field_objects".equals(source)
+                && !"metaengi_field.gpkg|layername=metaengi_field_objects".equals(source)) return false;
+        Set<String> names = new HashSet<>();
+        for (Element field : children(child(layer,"fieldConfiguration"),"field")) names.add(field.getAttribute("name"));
+        if (!names.containsAll(Arrays.asList("object_id","name","memo","surveyed_at","photo_near","photo_far","photo_other"))) return false;
+        Set<String> markers = new HashSet<>();
+        for (Element option : children(child(child(layer,"customproperties"),"Option"),"Option")) {
+            if ("bool".equals(option.getAttribute("type")) && "true".equals(option.getAttribute("value")))
+                markers.add(option.getAttribute("name"));
+        }
+        Element properties = child(qgis,"properties");
+        for (String[] brand : new String[][] {{"SungsanMobileGIS","kr.co.sungsan.mobilegis"}, {"MetaEngiMobileGIS","kr.co.metaengi.mobilegis"}}) {
+            String ns = brand[1];
+            if ((ns+".field-package/1").equals(text(child(properties,brand[0]),"fieldPackage"))
+                    && markers.contains(ns+"/fieldObjects") && markers.contains(ns+"/fieldPackage")
+                    && markers.contains(ns+"/landstarImportTarget")) return true;
+        }
+        return false;
+    }
+
+    private static void normalizeLegacyObjectName(Element qgis) {
+        Element object = null;
+        for (Element layer : children(child(qgis,"projectlayers"),"maplayer")) {
+            if (!isManagedObject(qgis,layer)) continue;
+            if (object != null) return;  // A duplicated managed layer may be a user's alternate view.
+            object = layer;
+        }
+        if (object == null || text(object,"id").isEmpty()) return;
+        String id = text(object,"id");
+        String oldName = text(object,"layername");
+        child(object,"layername").setTextContent("현장객체");
+        Element tree = child(qgis,"layer-tree-group");
+        if (tree == null) return;
+        NodeList nodes = tree.getElementsByTagName("layer-tree-layer");
+        for (int i=0; i<nodes.getLength(); ++i) {
+            Element node = (Element)nodes.item(i);
+            if (id.equals(node.getAttribute("id")) && oldName.equals(node.getAttribute("name"))
+                    && !"0".equals(node.getAttribute("useLayerName")))
+                node.setAttribute("name","현장객체");
+        }
+    }
+
     private static Element append(Element parent, String tag) {
         Element item = parent.getOwnerDocument().createElement(tag);
         parent.appendChild(item);
@@ -133,6 +190,7 @@ final class FieldPhotoProject {
             if (id.isEmpty() || pending.put(id,layer) != null) throw new IOException("Invalid photo layer id");
         }
         if (pending.isEmpty()) throw new IOException("Missing photo layer settings");
+        normalizeLegacyObjectName(qgis);
         for (Element layer : children(child(qgis,"projectlayers"), "maplayer")) {
             Element layerId = child(layer, "id");
             if (layerId == null) continue;

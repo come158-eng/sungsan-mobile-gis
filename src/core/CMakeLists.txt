@@ -331,6 +331,7 @@ if(ANDROID)
   set(QFIELD_CORE_HDRS
       ${QFIELD_CORE_HDRS}
       platforms/android/androidplatformutilities.h
+      platforms/android/androidprojectopenrequests.h
       platforms/android/androidresourcesource.h
       platforms/android/androidviewstatus.h
       platforms/android/androidprojectsource.h

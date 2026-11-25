@@ -66,17 +66,33 @@ receiver.positionInformation.latitudeValid = true; receiver.positionInformation.
 assert.equal(state.sungsanGnssFresh, false, "finite coordinates from an invalid NMEA fix accepted");
 console.log("PASS phone/external switch reversal during each timer, valid/invalid/mismatched fixes and zero easting");
 
-const cad = {name: "CAD", geometryType: () => 0}, survey = {name: "field", geometryType: () => 0};
+const cad = {id: "cad_1", name: "CAD", geometryType: () => 0}, survey = {id: "survey_1", name: "field", geometryType: () => 0};
 const roles = {Layer: 1, Type: 2, VectorLayerPointer: 3, ReadOnly: 4, FeatureAdditionLocked: 5, AttributeEditingLocked: 6};
 let rows = [cad, survey];
 const layers = context({
   FlatLayerTreeModel: roles, Qgis: {GeometryType: {Point: 0, Line: 1, Polygon: 2, Null: 3}},
   activeLayer: survey, projectInfo: {editRights: true, insertRights: true},
   layerTree: {rowCount: () => rows.length, index: x => x, data: (i, role) => {
-    const l = rows[i]; return ({2: 1, 3:l, 4:!!l.lock, 5:!!l.addLock, 6:!!l.editLock})[role];
+    const l = rows[i];
+    if (l.legendOf) return ({2: 0, 3:l.legendOf, 4:false, 5:false, 6:false})[role];
+    return ({2: 1, 3:l, 4:!!l.lock, 5:!!l.addLock, 6:!!l.editLock})[role];
   }}
 });
 const chooseLayer = handler(layers, "function ensureEditableLayerSelected", "requireFeatureAddition");
+const canEdit = handler(layers, "function canEditLayerAttributes", "layer");
+const symbol = {legendOf: survey};
+rows = [cad, survey, symbol, symbol];
+assert.ok(chooseLayer(true).ok && chooseLayer(false).ok && canEdit(survey), "expanded symbols overrode selected layer");
+rows = [symbol, cad, survey, symbol];
+survey.editLock = true;
+assert.ok(!canEdit(survey) && !chooseLayer(false).ok && chooseLayer(true).ok, "symbol allowed locked attributes");
+survey.editLock = false;
+survey.lock = true;
+assert.ok(!canEdit(survey) && !chooseLayer(true).ok && !chooseLayer(false).ok, "symbol allowed read-only parent");
+survey.lock = false;
+rows = [symbol];
+assert.ok(!canEdit(survey) && !chooseLayer(true).ok, "orphan symbol treated as a layer");
+rows = [cad, survey];
 survey.addLock = true;
 assert.ok(!chooseLayer(true).ok && layers.activeLayer === survey, "add silently switched to CAD");
 assert.ok(chooseLayer(false).ok);
@@ -84,7 +100,7 @@ layers.activeLayer = null; assert.ok(!chooseLayer(false).ok);
 rows = [survey]; assert.ok(chooseLayer(false).ok && layers.activeLayer === survey);
 layers.projectInfo.editRights = false; assert.ok(!chooseLayer(false).ok);
 survey.addLock = false; assert.ok(chooseLayer(true).ok);
-console.log("PASS layer ambiguity, locked add, attribute-only editing, project rights");
+console.log("PASS expanded and orphan legend rows, layer ambiguity, read-only, locked add or edit, project rights");
 
 const board = {activeLayer: cad, canEditLayerAttributes: () => true};
 const role = {LayerRole: "layer", FeatureIdRole: "fid"};
