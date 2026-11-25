@@ -18,6 +18,7 @@ final class FieldPhotoProject {
     private FieldPhotoProject() {}
     private static final Set<String> LEGACY_OBJECT_NAMES = new HashSet<>(Arrays.asList(
             "성산_현장객체", "성산 현장 객체", "성산 현장객체", "메타_현장객체", "메타이엔지_현장객체"));
+    private static final Pattern SHARED_TABLE_SUFFIX = Pattern.compile("_(?:[2-9]|[1-9][0-9]+)$");
 
     static void writeCopy(File source, String settings, File output) throws Exception {
         if (source.getCanonicalFile().equals(output.getCanonicalFile())) {
@@ -99,8 +100,10 @@ final class FieldPhotoProject {
         String source = text(layer,"datasource");
         if (source.startsWith("./")) source = source.substring(2);
         String prefix = "data/field_data.gpkg|layername=";
-        boolean packageTable = source.startsWith(prefix) && (LEGACY_OBJECT_NAMES.contains(source.substring(prefix.length()))
-                || "현장객체".equals(source.substring(prefix.length())));
+        String sharedTable = source.startsWith(prefix)
+                ? SHARED_TABLE_SUFFIX.matcher(source.substring(prefix.length())).replaceFirst("") : "";
+        boolean packageTable = LEGACY_OBJECT_NAMES.contains(sharedTable) || "현장객체".equals(sharedTable)
+                || "sungsan_field_objects".equals(sharedTable) || "metaengi_field_objects".equals(sharedTable);
         if (!packageTable && !"sungsan_field.gpkg|layername=sungsan_field_objects".equals(source)
                 && !"metaengi_field.gpkg|layername=metaengi_field_objects".equals(source)) return false;
         Set<String> names = new HashSet<>();

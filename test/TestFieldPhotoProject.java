@@ -91,6 +91,17 @@ public class TestFieldPhotoProject {
             require(uri.equals(doc.getElementsByTagName("datasource").item(0).getTextContent())
                     && old.equals(((Element)doc.getElementsByTagName("action").item(0)).getAttribute("name")));
         }
+        for (String table : Arrays.asList("sungsan_field_objects","metaengi_field_objects","현장객체_2",
+                "metaengi_field_objects_10","시설물_2","현장객체_1","현장객체_02","현장객체_2_2","현장객체_copy")) {
+            String source="./data/field_data.gpkg|layername="+table;
+            Files.writeString(input,xml.replace(uri,source),StandardCharsets.UTF_8);
+            FieldPhotoProject.writeCopy(input.toFile(),settings("managed"),output.toFile());
+            Document doc=DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(output.toFile());
+            boolean valid=Arrays.asList("sungsan_field_objects","metaengi_field_objects","현장객체_2","metaengi_field_objects_10").contains(table);
+            require((valid?"현장객체":old).equals(doc.getElementsByTagName("layername").item(0).getTextContent()));
+            require(old.equals(doc.getElementsByTagName("layername").item(1).getTextContent())); // same source, unmarked
+            require(source.equals(doc.getElementsByTagName("datasource").item(0).getTextContent()));
+        }
     }
 
     public static void main(String[] args) throws Exception {

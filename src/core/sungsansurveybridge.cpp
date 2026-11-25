@@ -412,9 +412,18 @@ bool SungsanSurveyBridge::isDefaultFieldLayer( QgsProject *project, QgsVectorLay
     QStringLiteral( "성산 현장객체" ), QStringLiteral( "메타_현장객체" ),
     QStringLiteral( "메타이엔지_현장객체" ), QStringLiteral( "현장객체" ) };
   if ( !defaultObjectNames.contains( layer->name() ) ) return false;
-  const QString db = QFileInfo( layer->source().section( QLatin1Char( '|' ), 0, 0 ) ).fileName();
+  const QFileInfo database( layer->source().section( QLatin1Char( '|' ), 0, 0 ) );
+  const QString db = database.fileName();
   const QString table = layer->source().section( QStringLiteral( "|layername=" ), 1, 1 ).section( QLatin1Char( '|' ), 0, 0 );
-  if ( !( ( db == QLatin1String( "field_data.gpkg" ) && defaultObjectNames.contains( table ) )
+  // The shared plugin preserves the source table, appending _2, _3, ... on
+  // collisions. Restrict that convention to its packaged data/field_data.gpkg.
+  static const QRegularExpression collisionSuffix( QStringLiteral( "_(?:[2-9]|[1-9][0-9]+)$" ) );
+  QString sharedTable = table;
+  sharedTable.remove( collisionSuffix );
+  const bool sharedObject = database.dir().dirName() == QLatin1String( "data" ) && db == QLatin1String( "field_data.gpkg" )
+      && ( defaultObjectNames.contains( sharedTable ) || sharedTable == QLatin1String( "sungsan_field_objects" )
+           || sharedTable == QLatin1String( "metaengi_field_objects" ) );
+  if ( !( sharedObject
        || ( db == QLatin1String( "sungsan_field.gpkg" ) && table == QLatin1String( "sungsan_field_objects" ) )
        || ( db == QLatin1String( "metaengi_field.gpkg" ) && table == QLatin1String( "metaengi_field_objects" ) ) ) ) return false;
   for ( const QString &field : QStringList{QStringLiteral( "object_id" ),QStringLiteral( "name" ),QStringLiteral( "memo" ),
