@@ -17,6 +17,7 @@
 
 #include "fileutils.h"
 #include "managedphotostore.h"
+#include "projectarchive.h"
 #include "gnsspositioninformation.h"
 #include "platforms/platformutilities.h"
 #include "qfield.h"
@@ -361,7 +362,10 @@ void FileUtils::restrictImageSize( const QString &imagePath, int maximumWidthHei
     QImage scaledImage = img.width() > img.height()
                            ? img.scaledToWidth( maximumWidthHeight, Qt::SmoothTransformation )
                            : img.scaledToHeight( maximumWidthHeight, Qt::SmoothTransformation );
-    scaledImage.save( imagePath, nullptr, 90 );
+    QSaveFile output( imagePath );
+    const QByteArray format = QFileInfo( imagePath ).suffix().toLatin1();
+    if ( !output.open( QIODevice::WriteOnly ) || !scaledImage.save( &output, format.constData(), 90 ) || !output.commit() )
+      return;
 
     for ( const QString &key : metadata.keys() )
     {
@@ -600,81 +604,11 @@ bool FileUtils::addImageNameBoard( const QString &imagePath, const QString &phot
 
 bool FileUtils::isWithinProjectDirectory( const QString &filePath )
 {
-  // Get the project instance
-  QgsProject *project = QgsProject::instance();
-  if ( !project || project->fileName().isEmpty() )
+  const QgsProject *project = QgsProject::instance();
+  if ( !project || filePath.isEmpty() )
     return false;
-
-  QFileInfo projectFileInfo( project->fileName() );
-  if ( !projectFileInfo.exists() )
-    return false;
-
-  // Get the canonical path for the project directory
-  QString projectDirCanonical = QFileInfo( projectFileInfo.dir().absolutePath() ).canonicalFilePath();
-  if ( projectDirCanonical.isEmpty() )
-  {
-    // Fallback to absolutePath() if canonicalFilePath() is empty
-    projectDirCanonical = QFileInfo( projectFileInfo.dir().absolutePath() ).absoluteFilePath();
-    if ( projectDirCanonical.isEmpty() )
-      return false;
-  }
-
-  // Get target file info and its canonical path
-  QFileInfo targetInfo( filePath );
-  QString targetCanonical;
-
-  if ( targetInfo.exists() || targetInfo.isSymLink() )
-  {
-    targetCanonical = targetInfo.canonicalFilePath();
-    if ( targetCanonical.isEmpty() )
-    {
-      targetCanonical = targetInfo.absoluteFilePath();
-    }
-  }
-  else
-  {
-    // Walk up the directory tree until we find an existing parent
-    QDir dir = targetInfo.dir();
-    QStringList pendingSegments;
-
-    while ( !dir.exists() && dir.cdUp() )
-    {
-      pendingSegments.prepend( QFileInfo( dir.path() ).fileName() );
-    }
-
-    QString existingCanonical = QFileInfo( dir.path() ).canonicalFilePath();
-    if ( existingCanonical.isEmpty() )
-    {
-      existingCanonical = QFileInfo( dir.path() ).absoluteFilePath();
-      if ( existingCanonical.isEmpty() )
-        return false;
-    }
-
-    // Rebuild the target path from existing directories
-    QDir rebuiltDir( existingCanonical );
-    for ( const QString &segment : pendingSegments )
-    {
-      //cppcheck-suppress ignoredReturnValue
-      ( void ) rebuiltDir.cd( segment );
-    }
-
-    targetCanonical = rebuiltDir.absoluteFilePath( targetInfo.fileName() );
-  }
-
-  // Normalize path separators
-  projectDirCanonical = QDir::fromNativeSeparators( projectDirCanonical );
-  targetCanonical = QDir::fromNativeSeparators( targetCanonical );
-
-  // Normalize paths for Windows (case-insensitive check)
-#ifdef Q_OS_WIN
-  projectDirCanonical = projectDirCanonical.toLower();
-  targetCanonical = targetCanonical.toLower();
-#endif
-
-  // Check if the target path is equal to or within the project directory
-  bool result = targetCanonical == projectDirCanonical || targetCanonical.startsWith( projectDirCanonical + "/" );
-
-  return result;
+  const QFileInfo projectFile( ManagedPhotoStore::localPath( project->fileName() ) );
+  return projectFile.isFile() && ManagedPhotoStore::inside( projectFile.absolutePath(), ManagedPhotoStore::localPath( filePath ) );
 }
 
 QByteArray FileUtils::readFileContent( const QString &filePath )
@@ -755,22 +689,55 @@ bool FileUtils::writeFileContent( const QString &filePath, const QByteArray &con
   }
 }
 
-QVariantMap FileUtils::storeCapturedPhoto( const QString &sourceFilePath, const QString &destinationFilePath )
+static QVariantMap storeProjectPhoto( const QString &sourceFilePath, const QString &destinationFilePath, ManagedPhotoStore::WriteMode mode )
 {
   QgsProject *project = QgsProject::instance();
   const QString projectPath = project ? ManagedPhotoStore::localPath( project->fileName() ) : QString();
   if ( projectPath.isEmpty() || !QFileInfo::exists( projectPath ) )
     return { { QStringLiteral( "ok" ), false }, { QStringLiteral( "code" ), QStringLiteral( "project" ) },
              { QStringLiteral( "error" ), QStringLiteral( "먼저 프로젝트 파일을 저장한 뒤 사진을 촬영해 주세요." ) } };
-  const QVariantMap result = ManagedPhotoStore::save( sourceFilePath, destinationFilePath, QFileInfo( projectPath ).absolutePath() );
+  const QVariantMap result = ManagedPhotoStore::save( sourceFilePath, destinationFilePath, QFileInfo( projectPath ).absolutePath(), mode );
   if ( !result.value( QStringLiteral( "ok" ) ).toBool() )
     QgsMessageLog::logMessage( QStringLiteral( "Photo save [%1]: %2" ).arg( result.value( QStringLiteral( "code" ) ).toString(), result.value( QStringLiteral( "error" ) ).toString() ), QStringLiteral( "Field photos" ), Qgis::MessageLevel::Warning );
   return result;
 }
 
+QString FileUtils::resolveAttachmentPath( const QString &base, const QString &path )
+{
+  const QString root = ManagedPhotoStore::localPath( base ).replace( QLatin1Char( '\\' ), QLatin1Char( '/' ) );
+  const QString name = ManagedPhotoStore::localPath( path ).replace( QLatin1Char( '\\' ), QLatin1Char( '/' ) );
+  if ( root.isEmpty() && name.isEmpty() )
+    return QString();
+  return QDir::cleanPath( QDir( root ).filePath( name ) );
+}
+
+QString FileUtils::fieldCameraCapturePath()
+{
+  const QString cache = QStandardPaths::writableLocation( QStandardPaths::CacheLocation );
+  if ( cache.isEmpty() )
+    return QString();
+  const QDir folder( QDir( cache ).filePath( QStringLiteral( "field-captures" ) ) );
+  if ( !folder.mkpath( QStringLiteral( "." ) ) )
+    return QString();
+  return folder.filePath( QUuid::createUuid().toString( QUuid::WithoutBraces ) + QStringLiteral( ".jpg" ) );
+}
+
+QVariantMap FileUtils::storeCapturedPhoto( const QString &sourceFilePath, const QString &baseDirectory, const QString &relativeName )
+{
+  const QDir base( ManagedPhotoStore::localPath( baseDirectory ) );
+  const QString relative = QDir::cleanPath( relativeName );
+  if ( baseDirectory.isEmpty() || !base.isAbsolute() || relative.isEmpty() || relative == QStringLiteral( "." )
+       || relative == QStringLiteral( ".." ) || relative.startsWith( QStringLiteral( "../" ) ) || QDir::isAbsolutePath( relative ) )
+    return { { QStringLiteral( "ok" ), false }, { QStringLiteral( "error" ), QStringLiteral( "프로젝트의 상대 사진 경로를 확인할 수 없습니다." ) } };
+  QVariantMap result = storeProjectPhoto( sourceFilePath, base.filePath( relative ), ManagedPhotoStore::WriteMode::NewAttachment );
+  if ( result.value( QStringLiteral( "ok" ) ).toBool() )
+    result.insert( QStringLiteral( "relativePath" ), base.relativeFilePath( result.value( QStringLiteral( "path" ) ).toString() ) );
+  return result;
+}
+
 bool FileUtils::replaceFileSafely( const QString &sourceFilePath, const QString &destinationFilePath )
 {
-  return storeCapturedPhoto( sourceFilePath, destinationFilePath ).value( QStringLiteral( "ok" ) ).toBool();
+  return storeProjectPhoto( sourceFilePath, destinationFilePath, ManagedPhotoStore::WriteMode::Replace ).value( QStringLiteral( "ok" ) ).toBool();
 }
 
 QVariantMap FileUtils::getFileInfo( const QString &filePath, bool fetchContent )
@@ -860,111 +827,10 @@ QVariantMap FileUtils::getFileInfo( const QString &filePath, bool fetchContent )
 
 bool FileUtils::unzip( const QString &zipFilename, const QString &dir, QStringList &files, bool checkConsistency )
 {
-  files.clear();
-
-  if ( !QFileInfo::exists( zipFilename ) )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Error zip file does not exist: '%1'" ).arg( zipFilename ) );
-    return false;
-  }
-  else if ( zipFilename.isEmpty() )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Error zip filename is empty" ) );
-    return false;
-  }
-  else if ( !QDir( dir ).exists( dir ) )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Error output dir does not exist: '%1'" ).arg( dir ) );
-    return false;
-  }
-  else if ( !QFileInfo( dir ).isDir() )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Error output dir is not a directory: '%1'" ).arg( dir ) );
-    return false;
-  }
-  else if ( !QFileInfo( dir ).isWritable() )
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Error output dir is not writable: '%1'" ).arg( dir ) );
-    return false;
-  }
-
-  int rc = 0;
-  const QByteArray fileNamePtr = zipFilename.toUtf8();
-  struct zip *z = zip_open( fileNamePtr.constData(), checkConsistency ? ZIP_CHECKCONS : 0, &rc );
-
-  if ( rc == ZIP_ER_OK && z )
-  {
-    const long long count = zip_get_num_entries( z, ZIP_FL_UNCHANGED );
-    if ( count != -1 )
-    {
-      struct zip_stat stat;
-
-      for ( int i = 0; i < count; i++ )
-      {
-        zip_stat_index( z, i, 0, &stat );
-        const size_t len = stat.size;
-
-        struct zip_file *file = zip_fopen_index( z, i, 0 );
-        const std::unique_ptr<char[]> buf( new char[len] );
-        if ( zip_fread( file, buf.get(), len ) != -1 )
-        {
-          const QString fileName( stat.name );
-          if ( fileName.endsWith( "/" ) )
-          {
-            continue;
-          }
-
-          const QFileInfo newFile( QDir( dir ), fileName );
-
-          if ( !QString( QDir::cleanPath( newFile.absolutePath() ) + QStringLiteral( "/" ) ).startsWith( QDir( dir ).absolutePath() + QStringLiteral( "/" ) ) )
-          {
-            QgsMessageLog::logMessage( QObject::tr( "Skipped file %1 outside of the directory %2" ).arg( newFile.absoluteFilePath(), QDir( dir ).absolutePath() ) );
-            continue;
-          }
-
-          // Create path for a new file if it does not exist.
-          if ( !newFile.absoluteDir().exists() )
-          {
-            if ( !QDir( dir ).mkpath( newFile.absolutePath() ) )
-              QgsMessageLog::logMessage( QObject::tr( "Failed to create a subdirectory %1/%2" ).arg( dir ).arg( fileName ) );
-          }
-
-          QFile outFile( newFile.absoluteFilePath() );
-          if ( !outFile.open( QIODevice::WriteOnly | QIODevice::Truncate ) )
-          {
-            QgsMessageLog::logMessage( QObject::tr( "Could not write to %1" ).arg( newFile.absoluteFilePath() ) );
-          }
-          else
-          {
-            outFile.write( buf.get(), len );
-          }
-          zip_fclose( file );
-          files.append( newFile.absoluteFilePath() );
-        }
-        else
-        {
-          zip_fclose( file );
-          QgsMessageLog::logMessage( QObject::tr( "Error reading file: '%1'" ).arg( zip_strerror( z ) ) );
-          return false;
-        }
-      }
-    }
-    else
-    {
-      zip_close( z );
-      QgsMessageLog::logMessage( QObject::tr( "Error getting files: '%1'" ).arg( zip_strerror( z ) ) );
-      return false;
-    }
-
-    zip_close( z );
-  }
-  else
-  {
-    QgsMessageLog::logMessage( QObject::tr( "Error opening zip archive: '%1' (Error code: %2)" ).arg( z ? zip_strerror( z ) : zipFilename ).arg( rc ) );
-    return false;
-  }
-
-  return true;
+  const QString error = ProjectArchive::extract( zipFilename, dir, files, checkConsistency );
+  if ( !error.isEmpty() )
+    QgsMessageLog::logMessage( error, QStringLiteral( "QField" ), Qgis::Warning );
+  return error.isEmpty();
 }
 
 bool FileUtils::isDeletable( const QString &filePath )

@@ -192,6 +192,8 @@ bool Positioning::active() const
 void Positioning::setActive( bool active )
 {
   const QString devId = deviceId();
+  if ( !active )
+    ++mPermissionRequestGeneration;
   // Permission prompts are only required when starting a receiver. Asking
   // while stopping can asynchronously turn it back on from the callback,
   // making an internal/external switch race with itself.
@@ -206,7 +208,9 @@ void Positioning::setActive( bool active )
 
       if ( permissionStatus == Qt::PermissionStatus::Undetermined )
       {
-        qApp->requestPermission( locationPermission, this, [this]( const QPermission &permission ) {
+        qApp->requestPermission( locationPermission, this, [this, devId, generation = mPermissionRequestGeneration]( const QPermission &permission ) {
+          if ( generation != mPermissionRequestGeneration || deviceId() != devId )
+            return;
           if ( permission.status() == Qt::PermissionStatus::Granted )
           {
             mInternalPermissionChecked = true;
@@ -246,7 +250,9 @@ void Positioning::setActive( bool active )
         Qt::PermissionStatus permissionStatus = qApp->checkPermission( bluetoothPermission );
         if ( permissionStatus == Qt::PermissionStatus::Undetermined )
         {
-          qApp->requestPermission( bluetoothPermission, this, [this]( const QPermission &permission ) {
+          qApp->requestPermission( bluetoothPermission, this, [this, devId, generation = mPermissionRequestGeneration]( const QPermission &permission ) {
+            if ( generation != mPermissionRequestGeneration || deviceId() != devId )
+              return;
             if ( permission.status() == Qt::PermissionStatus::Granted )
             {
               mBluetoothPermissionChecked = true;
@@ -331,6 +337,8 @@ QString Positioning::deviceId() const
 
 void Positioning::setDeviceId( const QString &id )
 {
+  if ( id != deviceId() )
+    ++mPermissionRequestGeneration;
   if ( isSourceAvailable() )
   {
     mPositioningSourceReplica->setProperty( "deviceId", id );
@@ -805,6 +813,9 @@ void Positioning::onPositionInformationChanged()
   {
     emit positionInformationChanged();
   }
+  // Reprojecting a cached position also emits positionInformationChanged.
+  // Only a sample from the positioning service renews the field capture clock.
+  emit receiverSampleReceived();
 }
 
 void Positioning::processProjectedPosition()

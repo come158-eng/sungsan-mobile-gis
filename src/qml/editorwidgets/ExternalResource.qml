@@ -19,45 +19,36 @@ EditorWidgetBase {
   ExpressionEvaluator {
     id: rootPathEvaluator
     project: qgisProject
+    feature: currentFeature
+    layer: currentLayer
     appExpressionContextScopesGenerator: appScopesGenerator
   }
 
+  readonly property bool hasCustomPhotoRoot: Number(config.RelativeStorage) === 2 && externalStorage.type === ""
   property string prefixToRelativePath: {
-    if (qgisProject == undefined)
+    if (!qgisProject || !qgisProject.homePath)
       return "";
-    let path = "";
-    if (config["RelativeStorage"] === 1 || externalStorage.type != "") {
-      path = qgisProject.homePath;
-      if (!path.endsWith("/"))
-        path = path + "/";
-    } else if (config["RelativeStorage"] === 2) {
-      const collection = config["PropertyCollection"];
-      const props = collection["properties"];
-      if (props) {
-        if (props["propertyRootPath"]) {
-          const rootPathProps = props["propertyRootPath"];
-          rootPathEvaluator.expressionText = rootPathProps["expression"];
-        }
+    let configuredRoot = "";
+    if (hasCustomPhotoRoot) {
+      const props = (config.PropertyCollection || {}).properties || {};
+      const entry = props.propertyRootPath;
+      if (entry && entry.active !== false) {
+        let expression = entry.expression || "";
+        if (!expression && entry.field)
+          expression = '"' + String(entry.field).replace(/"/g, '""') + '"';
+        const result = expression ? rootPathEvaluator.evaluate(expression) : entry.val;
+        if (result !== undefined && result !== null && !FeatureUtils.attributeIsNull(result))
+          configuredRoot = String(result);
       }
-      rootPathEvaluator.feature = currentFeature;
-      rootPathEvaluator.layer = currentLayer;
-      const evaluatedFilepath = rootPathEvaluator.evaluate().replace("\\", "/");
-      if (evaluatedFilepath) {
-        path = evaluatedFilepath;
-      } else {
-        path = config["DefaultRoot"] ? config["DefaultRoot"] : qgisProject.homePath;
-        if (!path.endsWith("/"))
-          path = path + "/";
-      }
+      if (!configuredRoot)
+        configuredRoot = config.DefaultRoot || "";
     }
+    const path = FileUtils.resolveAttachmentPath(qgisProject.homePath, configuredRoot);
+    return path.endsWith("/") ? path : path + "/";
+  }
 
-    // since we've hardcoded the project path by default so far, let's maintain that until we improve things in qfieldsync
-    if (path == "") {
-      path = qgisProject.homePath;
-      if (!path.endsWith("/"))
-        path = path + "/";
-    }
-    return String(path).indexOf("file:") === 0 ? UrlUtils.toLocalFile(path) : path;
+  function attachmentPath(name) {
+    return FileUtils.resolveAttachmentPath(prefixToRelativePath, String(name));
   }
 
   property ResourceSource __resourceSource
@@ -81,10 +72,15 @@ EditorWidgetBase {
 
   //to not break any binding of image.source
   property var currentValue: value
-  onCurrentValueChanged: {
+  onCurrentValueChanged: if (isLoaded) refreshAttachment()
+  onPrefixToRelativePathChanged: if (isLoaded) refreshAttachment()
+  onIsLoadedChanged: if (isLoaded) refreshAttachment()
+
+  function refreshAttachment() {
     if (currentValue != undefined && currentValue !== '') {
-      const isHttp = value.startsWith('http://') || value.startsWith('https://');
-      const fullValue = isHttp ? value : prefixToRelativePath + value;
+      const attachment = String(currentValue);
+      const isHttp = attachment.startsWith('http://') || attachment.startsWith('https://');
+      const fullValue = isHttp ? attachment : attachmentPath(attachment);
       if (!isHttp && !FileUtils.fileExists(fullValue)) {
         prepareValue("");
         if (externalStorage.type != "") {
@@ -118,12 +114,6 @@ EditorWidgetBase {
   }
 
   property string audioSourcePath: ''
-  // Keep the value that was attached when a managed field-photo capture was
-  // started.  The native camera commits its result before resourceReceived is
-  // emitted, so this lets us remove an obsolete, differently named photo only
-  // after the replacement has been verified on disk.
-  property string sungsanPendingPreviousPhotoPath: ""
-
   function prepareValue(fullValue) {
     if (fullValue != "" && !config.UseLink) { // coercion needed
       const mimeType = FileUtils.mimeTypeName(fullValue);
@@ -265,56 +255,14 @@ EditorWidgetBase {
         && Boolean(currentLayer.customProperty('kr.co.sungsan.mobilegis/saveFieldPhotosToGallery'));
   }
 
-  function rememberSungsanPreviousPhoto() {
-    sungsanPendingPreviousPhotoPath = isSungsanManagedFieldPhoto() && currentValue
-        ? String(currentValue)
-        : "";
-  }
-
-  function normalizedSungsanPhotoPath(path) {
-    return String(path || "").replace(/\\/g, "/").replace(/\/+/g, "/");
-  }
-
   function commitSungsanManagedPhoto(path) {
-    const previousPath = sungsanPendingPreviousPhotoPath;
-    sungsanPendingPreviousPhotoPath = "";
-
-    if (!path) {
+    if (!path || !FileUtils.fileExists(attachmentPath(path))) {
+      mainWindow.displayToast("사진 파일이 프로젝트 폴더에 없습니다. 다시 촬영해 주세요.", "error");
       return false;
     }
-
-    const relativePath = String(path);
-    if (!isSungsanManagedFieldPhoto()) {
-      valueChangeRequested(relativePath, false);
-      return true;
-    }
-
-    const absoluteNewPath = prefixToRelativePath + relativePath;
-    if (!FileUtils.fileExists(absoluteNewPath)) {
-      mainWindow.displayToast("새 사진을 안전하게 저장하지 못했습니다. 기존 사진은 유지됩니다.", "error");
-      return false;
-    }
-
-    const currentPathBeforeCommit = currentValue ? String(currentValue) : "";
-
-    // Point the field at the verified replacement before removing an obsolete
-    // file.  A same-path retake is already replaced atomically by Android and
-    // must never be passed to deleteFiles().
-    valueChangeRequested(relativePath, false);
-
-    if (previousPath
-        && normalizedSungsanPhotoPath(currentPathBeforeCommit) === normalizedSungsanPhotoPath(previousPath)
-        && normalizedSungsanPhotoPath(previousPath) !== normalizedSungsanPhotoPath(relativePath)) {
-      const absolutePreviousPath = prefixToRelativePath + previousPath;
-      if (normalizedSungsanPhotoPath(absolutePreviousPath) !== normalizedSungsanPhotoPath(absoluteNewPath)
-          && FileUtils.fileExists(absolutePreviousPath)) {
-        const results = FileUtils.deleteFiles([absolutePreviousPath]);
-        if (!results[absolutePreviousPath]) {
-          mainWindow.displayToast("새 사진은 저장했지만 이전 사진 파일을 정리하지 못했습니다.", "warning");
-        }
-      }
-    }
-
+    // The old path may still be in the database until the form is saved, or
+    // referenced by another feature. Updating the form must leave it intact.
+    valueChangeRequested(path, false);
     return true;
   }
 
@@ -347,7 +295,7 @@ EditorWidgetBase {
       if ((!isEditable && isEditing) || isNull || isEmpty) {
         return Theme.mainTextDisabledColor;
       }
-      return FileUtils.fileExists(prefixToRelativePath + value) ? Theme.mainColor : Theme.secondaryTextColor;
+      return FileUtils.fileExists(attachmentPath(value)) ? Theme.mainColor : Theme.secondaryTextColor;
     }
 
     text: {
@@ -358,7 +306,7 @@ EditorWidgetBase {
       }
       let fieldValue = qsTr('No Value');
       if (hasValue) {
-        fieldValue = prefixToRelativePath + currentValue;
+        fieldValue = attachmentPath(currentValue);
         if (UrlUtils.isRelativeOrFileUrl(fieldValue)) {
           fieldValue = config.FullUrl ? fieldValue : FileUtils.fileName(fieldValue);
         }
@@ -369,7 +317,7 @@ EditorWidgetBase {
 
     font.pointSize: Theme.defaultFont.pointSize
     font.italic: !hasValue
-    font.underline: FileUtils.fileExists(prefixToRelativePath + value) || FileUtils.fileExists(value)
+    font.underline: FileUtils.fileExists(attachmentPath(value)) || FileUtils.fileExists(value)
     verticalAlignment: Text.AlignVCenter
     elide: Text.ElideMiddle
 
@@ -382,8 +330,8 @@ EditorWidgetBase {
         if (!UrlUtils.isRelativeOrFileUrl(value)) {
           // matches `http://...` but not `file://...` paths
           Qt.openUrlExternally(value);
-        } else if (FileUtils.fileExists(prefixToRelativePath + value)) {
-          __viewStatus = platformUtilities.open(prefixToRelativePath + value, isEnabled, this);
+        } else if (FileUtils.fileExists(attachmentPath(value))) {
+          __viewStatus = platformUtilities.open(attachmentPath(value), isEnabled, this);
         }
       }
     }
@@ -586,9 +534,9 @@ EditorWidgetBase {
       height: playerControls.visible ? player.height - 54 : image.height
 
       onClicked: {
-        if (FileUtils.fileExists(prefixToRelativePath + value)) {
+        if (FileUtils.fileExists(attachmentPath(value))) {
           platformUtilities.requestStoragePermission();
-          __viewStatus = platformUtilities.open(prefixToRelativePath + value, isEnabled, this);
+          __viewStatus = platformUtilities.open(attachmentPath(value), isEnabled, this);
         }
       }
     }
@@ -836,7 +784,8 @@ EditorWidgetBase {
       id: qfieldCamera
       visible: false
 
-      allowCaptureModeToggle: true
+      managedFieldCapture: isSungsanManagedFieldPhoto()
+      allowCaptureModeToggle: !managedFieldCapture
 
       Component.onCompleted: {
         qfieldCamera.state = isVideo ? 'VideoCapture' : 'PhotoCapture';
@@ -844,44 +793,47 @@ EditorWidgetBase {
       }
 
       onFinished: path => {
-        const filepath = StringUtils.replaceFilenameTags(getResourceFilePath(), path);
-        const destinationPath = prefixToRelativePath + filepath;
-        const managed = isSungsanManagedFieldPhoto();
-        const saveResult = managed
-            ? FileUtils.storeCapturedPhoto(path, destinationPath)
-            : { ok: platformUtilities.renameFile(path, destinationPath) };
-        if (managed && (!saveResult.ok || !FileUtils.fileExists(destinationPath))) {
-          mainWindow.displayToast("사진 저장 실패: " + (saveResult.error || "저장된 파일을 확인할 수 없습니다.") + " 기존 사진은 유지됩니다.", "error");
-          // Retain the captured source and the preview so the user can retry.
-          return;
-        }
-        if (!cameraLoader.isVideo) {
-          const maximumWidhtHeight = iface.readProjectNumEntry("qfieldsync", "maximumImageWidthHeight", 0);
-          if (maximumWidhtHeight > 0) {
-            FileUtils.restrictImageSize(prefixToRelativePath + filepath, maximumWidhtHeight);
-          }
-        }
-        if (isSungsanManagedFieldPhoto()) {
-          const finalPhotoPath = prefixToRelativePath + filepath;
-          const finalPhotoName = FileUtils.fileName(finalPhotoPath, true);
-          if (!cameraLoader.isVideo && !FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)) {
-            mainWindow.displayToast("사진은 저장했지만 하단 사진명 표지를 넣지 못했습니다.", "warning");
-          }
-          const publishToGallery = !cameraLoader.isVideo && shouldPublishSungsanPhotoToGallery();
-          if (!commitSungsanManagedPhoto(filepath)) {
+        const preferredPath = StringUtils.replaceFilenameTags(getResourceFilePath(), path);
+        const maximumSize = iface.readProjectNumEntry("qfieldsync", "maximumImageWidthHeight", 0);
+        if (managedFieldCapture) {
+          const nameInRoot = hasCustomPhotoRoot ? FileUtils.fileName(preferredPath, true) : preferredPath;
+          const result = FileUtils.storeCapturedPhoto(path, prefixToRelativePath, nameInRoot);
+          if (!result.ok) {
+            mainWindow.displayToast("사진 저장 실패: " + result.error, "error");
             return;
           }
-          if (publishToGallery) {
-            platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName);
+          const finalPhotoPath = result.path;
+          const finalPhotoName = FileUtils.fileName(finalPhotoPath, true);
+          if (maximumSize > 0) {
+            FileUtils.restrictImageSize(finalPhotoPath, maximumSize);
+          }
+          if (!FileUtils.addImageNameBoard(finalPhotoPath, finalPhotoName)) {
+            // Only this attempt's new copy is disposable. Keep the verified
+            // shutter file in the preview for a retry without taking it again.
+            FileUtils.deleteFiles([finalPhotoPath]);
+            mainWindow.displayToast("촬영 사진을 읽거나 사진명 표지를 저장하지 못했습니다. 다시 저장해 주세요.", "error");
+            return;
+          }
+          const publishToGallery = shouldPublishSungsanPhotoToGallery();
+          if (!commitSungsanManagedPhoto(result.relativePath)) {
+            return;
+          }
+          if (publishToGallery && Qt.platform.os === "android"
+              && !platformUtilities.publishImageToGallery(finalPhotoPath, finalPhotoName)) {
+            mainWindow.displayToast("프로젝트 사진은 저장했습니다. 갤러리 저장 권한과 경로를 확인해 주세요.", "warning");
           }
         } else {
-          valueChangeRequested(filepath, false);
+          const destinationPath = prefixToRelativePath + preferredPath;
+          platformUtilities.renameFile(path, destinationPath);
+          if (!cameraLoader.isVideo && maximumSize > 0) {
+            FileUtils.restrictImageSize(destinationPath, maximumSize);
+          }
+          valueChangeRequested(preferredPath, false);
         }
         close();
       }
 
       onCanceled: {
-        sungsanPendingPreviousPhotoPath = "";
         close();
       }
       onClosed: cameraLoader.active = false
@@ -894,15 +846,13 @@ EditorWidgetBase {
       if (path) {
         const maximumWidhtHeight = iface.readProjectNumEntry("qfieldsync", "maximumImageWidthHeight", 0);
         if (maximumWidhtHeight > 0) {
-          FileUtils.restrictImageSize(prefixToRelativePath + path, maximumWidhtHeight);
+          FileUtils.restrictImageSize(attachmentPath(path), maximumWidhtHeight);
         }
         if (isSungsanManagedFieldPhoto()) {
           commitSungsanManagedPhoto(path);
         } else {
           valueChangeRequested(path, false);
         }
-      } else {
-        sungsanPendingPreviousPhotoPath = "";
       }
     }
   }
@@ -941,7 +891,7 @@ EditorWidgetBase {
         if (errorString !== "") {
           displayToast(qsTr("QFieldCloud on-demand attachment error: ") + errorString, 'error');
         } else {
-          prepareValue(prefixToRelativePath + fileName);
+          prepareValue(attachmentPath(fileName));
         }
         cloudProjectConnection.target = dummyTarget;
         fetchingIndicator.running = false;
@@ -952,7 +902,6 @@ EditorWidgetBase {
   function attachFile() {
     Qt.inputMethod.hide();
     platformUtilities.requestStoragePermission();
-    sungsanPendingPreviousPhotoPath = "";
     const filepath = getResourceFilePath();
     if (documentViewer == ExternalResource.DocumentAudio) {
       __resourceSource = platformUtilities.getFile(qgisProject.homePath + '/', filepath, "audio/*", this);
@@ -964,10 +913,6 @@ EditorWidgetBase {
   function attachGallery() {
     Qt.inputMethod.hide();
     platformUtilities.requestStoragePermission();
-    // Gallery imports do not currently provide a staged/validated success
-    // signal on every Android version.  Never reuse a pending camera cleanup
-    // for this path, otherwise a failed import could remove the old photo.
-    sungsanPendingPreviousPhotoPath = "";
     const filepath = getResourceFilePath();
     if (documentViewer == ExternalResource.DocumentVideo) {
       __resourceSource = platformUtilities.getGalleryVideo(qgisProject.homePath + '/', filepath, this);
@@ -978,7 +923,6 @@ EditorWidgetBase {
 
   function capturePhoto() {
     Qt.inputMethod.hide();
-    rememberSungsanPreviousPhoto();
     if (isSungsanManagedFieldPhoto()) {
       const objectName = sungsanObjectNameEvaluator.evaluate();
       if (objectName === undefined || objectName === null || FeatureUtils.attributeIsNull(objectName) || String(objectName).trim().length === 0) {
@@ -989,7 +933,6 @@ EditorWidgetBase {
       // activities can return portrait pixels without an EXIF orientation tag
       // after a landscape capture, which cannot be repaired during ZIP
       // export. QFieldCamera records the viewport orientation at shutter time.
-      platformUtilities.createDir(qgisProject.homePath, 'DCIM');
       cameraLoader.isVideo = false;
       cameraLoader.active = true;
       return;
@@ -1008,7 +951,6 @@ EditorWidgetBase {
 
   function captureVideo() {
     Qt.inputMethod.hide();
-    sungsanPendingPreviousPhotoPath = "";
     if (platformUtilities.capabilities & PlatformUtilities.NativeCamera && settings.valueBool("nativeCamera2", true)) {
       let filepath = getResourceFilePath();
       // Video taken by cameras will always be MP4
@@ -1023,7 +965,6 @@ EditorWidgetBase {
 
   function captureAudio() {
     Qt.inputMethod.hide();
-    sungsanPendingPreviousPhotoPath = "";
     audioRecorderLoader.active = true;
   }
 
@@ -1035,21 +976,13 @@ EditorWidgetBase {
     Label {
       width: parent.width
       wrapMode: Text.WordWrap
-      text: "이 사진 파일과 현재 객체의 연결을 삭제할까요?"
+      text: "현재 객체의 이 칸에서 사진 연결을 해제할까요? 원본 사진은 프로젝트에 보관됩니다."
     }
 
     onAccepted: {
-      const absolutePath = prefixToRelativePath + currentValue;
-      if (currentValue && FileUtils.fileExists(absolutePath)) {
-        const results = FileUtils.deleteFiles([absolutePath]);
-        if (!results[absolutePath]) {
-          mainWindow.displayToast("사진 파일을 삭제하지 못했습니다.", "error");
-          return;
-        }
-      }
       valueChangeRequested("", false);
       prepareValue("");
-      mainWindow.displayToast("사진을 삭제했습니다.");
+      mainWindow.displayToast("사진 연결을 해제했습니다.");
       visible = false;
     }
 

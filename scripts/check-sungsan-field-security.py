@@ -18,6 +18,7 @@ ACTIVITY = (
     / "platform/android/src/ch/opengis/qfield/QFieldActivity.java"
 ).read_text(encoding="utf-8")
 BRIDGE = (ROOT / "src/core/sungsansurveybridge.cpp").read_text(encoding="utf-8")
+BRIDGE += (ROOT / "src/core/utils/landstarpointfile.h").read_text(encoding="utf-8")
 ROOT_QML = (ROOT / "src/qml/qgismobileapp.qml").read_text(encoding="utf-8")
 ANDROID_UTILITIES = (
     ROOT / "src/core/platforms/android/androidplatformutilities.cpp"

@@ -19,7 +19,9 @@ Popup {
   property bool isPortraitMode: mainWindow.height > mainWindow.width
 
   property string currentPath: ''
+  property bool managedFieldCapture: false
   property bool capturePending: false
+  property bool captureDecorated: false
   property var currentPosition: PositioningUtils.createEmptyGnssPositionInformation()
   property var currentProjectedPosition: undefined
 
@@ -90,7 +92,15 @@ Popup {
     tryActivateCaptureLoader();
   }
 
+  function discardManagedPreview() {
+    if (managedFieldCapture && currentPath !== "") {
+      platformUtilities.rmFile(currentPath);
+      currentPath = "";
+    }
+  }
+
   onAboutToHide: {
+    discardManagedPreview();
     captureLoaderActivated = false;
   }
 
@@ -274,7 +284,12 @@ Popup {
                   return;
                 }
                 currentPath = savedPath;
-                orientationNormalizer.normalizeImageOrientation(currentPath);
+                const normalized = orientationNormalizer.normalizeImageOrientation(currentPath);
+                if (managedFieldCapture && !normalized) {
+                  mainWindow.displayToast("촬영 사진의 방향을 확인하여 저장하지 못했습니다. 다시 촬영해 주세요.", "error");
+                  cameraItem.state = "PhotoCapture";
+                  return;
+                }
                 photoPreview.source = UrlUtils.fromString(currentPath);
                 cameraItem.state = "PhotoPreview";
               }
@@ -532,7 +547,8 @@ Popup {
                 if (!captureLoader.item)
                   return;
                 if (cameraItem.state == "PhotoCapture") {
-                  platformUtilities.createDir(qgisProject.homePath, 'DCIM');
+                  if (!managedFieldCapture)
+                    platformUtilities.createDir(qgisProject.homePath, 'DCIM');
                   // Record the visible viewport before asking the backend to
                   // capture. Some Android camera backends can emit imageSaved
                   // immediately and QScreen may stay locked to portrait even
@@ -540,10 +556,21 @@ Popup {
                   captureLoader.item.orientationNormalizer.recordCaptureDeviceOrientation(
                       cameraItem.lastStableDeviceOrientation,
                       !cameraItem.isPortraitMode);
+                  discardManagedPreview();
                   currentPath = "";
-                  capturePending = true;
+                  captureDecorated = false;
                   const captureName = "capture_" + Date.now() + "_" + Math.floor(Math.random() * 0x100000000).toString(16) + ".jpg";
-                  captureLoader.item.imageCapture.captureToFile(qgisProject.homePath + '/DCIM/' + captureName);
+                  const targetPath = managedFieldCapture ? FileUtils.fieldCameraCapturePath() : qgisProject.homePath + '/DCIM/' + captureName;
+                  if (!targetPath) {
+                    mainWindow.displayToast("촬영 임시 폴더를 만들 수 없습니다. 저장 공간을 확인해 주세요.", "error");
+                    return;
+                  }
+                  capturePending = true;
+                  if (captureLoader.item.imageCapture.captureToFile(targetPath) < 0) {
+                    capturePending = false;
+                    mainWindow.displayToast("카메라가 촬영을 시작하지 못했습니다. 다시 눌러 주세요.", "error");
+                    return;
+                  }
                   captureFlashAnimation.start();
                   if (positionSource.active) {
                     currentPosition = positionSource.positionInformation;
@@ -564,7 +591,8 @@ Popup {
                 } else if (cameraItem.state == "PhotoPreview" || cameraItem.state == "VideoPreview") {
                   if (!currentPath || currentPath === "")
                     return;
-                  if (cameraItem.state == "PhotoPreview") {
+                  if (cameraItem.state == "PhotoPreview" && !captureDecorated) {
+                    captureDecorated = true;
                     if (cameraSettings.geoTagging && positionSource.active) {
                       FileUtils.addImageMetadata(currentPath, currentPosition);
                     }
@@ -788,6 +816,7 @@ Popup {
 
       onClicked: {
         if (cameraItem.state == "PhotoPreview") {
+          discardManagedPreview();
           cameraItem.state = "PhotoCapture";
         } else if (cameraItem.state == "VideoPreview") {
           videoPreview.stop();

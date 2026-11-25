@@ -17,12 +17,8 @@
 #include "cameraorientationnormalizer.h"
 
 #include <QGuiApplication>
-#include <QImage>
-#include <QImageReader>
-#include <QImageWriter>
-#include <QSaveFile>
+#include "capturedimageorientation.h"
 #include <QScreen>
-#include <QTransform>
 
 #include <QOrientationReading>
 
@@ -108,65 +104,10 @@ bool CameraOrientationNormalizer::normalizeImageOrientation( const QString &path
   const bool captureOrientationRecorded = mCaptureOrientationRecorded;
   mCaptureOrientationRecorded = false;
 
-  // Read the EXIF transform before decoding. When present, let Qt apply it to
-  // the pixels so the rewritten file is oriented correctly even in viewers
-  // which ignore EXIF. The capture-orientation heuristic is only a fallback
-  // for camera backends that write rotated pixels without an EXIF tag.
-  QImageReader metadataReader( path );
-  metadataReader.setAutoTransform( false );
-  const QImageIOHandler::Transformations exifTransform = metadataReader.transformation();
-  const QByteArray imageFormat = metadataReader.format();
-
-  QImageReader reader( path );
-  const bool hasExifTransform = exifTransform != QImageIOHandler::TransformationNone;
-  reader.setAutoTransform( hasExifTransform );
-  QImage image = reader.read();
-  if ( image.isNull() )
-  {
-    return false;
-  }
-
-  const bool capturedInLandscape = ( mCaptureOrientation == Qt::LandscapeOrientation || mCaptureOrientation == Qt::InvertedLandscapeOrientation );
-  const bool pixelsAreLandscape = image.width() > image.height();
-  const bool needsFallbackRotation = !hasExifTransform && captureOrientationRecorded && ( capturedInLandscape != pixelsAreLandscape );
-
-  if ( !needsFallbackRotation && !hasExifTransform )
-  {
-    return false;
-  }
-
-  if ( needsFallbackRotation )
-  {
-    QTransform transform;
-    int rotationDegrees = pixelsAreLandscape ? 90 : 270;
-    if ( pixelsAreLandscape && mCaptureOrientation == Qt::InvertedPortraitOrientation )
-      rotationDegrees = 270;
-    else if ( !pixelsAreLandscape && mCaptureOrientation == Qt::InvertedLandscapeOrientation )
-      rotationDegrees = 90;
-    transform.rotate( rotationDegrees );
-    image = image.transformed( transform, Qt::SmoothTransformation );
-  }
-
-  // QSaveFile commits with a same-directory rename, so a failed encode never
-  // truncates the valid camera output that is already on disk.
-  QSaveFile saveFile( path );
-  if ( !saveFile.open( QIODevice::WriteOnly ) )
-  {
-    return false;
-  }
-
-  QImageWriter writer( &saveFile, imageFormat.isEmpty() ? QByteArrayLiteral( "jpg" ) : imageFormat );
-  writer.setTransformation( QImageIOHandler::TransformationNone );
-  writer.setQuality( 95 );
-  if ( !writer.write( image ) )
-  {
-    saveFile.cancelWriting();
-    return false;
-  }
-  return saveFile.commit();
+  return prepareCapturedImage( path, mCaptureOrientation, captureOrientationRecorded );
 #else
   Q_UNUSED( path )
-  return false;
+  return true;
 #endif
 }
 

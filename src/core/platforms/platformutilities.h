@@ -192,10 +192,11 @@ class QFIELD_CORE_EXPORT PlatformUtilities : public QObject
      * Publishes a copy of an application image to the platform photo gallery.
      * Platforms without a public photo collection safely ignore the request.
      */
-    Q_INVOKABLE virtual void publishImageToGallery( const QString &imagePath, const QString &displayName ) const
+    Q_INVOKABLE virtual bool publishImageToGallery( const QString &imagePath, const QString &displayName ) const
     {
       Q_UNUSED( imagePath )
       Q_UNUSED( displayName )
+      return false;
     }
 
     /**

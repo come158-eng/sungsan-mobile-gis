@@ -368,6 +368,7 @@ class Positioning : public QObject
     void loggingChanged();
     void loggingPathChanged();
     void positionInformationChanged();
+    void receiverSampleReceived();
 
     // Signals from positioning source properties forwarded onwards but not cached
     void deviceLastErrorChanged();
@@ -436,6 +437,7 @@ class Positioning : public QObject
 
     bool mInternalPermissionChecked = false;
     bool mBluetoothPermissionChecked = false;
+    quint64 mPermissionRequestGeneration = 0;
 
     bool mServiceMode = false;
     bool mBackgroundMode = false;

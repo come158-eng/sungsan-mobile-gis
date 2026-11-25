@@ -5,6 +5,8 @@
  ***************************************************************************/
 
 #include "sungsansurveybridge.h"
+#include "featuremodel.h"
+#include "utils/landstarpointfile.h"
 
 #include <algorithm>
 #include <cmath>
@@ -53,23 +55,9 @@
 
 namespace
 {
+  using LandStarPointFile::normalized;
+
   constexpr qint64 MAX_POINT_FILE_BYTES = 25LL * 1024LL * 1024LL;
-  constexpr int MAX_POINT_ROWS = 200000;
-
-  struct PointRecord
-  {
-    QString name;
-    QString code;
-    QString fixStatus;
-    QString surveyedAt;
-    double northing = 0.0;
-    double easting = 0.0;
-    double elevation = 0.0;
-    bool elevationValid = false;
-    double horizontalAccuracy = 0.0;
-    bool horizontalAccuracyValid = false;
-  };
-
   struct LandStarMetadata
   {
     QString region;
@@ -78,20 +66,6 @@ namespace
     QString projectName;
     QString source = QStringLiteral( "none" );
   };
-
-  enum class FixQuality
-  {
-    Fixed,
-    Rejected,
-    Unverified,
-  };
-
-  QString normalized( const QString &value )
-  {
-    QString result = value.trimmed().toLower();
-    result.remove( QRegularExpression( QStringLiteral( "[\\s_\\-()\\[\\].]" ) ) );
-    return result;
-  }
 
   bool matchesAnyAlias( const QString &value, const QStringList &aliases )
   {
@@ -227,70 +201,18 @@ namespace
     return metadata;
   }
 
-  QStringList parseCsvLine( const QString &line, const QChar delimiter )
-  {
-    QStringList fields;
-    QString current;
-    bool quoted = false;
-    for ( int i = 0; i < line.size(); ++i )
-    {
-      const QChar character = line.at( i );
-      if ( character == QLatin1Char( '"' ) )
-      {
-        if ( quoted && i + 1 < line.size() && line.at( i + 1 ) == QLatin1Char( '"' ) )
-        {
-          current.append( QLatin1Char( '"' ) );
-          ++i;
-        }
-        else
-        {
-          quoted = !quoted;
-        }
-      }
-      else if ( character == delimiter && !quoted )
-      {
-        fields.append( current.trimmed() );
-        current.clear();
-      }
-      else
-      {
-        current.append( character );
-      }
-    }
-    fields.append( current.trimmed() );
-    return fields;
-  }
-
-  QStringList splitLine( const QString &line, const QChar delimiter )
-  {
-    if ( delimiter.isSpace() )
-      return line.split( QRegularExpression( QStringLiteral( "\\s+" ) ), Qt::SkipEmptyParts );
-    return parseCsvLine( line, delimiter );
-  }
-
-  int findHeader( const QStringList &headers, const QStringList &aliases )
-  {
-    QSet<QString> wanted;
-    for ( const QString &alias : aliases )
-      wanted.insert( normalized( alias ) );
-    for ( int i = 0; i < headers.size(); ++i )
-    {
-      if ( wanted.contains( normalized( headers.at( i ) ) ) )
-        return i;
-    }
-    return -1;
-  }
-
   int findField( const QgsVectorLayer *layer, const QStringList &aliases )
   {
-    QSet<QString> wanted;
-    for ( const QString &alias : aliases )
-      wanted.insert( normalized( alias ) );
     const QgsFields fields = layer->fields();
-    for ( int i = 0; i < fields.count(); ++i )
+    for ( const QString &alias : aliases )
     {
-      if ( wanted.contains( normalized( fields.at( i ).name() ) ) || wanted.contains( normalized( layer->attributeAlias( i ) ) ) )
-        return i;
+      const QString key = normalized( alias );
+      for ( int i = 0; i < fields.count(); ++i )
+        if ( normalized( fields.at( i ).name() ) == key )
+          return i;
+      for ( int i = 0; i < fields.count(); ++i )
+        if ( normalized( layer->attributeAlias( i ) ) == key )
+          return i;
     }
     return -1;
   }
@@ -301,25 +223,6 @@ namespace
     value.replace( QLatin1Char( '\n' ), QLatin1Char( ' ' ) );
     value.replace( QLatin1Char( ',' ), QLatin1Char( ' ' ) );
     return value.trimmed();
-  }
-
-  FixQuality classifyFixQuality( const QString &value )
-  {
-    const QString quality = normalized( value );
-    if ( quality.isEmpty() )
-      return FixQuality::Unverified;
-    if ( quality == QLatin1String( "0" ) || quality == QLatin1String( "1" )
-         || quality == QLatin1String( "2" ) || quality == QLatin1String( "5" )
-         || quality.contains( QStringLiteral( "float" ) ) || quality.contains( QStringLiteral( "single" ) )
-         || quality.contains( QStringLiteral( "autonomous" ) ) || quality.contains( QStringLiteral( "dgps" ) )
-         || quality.contains( QStringLiteral( "nofix" ) ) || quality.contains( QStringLiteral( "invalid" ) )
-         || quality.contains( QStringLiteral( "notfixed" ) ) || quality.contains( QStringLiteral( "미고정" ) ) )
-      return FixQuality::Rejected;
-    if ( quality == QLatin1String( "4" ) || quality.contains( QStringLiteral( "rtkfix" ) )
-         || quality.contains( QStringLiteral( "fixed" ) ) || quality == QLatin1String( "fix" )
-         || quality.contains( QStringLiteral( "고정" ) ) )
-      return FixQuality::Fixed;
-    return FixQuality::Unverified;
   }
 
   QString preserveLandStarSource( const QByteArray &bytes, const QFileInfo &sourceInfo, QgsProject *project, QString *error )
@@ -743,7 +646,34 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
     const QString fieldName = photoFields.at( slot );
     const int fieldIndex = layer->fields().lookupField( fieldName );
     layer->setFieldAlias( fieldIndex, photoAliases.at( slot ) );
-    layer->setEditorWidgetSetup( fieldIndex, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), photoWidgetOptions ) );
+    QVariantMap options = layer->editorWidgetSetup( fieldIndex ).config();
+    const bool existingRoot = layer->editorWidgetSetup( fieldIndex ).type() == QStringLiteral( "ExternalResource" )
+                              && options.value( QStringLiteral( "RelativeStorage" ) ).toInt() == 2;
+    for ( auto it = photoWidgetOptions.constBegin(); it != photoWidgetOptions.constEnd(); ++it )
+    {
+      if ( !existingRoot || it.key() != QStringLiteral( "RelativeStorage" ) )
+        options.insert( it.key(), it.value() );
+    }
+    // Older packages store bare filenames relative to e.g. photos/근경.
+    // Resolve that directory in the opened project even after moving its ZIP.
+    if ( existingRoot )
+    {
+      const QString root = options.value( QStringLiteral( "DefaultRoot" ) ).toString();
+      QVariantMap collection = options.value( QStringLiteral( "PropertyCollection" ) ).toMap();
+      QVariantMap properties = collection.value( QStringLiteral( "properties" ) ).toMap();
+      const QString property = QStringLiteral( "propertyRootPath" );
+      if ( !root.isEmpty() && QDir::isRelativePath( root ) && !root.contains( QLatin1Char( ':' ) )
+           && !properties.value( property ).toMap().value( QStringLiteral( "active" ) ).toBool() )
+      {
+        const QString expression = QStringLiteral( "@project_home || '/' || " ) + QgsExpression::quotedString( root );
+        properties.insert( property, QVariantMap{ { QStringLiteral( "active" ), true }, { QStringLiteral( "type" ), 3 },
+                                                  { QStringLiteral( "expression" ), expression } } );
+        collection.insert( QStringLiteral( "type" ), QStringLiteral( "collection" ) );
+        collection.insert( QStringLiteral( "properties" ), properties );
+        options.insert( QStringLiteral( "PropertyCollection" ), collection );
+      }
+    }
+    layer->setEditorWidgetSetup( fieldIndex, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), options ) );
     attachmentNaming.insert(
       fieldName,
       photoNameBaseExpression.arg( objectNameSafeExpression, escapedPhotoFolder, duplicateNameSuffixExpression, fixedPhotoSuffixes.at( slot ) ) );
@@ -1051,10 +981,12 @@ QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, Qgs
 
   const auto usableFieldObjectLayer = []( QgsVectorLayer *layer ) {
     if ( !layer || !layer->isValid() || QgsWkbTypes::geometryType( layer->wkbType() ) != Qgis::GeometryType::Point
-         || !QgsWkbTypes::hasZ( layer->wkbType() ) || !layer->supportsEditing() )
+         || !QgsWkbTypes::hasZ( layer->wkbType() ) || layer->readOnly() || !layer->supportsEditing() )
       return false;
 
-    const bool markedForFieldObjects = layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), false ).toBool() || layer->name() == QStringLiteral( "성산_현장객체" );
+    const bool markedForFieldObjects = layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), false ).toBool()
+                                       || layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/fieldObjects" ), false ).toBool()
+                                       || layer->name() == QStringLiteral( "성산_현장객체" );
     if ( !markedForFieldObjects )
       return false;
 
@@ -1070,8 +1002,6 @@ QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, Qgs
     } );
   };
 
-  if ( usableFieldObjectLayer( preferredLayer ) )
-    return preferredLayer;
   if ( !project )
     return nullptr;
 
@@ -1085,10 +1015,13 @@ QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, Qgs
       continue;
 
     compatibleTargets.append( layer );
-    if ( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/landstarImportTarget" ), false ).toBool() )
+    if ( layer->customProperty( QStringLiteral( "kr.co.sungsan.mobilegis/landstarImportTarget" ), false ).toBool()
+         || layer->customProperty( QStringLiteral( "kr.co.metaengi.mobilegis/landstarImportTarget" ), false ).toBool() )
       explicitTargets.append( layer );
   }
 
+  if ( explicitTargets.isEmpty() && compatibleTargets.contains( preferredLayer ) )
+    return preferredLayer;
   const QList<QgsVectorLayer *> &candidates = explicitTargets.isEmpty() ? compatibleTargets : explicitTargets;
   if ( candidates.size() == 1 )
     return candidates.constFirst();
@@ -1103,7 +1036,7 @@ QgsVectorLayer *SungsanSurveyBridge::selectTargetLayer( QgsProject *project, Qgs
   return nullptr;
 }
 
-QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, QgsProject *project, QgsVectorLayer *preferredLayer )
+QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, QgsProject *project, QgsVectorLayer *preferredLayer, bool allowNew, bool allowUpdate )
 {
   const QFileInfo info( filePath );
   if ( !info.isFile() || info.size() <= 0 )
@@ -1139,185 +1072,17 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
   const QString text = decoder.decode( bytes );
   if ( decoder.hasError() )
     return errorResult( tr( "LandStar 측점 파일 문자 인코딩이 올바르지 않습니다. Android에서는 UTF-8 또는 Windows-949 파일을 선택해 주세요." ) );
-  QStringList lines = text.split( QRegularExpression( QStringLiteral( "\\r?\\n" ) ), Qt::SkipEmptyParts );
-  lines.erase( std::remove_if( lines.begin(), lines.end(), []( const QString &line ) {
-                 const QString trimmed = line.trimmed();
-                 return trimmed.isEmpty() || trimmed.startsWith( QLatin1Char( '#' ) ) || trimmed.startsWith( QStringLiteral( "//" ) );
-               } ),
-               lines.end() );
-  if ( lines.isEmpty() )
-    return errorResult( tr( "LandStar 측점 파일에 읽을 행이 없습니다." ) );
-  if ( lines.size() > MAX_POINT_ROWS + 1 )
-    return errorResult( tr( "LandStar 측점 수가 안전 제한(200,000개)을 초과했습니다." ) );
-
-  const QString firstLine = lines.constFirst();
-  QChar delimiter = QLatin1Char( ',' );
-  if ( firstLine.count( QLatin1Char( '\t' ) ) > firstLine.count( QLatin1Char( ',' ) ) )
-    delimiter = QLatin1Char( '\t' );
-  else if ( !firstLine.contains( QLatin1Char( ',' ) ) && !firstLine.contains( QLatin1Char( '\t' ) ) )
-    delimiter = QLatin1Char( ' ' );
-
-  const QStringList firstFields = splitLine( firstLine, delimiter );
-  bool coordinateNumeric = false;
-  if ( firstFields.size() >= 3 )
-  {
-    bool northOk = false;
-    bool eastOk = false;
-    firstFields.at( 1 ).toDouble( &northOk );
-    firstFields.at( 2 ).toDouble( &eastOk );
-    coordinateNumeric = northOk && eastOk;
-  }
-  const bool hasHeader = !coordinateNumeric;
-  const QStringList headers = hasHeader ? firstFields : QStringList();
-
-  int nameColumn = 0;
-  int northColumn = 1;
-  int eastColumn = 2;
-  int elevationColumn = 3;
-  int codeColumn = 4;
-  int fixColumn = -1;
-  int timeColumn = -1;
-  int accuracyColumn = -1;
-  double accuracyScaleToMeters = 1.0;
-  if ( hasHeader )
-  {
-    nameColumn = findHeader( headers, { QStringLiteral( "name" ), QStringLiteral( "point" ), QStringLiteral( "pointname" ), QStringLiteral( "pointid" ), QStringLiteral( "id" ), QStringLiteral( "pt" ), QStringLiteral( "측점" ), QStringLiteral( "점번호" ), QStringLiteral( "측점명" ) } );
-    northColumn = findHeader( headers, { QStringLiteral( "n" ), QStringLiteral( "north" ), QStringLiteral( "northing" ), QStringLiteral( "x" ), QStringLiteral( "북" ), QStringLiteral( "위도" ), QStringLiteral( "latitude" ), QStringLiteral( "lat" ) } );
-    eastColumn = findHeader( headers, { QStringLiteral( "e" ), QStringLiteral( "east" ), QStringLiteral( "easting" ), QStringLiteral( "y" ), QStringLiteral( "동" ), QStringLiteral( "경도" ), QStringLiteral( "longitude" ), QStringLiteral( "lon" ) } );
-    elevationColumn = findHeader( headers, { QStringLiteral( "z" ), QStringLiteral( "elevation" ), QStringLiteral( "elev" ), QStringLiteral( "height" ), QStringLiteral( "h" ), QStringLiteral( "표고" ), QStringLiteral( "고도" ) } );
-    codeColumn = findHeader( headers, { QStringLiteral( "code" ), QStringLiteral( "description" ), QStringLiteral( "desc" ), QStringLiteral( "featurecode" ), QStringLiteral( "코드" ), QStringLiteral( "설명" ) } );
-    fixColumn = findHeader( headers, { QStringLiteral( "fix" ), QStringLiteral( "solution" ), QStringLiteral( "quality" ), QStringLiteral( "status" ), QStringLiteral( "고정상태" ) } );
-    timeColumn = findHeader( headers, { QStringLiteral( "time" ), QStringLiteral( "datetime" ), QStringLiteral( "surveytime" ), QStringLiteral( "측량시간" ) } );
-    accuracyColumn = findHeader( headers, {
-                                             QStringLiteral( "hacc" ), QStringLiteral( "hacc(m)" ), QStringLiteral( "hacc(cm)" ), QStringLiteral( "hacc(mm)" ),
-                                             QStringLiteral( "horizontalaccuracy" ), QStringLiteral( "horizontalaccuracy(m)" ), QStringLiteral( "horizontalaccuracy(cm)" ), QStringLiteral( "horizontalaccuracy(mm)" ),
-                                             QStringLiteral( "haccuracy" ), QStringLiteral( "haccuracy(m)" ), QStringLiteral( "haccuracy(cm)" ), QStringLiteral( "haccuracy(mm)" ),
-                                             QStringLiteral( "horizontalprecision" ), QStringLiteral( "horizontalprecision(m)" ), QStringLiteral( "horizontalprecision(cm)" ), QStringLiteral( "horizontalprecision(mm)" ),
-                                             QStringLiteral( "hrms" ), QStringLiteral( "hrms(m)" ), QStringLiteral( "hrms(cm)" ), QStringLiteral( "hrms(mm)" ),
-                                             QStringLiteral( "rms" ), QStringLiteral( "rms(m)" ), QStringLiteral( "rms(cm)" ), QStringLiteral( "rms(mm)" ),
-                                             QStringLiteral( "accuracy" ), QStringLiteral( "accuracy(m)" ), QStringLiteral( "accuracy(cm)" ), QStringLiteral( "accuracy(mm)" ),
-                                             QStringLiteral( "수평정확도" ), QStringLiteral( "수평정확도(m)" ), QStringLiteral( "수평정확도(cm)" ), QStringLiteral( "수평정확도(mm)" ),
-                                             QStringLiteral( "정확도" ), QStringLiteral( "정확도(m)" ), QStringLiteral( "정확도(cm)" ), QStringLiteral( "정확도(mm)" ),
-                                           } );
-    if ( accuracyColumn >= 0 )
-    {
-      const QString accuracyHeader = normalized( headers.at( accuracyColumn ) );
-      if ( accuracyHeader.endsWith( QStringLiteral( "mm" ) ) )
-        accuracyScaleToMeters = 0.001;
-      else if ( accuracyHeader.endsWith( QStringLiteral( "cm" ) ) )
-        accuracyScaleToMeters = 0.01;
-    }
-  }
-  if ( northColumn < 0 || eastColumn < 0 || elevationColumn < 0 )
-    return errorResult( tr( "측점 파일에서 북ing(N)·동ing(E)·표고(Z) 열을 모두 찾지 못했습니다." ) );
-
-  bool coordinatesAreWgs84 = false;
-  if ( hasHeader )
-  {
-    const QString northHeader = normalized( headers.at( northColumn ) );
-    const QString eastHeader = normalized( headers.at( eastColumn ) );
-    const QSet<QString> latitudeHeaders = { QStringLiteral( "latitude" ), QStringLiteral( "lat" ), QStringLiteral( "위도" ) };
-    const QSet<QString> longitudeHeaders = { QStringLiteral( "longitude" ), QStringLiteral( "lon" ), QStringLiteral( "경도" ) };
-    coordinatesAreWgs84 = latitudeHeaders.contains( northHeader ) && longitudeHeaders.contains( eastHeader );
-    if ( latitudeHeaders.contains( northHeader ) != longitudeHeaders.contains( eastHeader ) )
-      return errorResult( tr( "경위도 머리글은 latitude/longitude(또는 lat/lon) 쌍으로 함께 있어야 합니다." ) );
-  }
-
-  QList<PointRecord> records;
-  const int startRow = hasHeader ? 1 : 0;
-  int skipped = 0;
-  int fixedQuality = 0;
-  int unverifiedQuality = 0;
-  int rejectedQuality = 0;
-  int verifiedAccuracy = 0;
-  int unverifiedAccuracy = 0;
-  for ( int row = startRow; row < lines.size(); ++row )
-  {
-    const QStringList values = splitLine( lines.at( row ), delimiter );
-    if ( northColumn >= values.size() || eastColumn >= values.size() || elevationColumn >= values.size() )
-    {
-      ++skipped;
-      continue;
-    }
-    bool northOk = false;
-    bool eastOk = false;
-    PointRecord record;
-    record.northing = values.at( northColumn ).toDouble( &northOk );
-    record.easting = values.at( eastColumn ).toDouble( &eastOk );
-    if ( !northOk || !eastOk || !std::isfinite( record.northing ) || !std::isfinite( record.easting ) )
-    {
-      ++skipped;
-      continue;
-    }
-    if ( coordinatesAreWgs84
-         && ( record.easting < -180.0 || record.easting > 180.0
-              || record.northing < -90.0 || record.northing > 90.0 ) )
-      return errorResult( tr( "latitude/longitude 머리글의 좌표가 WGS84 유효 범위를 벗어났습니다." ) );
-    if ( nameColumn >= 0 && nameColumn < values.size() )
-      record.name = values.at( nameColumn ).trimmed();
-    if ( record.name.isEmpty() )
-    {
-      ++skipped;
-      continue;
-    }
-    record.elevation = values.at( elevationColumn ).toDouble( &record.elevationValid );
-    if ( !record.elevationValid || !std::isfinite( record.elevation ) )
-    {
-      ++skipped;
-      continue;
-    }
-    if ( codeColumn >= 0 && codeColumn < values.size() )
-      record.code = values.at( codeColumn ).trimmed();
-    if ( fixColumn >= 0 && fixColumn < values.size() )
-      record.fixStatus = values.at( fixColumn ).trimmed();
-    if ( timeColumn >= 0 && timeColumn < values.size() )
-      record.surveyedAt = values.at( timeColumn ).trimmed();
-    if ( accuracyColumn >= 0 && accuracyColumn < values.size() )
-    {
-      record.horizontalAccuracy = values.at( accuracyColumn ).toDouble( &record.horizontalAccuracyValid );
-      record.horizontalAccuracyValid = record.horizontalAccuracyValid
-                                       && std::isfinite( record.horizontalAccuracy )
-                                       && record.horizontalAccuracy >= 0.0;
-      if ( record.horizontalAccuracyValid )
-        record.horizontalAccuracy *= accuracyScaleToMeters;
-    }
-    const FixQuality quality = classifyFixQuality( record.fixStatus );
-    if ( quality == FixQuality::Rejected )
-    {
-      ++skipped;
-      ++rejectedQuality;
-      continue;
-    }
-    if ( quality == FixQuality::Fixed )
-      ++fixedQuality;
-    else
-      ++unverifiedQuality;
-    if ( record.horizontalAccuracyValid )
-      ++verifiedAccuracy;
-    else
-      ++unverifiedAccuracy;
-    records.append( record );
-  }
-  if ( records.isEmpty() )
-    return errorResult( rejectedQuality > 0
-                          ? tr( "FIX가 아닌 측점만 있어 가져오기를 중단했습니다. LandStar에서 RTK FIX 상태를 확인하세요." )
-                          : tr( "유효한 LandStar 측점 좌표를 찾지 못했습니다." ) );
-
-  QSet<QString> incomingNames;
-  for ( const PointRecord &record : std::as_const( records ) )
-  {
-    const QString key = record.name.trimmed().toCaseFolded();
-    if ( incomingNames.contains( key ) )
-      return errorResult( tr( "측점 파일에 같은 측점명 '%1'이 두 번 이상 있습니다. 잘못된 점을 갱신하지 않도록 가져오기를 중단했습니다." ).arg( record.name ) );
-    incomingNames.insert( key );
-  }
-
+  LandStarPointFile::Parsed parsed;
+  const QString parseError = LandStarPointFile::parse( text, parsed );
+  if ( !parseError.isEmpty() )
+    return errorResult( parseError );
+  int skipped = parsed.skipped;
   if ( !layer->crs().isValid() )
     return errorResult( tr( "성산 현장객체 레이어의 좌표계가 올바르지 않아 측점을 저장하지 않았습니다." ) );
 
   const QString targetCrsAuthId = layer->crs().authid();
   QString sourceCrsAuthId = QStringLiteral( "EPSG:4326" );
-  if ( !coordinatesAreWgs84 )
+  if ( !parsed.coordinatesAreWgs84 )
   {
     bool confirmationRead = false;
     const bool crsConfirmed = project && project->readBoolEntry(
@@ -1383,6 +1148,8 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
   }
   if ( !duplicateExistingNames.isEmpty() )
     return errorResult( tr( "기존 현장객체에 중복된 LandStar 측점명이 있어 안전하게 갱신할 수 없습니다. QGIS에서 중복 측점명을 먼저 정리하세요." ) );
+  if ( layer->isEditCommandActive() )
+    return errorResult( tr( "진행 중인 레이어 편집을 마친 뒤 측점 파일을 다시 열어 주세요." ) );
 
   QString auditError;
   const QString auditPath = preserveLandStarSource( auditBytes, info, project, &auditError );
@@ -1397,14 +1164,23 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
     startedEditing = true;
   }
 
+  FeatureModel permissions;
+  permissions.setCurrentLayer( layer );
+  layer->beginEditCommand( tr( "LandStar 측점 가져오기" ) );
+  const auto abortImport = [&]( const QString &message ) {
+    layer->destroyEditCommand();
+    if ( startedEditing )
+      layer->rollBack();
+    return errorResult( message );
+  };
   int added = 0;
   int updated = 0;
   const bool layerHasZ = QgsWkbTypes::hasZ( layer->wkbType() );
   const QgsCoordinateReferenceSystem wgs84( QStringLiteral( "EPSG:4326" ) );
-  const bool transformLonLat = coordinatesAreWgs84 && layer->crs() != wgs84;
+  const bool transformLonLat = parsed.coordinatesAreWgs84 && layer->crs() != wgs84;
   QgsCoordinateTransform coordinateTransform( wgs84, layer->crs(), project ? project->transformContext() : QgsCoordinateTransformContext() );
 
-  for ( const PointRecord &record : std::as_const( records ) )
+  for ( const LandStarPointFile::PointRecord &record : std::as_const( parsed.records ) )
   {
     QgsPointXY mapPoint( record.easting, record.northing );
     if ( transformLonLat )
@@ -1464,42 +1240,40 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
     if ( idField >= 0 && !key.isEmpty() && existingIt != existingByName.constEnd() )
     {
       const QgsFeatureId featureId = existingIt.value();
+      permissions.setFeature( layer->getFeature( featureId ) );
+      if ( !allowUpdate || permissions.attributeEditingLocked() || permissions.geometryEditingLocked() )
+        return abortImport( tr( "측점 '%1'의 좌표·속성 수정 권한이 없어 가져오기를 취소했습니다." ).arg( record.name ) );
       QgsGeometry updatedGeometry = feature.geometry();
-      if ( !layer->changeGeometry( featureId, updatedGeometry ) )
-      {
-        ++skipped;
-        continue;
-      }
+      QgsAttributeMap changes;
       for ( int fieldIndex = 0; fieldIndex < feature.fields().count(); ++fieldIndex )
       {
         if ( feature.attribute( fieldIndex ).isValid() && !feature.attribute( fieldIndex ).isNull() )
-          layer->changeAttributeValue( featureId, fieldIndex, feature.attribute( fieldIndex ) );
+          changes.insert( fieldIndex, feature.attribute( fieldIndex ) );
       }
       for ( const int fieldIndex : std::as_const( fieldsToClearOnUpdate ) )
-        layer->changeAttributeValue( featureId, fieldIndex, QVariant() );
+        changes.insert( fieldIndex, QVariant() );
       if ( existingMissingObjectId.remove( featureId ) )
-        layer->changeAttributeValue( featureId, objectIdField, QUuid::createUuid().toString( QUuid::WithoutBraces ) );
+        changes.insert( objectIdField, QUuid::createUuid().toString( QUuid::WithoutBraces ) );
       if ( existingMissingName.remove( featureId ) )
-        layer->changeAttributeValue( featureId, nameField, record.name );
+        changes.insert( nameField, record.name );
+      if ( !layer->changeGeometry( featureId, updatedGeometry, true ) || !layer->changeAttributeValues( featureId, changes, QgsAttributeMap(), true ) )
+        return abortImport( tr( "측점 '%1'의 좌표·속성을 함께 저장하지 못해 가져오기를 취소했습니다." ).arg( record.name ) );
       ++updated;
     }
     else
     {
       setValue( objectIdField, QUuid::createUuid().toString( QUuid::WithoutBraces ) );
       setValue( nameField, record.name );
-      if ( layer->addFeature( feature ) )
-      {
-        ++added;
-        if ( idField >= 0 && !key.isEmpty() )
-          existingByName.insert( key, feature.id() );
-      }
-      else
-      {
-        ++skipped;
-      }
+      permissions.setFeature( feature );
+      if ( !allowNew || permissions.featureAdditionLocked() )
+        return abortImport( tr( "측점 '%1'의 추가 권한이 없어 가져오기를 취소했습니다." ).arg( record.name ) );
+      if ( !layer->addFeature( feature ) )
+        return abortImport( tr( "측점 '%1'을 저장하지 못해 가져오기를 취소했습니다." ).arg( record.name ) );
+      ++added;
     }
   }
 
+  layer->endEditCommand();
   if ( startedEditing && !layer->commitChanges() )
   {
     const QString details = layer->commitErrors().join( QStringLiteral( "; " ) );
@@ -1518,12 +1292,12 @@ QVariantMap SungsanSurveyBridge::importLandStarFile( const QString &filePath, Qg
     { QStringLiteral( "added" ), added },
     { QStringLiteral( "updated" ), updated },
     { QStringLiteral( "skipped" ), skipped },
-    { QStringLiteral( "fixedQuality" ), fixedQuality },
-    { QStringLiteral( "unverifiedQuality" ), unverifiedQuality },
-    { QStringLiteral( "rejectedQuality" ), rejectedQuality },
-    { QStringLiteral( "verifiedAccuracy" ), verifiedAccuracy },
-    { QStringLiteral( "unverifiedAccuracy" ), unverifiedAccuracy },
-    { QStringLiteral( "coordinateMode" ), coordinatesAreWgs84 ? QStringLiteral( "WGS84" ) : QStringLiteral( "PROJECTED" ) },
+    { QStringLiteral( "fixedQuality" ), parsed.fixedQuality },
+    { QStringLiteral( "unverifiedQuality" ), parsed.unverifiedQuality },
+    { QStringLiteral( "rejectedQuality" ), parsed.rejectedQuality },
+    { QStringLiteral( "verifiedAccuracy" ), parsed.verifiedAccuracy },
+    { QStringLiteral( "unverifiedAccuracy" ), parsed.unverifiedAccuracy },
+    { QStringLiteral( "coordinateMode" ), parsed.coordinatesAreWgs84 ? QStringLiteral( "WGS84" ) : QStringLiteral( "PROJECTED" ) },
     { QStringLiteral( "sourceCrs" ), sourceCrsAuthId },
     { QStringLiteral( "targetCrs" ), targetCrsAuthId },
     { QStringLiteral( "auditPath" ), auditPath },

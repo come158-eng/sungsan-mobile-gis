@@ -507,12 +507,12 @@ ResourceSource *AndroidPlatformUtilities::getCameraVideo( const QString &prefix,
   return processCameraActivity( prefix, videoFilePath, suffix, true, parent );
 }
 
-void AndroidPlatformUtilities::publishImageToGallery( const QString &imagePath, const QString &displayName ) const
+bool AndroidPlatformUtilities::publishImageToGallery( const QString &imagePath, const QString &displayName ) const
 {
   if ( imagePath.trimmed().isEmpty() || displayName.trimmed().isEmpty() || !mActivity.isValid()
        || !FileUtils::isWithinProjectDirectory( imagePath ) )
   {
-    return;
+    return false;
   }
 
   // Android 10+ lets an app publish its own MediaStore image without a broad
@@ -521,7 +521,7 @@ void AndroidPlatformUtilities::publishImageToGallery( const QString &imagePath, 
   if ( qtAndroidSkdVersion() < 29
        && !checkAndAcquirePermissions( { QStringLiteral( "android.permission.WRITE_EXTERNAL_STORAGE" ) } ) )
   {
-    return;
+    return false;
   }
 
   runOnAndroidMainThread( [imagePath, displayName] {
@@ -534,6 +534,7 @@ void AndroidPlatformUtilities::publishImageToGallery( const QString &imagePath, 
                                  imagePathJni.object<jstring>(), displayNameJni.object<jstring>() );
     }
   } );
+  return true;
 }
 
 ResourceSource *AndroidPlatformUtilities::processGalleryActivity( const QString &prefix, const QString &filePath, const QString &mimeType, QObject *parent )

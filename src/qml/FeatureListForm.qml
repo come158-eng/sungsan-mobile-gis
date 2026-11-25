@@ -916,6 +916,7 @@ Pane {
     focus = false;
     fullScreenView = qfieldSettings.fullScreenIdentifyView;
     if (!featureFormList.canvasOperationRequested) {
+      featureFormList.editExistingAfterSelection = false;
       featureFormList.multiSelection = false;
       featureForm.model.featureModel.modelMode = FeatureModel.SingleFeatureModel;
       featureFormList.selection.clear();

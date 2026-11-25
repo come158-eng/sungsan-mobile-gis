@@ -366,10 +366,10 @@ check(
     "JSON.parse" in EXTERNAL_RESOURCE,
 )
 check(
-    "managed photo can be deleted without clearing other slots",
+    "managed photo can be unlinked without deleting a file referenced by another slot",
     "visible: image.source !== ''" in EXTERNAL_RESOURCE
     and "isSungsanManagedFieldPhoto()" in EXTERNAL_RESOURCE
-    and "FileUtils.deleteFiles([absolutePath])" in EXTERNAL_RESOURCE
+    and "FileUtils.deleteFiles([absolutePath])" not in EXTERNAL_RESOURCE
     and 'valueChangeRequested("", false)' in EXTERNAL_RESOURCE,
 )
 check(
@@ -393,14 +393,6 @@ replacement_helper = next(
     ),
     "",
 )
-remember_helper = next(
-    (
-        body
-        for name, parameters, body in external_functions
-        if name == "rememberSungsanPreviousPhoto" and not parameters
-    ),
-    "",
-)
 capture_helper = next(
     (
         body
@@ -409,59 +401,26 @@ capture_helper = next(
     ),
     "",
 )
-gallery_helper = next(
-    (
-        body
-        for name, parameters, body in external_functions
-        if name == "attachGallery" and not parameters
-    ),
-    "",
-)
-new_file_check_position = replacement_helper.find(
-    "FileUtils.fileExists(absoluteNewPath)"
-)
-value_change_position = replacement_helper.find("valueChangeRequested(relativePath")
-if new_file_check_position >= 0:
-    value_change_position = replacement_helper.find(
-        "valueChangeRequested(relativePath", new_file_check_position
-    )
-old_file_delete_position = replacement_helper.find(
-    "FileUtils.deleteFiles([absolutePreviousPath])"
-)
-remember_capture_position = capture_helper.find("rememberSungsanPreviousPhoto()")
-path_capture_position = capture_helper.find("getResourceFilePath()")
-
 check(
-    "object-name changes keep the stored photo link until recapture succeeds",
-    bool(remember_helper)
-    and "sungsanPendingPreviousPhotoPath" in remember_helper
-    and "currentValue" in remember_helper
-    and "String(currentValue)" in remember_helper
-    and 0 <= remember_capture_position < path_capture_position,
+    "camera stores new attachments without modifying the previous form value or file",
+    "FileUtils.storeCapturedPhoto(path, prefixToRelativePath, nameInRoot)" in EXTERNAL_RESOURCE
+    and "commitSungsanManagedPhoto(result.relativePath)" in EXTERNAL_RESOURCE
+    and "valueChangeRequested(path, false)" in replacement_helper
+    and "deleteFiles" not in replacement_helper
+    and "FileUtils.deleteFiles([absolutePreviousPath])" not in EXTERNAL_RESOURCE,
 )
 check(
-    "recapture removes the previous managed photo only after replacement succeeds",
-    bool(replacement_helper)
-    and "const previousPath = sungsanPendingPreviousPhotoPath" in replacement_helper
-    and "const currentPathBeforeCommit = currentValue" in replacement_helper
-    and "normalizedSungsanPhotoPath(currentPathBeforeCommit) === normalizedSungsanPhotoPath(previousPath)"
-    in replacement_helper
-    and "normalizedSungsanPhotoPath(previousPath) !== normalizedSungsanPhotoPath(relativePath)"
-    in replacement_helper
-    and "normalizedSungsanPhotoPath(absolutePreviousPath) !== normalizedSungsanPhotoPath(absoluteNewPath)"
-    in replacement_helper
-    and 0 <= new_file_check_position < value_change_position < old_file_delete_position
-    # Only camera capture may arm cleanup. Gallery/file imports do not expose a
-    # uniformly validated success callback, so they must clear pending state.
-    and 'sungsanPendingPreviousPhotoPath = ""' in gallery_helper
-    and "rememberSungsanPreviousPhoto()" not in gallery_helper
-    and EXTERNAL_RESOURCE.count("commitSungsanManagedPhoto(") >= 3,
+    "scoped attachment retry keeps its cache file while a failed staging copy is discarded",
+    "managedFieldCapture: isSungsanManagedFieldPhoto()" in EXTERNAL_RESOURCE
+    and "FileUtils.deleteFiles([finalPhotoPath])" in EXTERNAL_RESOURCE
+    and "FileUtils.fieldCameraCapturePath()" in QFIELD_CAMERA
+    and "discardManagedPreview();" in QFIELD_CAMERA
+    and "allowCaptureModeToggle: !managedFieldCapture" in EXTERNAL_RESOURCE,
 )
 check(
     "portable camera fallback preserves an existing photo transactionally",
-    "FileUtils.storeCapturedPhoto(path, destinationPath)" in EXTERNAL_RESOURCE
-    and "Q_INVOKABLE static QVariantMap storeCapturedPhoto" in FILE_UTILS_H
-    and "ManagedPhotoStore::save" in FILE_UTILS_CPP
+    "Q_INVOKABLE static QVariantMap storeCapturedPhoto" in FILE_UTILS_H
+    and "ManagedPhotoStore::WriteMode::NewAttachment" in FILE_UTILS_CPP
     and (ROOT / "test/test_managedphotostore.cpp").exists(),
 )
 
@@ -505,8 +464,8 @@ check(
 check(
     "portable camera normalizer handles Android safely",
     "Q_OS_ANDROID" in ORIENTATION_CPP
-    and "setAutoTransform( hasExifTransform )" in ORIENTATION_CPP
-    and "QSaveFile" in ORIENTATION_CPP,
+    and "prepareCapturedImage( path, mCaptureOrientation, captureOrientationRecorded )" in ORIENTATION_CPP
+    and "setAutoTransform( hasExifTransform )" in (ROOT / "src/core/capturedimageorientation.h").read_text(encoding="utf-8"),
 )
 check(
     "managed field photos always use the orientation-aware in-app camera",

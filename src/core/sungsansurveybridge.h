@@ -38,7 +38,7 @@ class QFIELD_CORE_EXPORT SungsanSurveyBridge : public QObject
      * default no-header order is
      * point-name,northing,easting,elevation,code.
      */
-    Q_INVOKABLE QVariantMap importLandStarFile( const QString &filePath, QgsProject *project, QgsVectorLayer *preferredLayer = nullptr );
+    Q_INVOKABLE QVariantMap importLandStarFile( const QString &filePath, QgsProject *project, QgsVectorLayer *preferredLayer, bool allowNew, bool allowUpdate );
 
     /**
      * Reads only metadata from a LandStar file without touching project layers.

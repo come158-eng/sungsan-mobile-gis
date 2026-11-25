@@ -74,7 +74,7 @@ class CameraOrientationNormalizer : public QObject
      * pixel dimensions contradict the capture orientation and strips
      * any non-identity EXIF orientation tag.
      *
-     * Returns false without touching the file when no correction is needed.
+     * Returns true when the saved image is ready, including when no rotation is needed.
      */
     Q_INVOKABLE bool normalizeImageOrientation( const QString &path );
 

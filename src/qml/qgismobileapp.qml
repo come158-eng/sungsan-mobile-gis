@@ -464,16 +464,21 @@ ApplicationWindow {
     enableNtrip: positioningSettings.enableNtrip
     ntripSettings: PositioningUtils.createNtripSettings(positioningSettings.ntripSettings)
 
-    onPositionInformationChanged: {
-      if (active) {
+    onReceiverSampleReceived: {
+      if (active && !mainWindow.sungsanPositionSwitchPending && deviceId === (positioningSettings.positioningDevice || "")) {
         mainWindow.sungsanLastGnssReceiptMs = Date.now();
         mainWindow.sungsanGnssFresh = !!positionSource.positionInformation
           && positionSource.positionInformation.latitudeValid
           && positionSource.positionInformation.longitudeValid;
-        if (jumpToPosition && positionSource.projectedPosition.x) {
+        if (jumpToPosition && mainWindow.sungsanGnssFresh && Number.isFinite(positionSource.projectedPosition.x) && Number.isFinite(positionSource.projectedPosition.y)) {
           jumpToPosition = false;
           gnssButton.jumpToLocation();
         }
+      }
+    }
+
+    onPositionInformationChanged: {
+      if (active) {
         bearingTrueNorth = PositioningUtils.bearingTrueNorth(positionSource.projectedPosition, mapCanvas.mapSettings.destinationCrs);
         if (gnssButton.followActive) {
           if (stateMachine.state === '3d') {
@@ -515,6 +520,13 @@ ApplicationWindow {
       // Never carry a cached coordinate across a phone/external switch.
       mainWindow.sungsanLastGnssReceiptMs = 0;
       mainWindow.sungsanGnssFresh = false;
+    }
+
+    onActiveChanged: {
+      if (!active) {
+        mainWindow.sungsanLastGnssReceiptMs = 0;
+        mainWindow.sungsanGnssFresh = false;
+      }
     }
 
     onBackgroundModeChanged: {
@@ -1154,7 +1166,7 @@ ApplicationWindow {
           if (mainWindow.sungsanExistingFeatureEditPending) {
             let activeLayer = dashBoard.activeLayer;
             const featureIds = [];
-            if (activeLayer) {
+            if (activeLayer && dashBoard.canEditLayerAttributes(activeLayer)) {
               for (let i = 0; i < featureListForm.model.count; ++i) {
                 const resultIndex = featureListForm.model.index(i, 0);
                 const resultLayer = featureListForm.model.data(resultIndex, MultiFeatureListModel.LayerRole);
@@ -3773,6 +3785,8 @@ ApplicationWindow {
 
     function ensureEditableLayerSelected(requireFeatureAddition) {
       const additionRequired = requireFeatureAddition === true;
+      if (!(additionRequired ? projectInfo.editRights || projectInfo.insertRights : projectInfo.editRights))
+        return { "ok": false, "selectionRequired": false, "candidateCount": 0 };
       var editableLayers = [];
       var activeLayerIsEditable = false;
       for (var i = 0; i < layerTree.rowCount(); i++) {
@@ -3800,6 +3814,9 @@ ApplicationWindow {
       // exactly one candidate; otherwise the surveyor must choose explicitly.
       if (activeLayerIsEditable) {
         return { "ok": true, "selectionRequired": false, "candidateCount": editableLayers.length };
+      }
+      if (activeLayer && editableLayers.length > 0) {
+        return { "ok": false, "selectionRequired": true, "candidateCount": editableLayers.length };
       }
       if (editableLayers.length === 1) {
         activeLayer = editableLayers[0];
@@ -3839,7 +3856,7 @@ ApplicationWindow {
     if (!layerSelection.ok) {
       if (layerSelection.selectionRequired) {
         dashBoard.open();
-        displayToast("편집 가능한 조사 레이어가 여러 개입니다. 사용할 레이어를 선택한 뒤 다시 눌러 주세요.", "warning");
+        displayToast("‘레이어’에서 이 작업에 사용할 편집 가능한 조사 레이어를 선택해 주세요.", "warning");
       } else {
         displayToast(requireFeatureAddition === true ? "객체를 추가할 수 있는 포인트·선·면 레이어가 없습니다." : "속성을 수정할 수 있는 포인트·선·면 레이어가 없습니다.", "warning");
       }
@@ -3932,10 +3949,17 @@ ApplicationWindow {
     // active receiver could obtain its first fix later without revealing it.
     positionSource.jumpToPosition = true;
 
+    if (mainWindow.sungsanPositionSwitchPending) {
+      sungsanPositionDeviceSwitchTimer.stop();
+      sungsanPositionDeviceActivateTimer.stop();
+      mainWindow.sungsanPositionSwitchPending = false;
+    }
     if (positioningSettings.positioningDevice !== targetDevice) {
       // Release the old receiver before changing its ID. This prevents the
       // outgoing and incoming Bluetooth sockets from overlapping.
       mainWindow.sungsanPositionSwitchPending = true;
+      mainWindow.sungsanGnssFresh = false;
+      mainWindow.sungsanLastGnssReceiptMs = 0;
       mainWindow.sungsanPendingPositioningDevice = targetDevice;
       mainWindow.sungsanPendingPositioningDeviceName = targetName;
       positioningSettings.positioningActivated = false;
@@ -3953,7 +3977,7 @@ ApplicationWindow {
       } else {
         displayToast("선택한 위치 장치의 첫 FIX를 기다립니다.", "info");
       }
-    } else if (positionSource.projectedPosition.x) {
+    } else if (Number.isFinite(positionSource.projectedPosition.x) && Number.isFinite(positionSource.projectedPosition.y)) {
       positionSource.jumpToPosition = false;
       gnssButton.jumpToLocation();
     } else {
@@ -4151,7 +4175,7 @@ ApplicationWindow {
       return;
     }
     const preferredLayer = dashBoard.activeLayer && dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point ? dashBoard.activeLayer : null;
-    const result = sungsanSurveyBridge.importLandStarFile(filePath, qgisProject, preferredLayer);
+    const result = sungsanSurveyBridge.importLandStarFile(filePath, qgisProject, preferredLayer, projectInfo.insertRights || projectInfo.editRights, projectInfo.editRights);
     if (!result || !result.ok) {
       // The pending slot exists only to bridge a cold-start share until a
       // project is open.  Once an import was attempted, clear it even on
@@ -5332,7 +5356,10 @@ ApplicationWindow {
       if (path !== '') {
         if (FileUtils.fileExists(path)) {
           // A project or dataset path is provided, load it
-          iface.loadFile(path);
+          if (!iface.loadFile(path)) {
+            displayToast("파일을 열 수 없습니다. 프로젝트 ZIP과 내부 프로젝트 파일을 확인해 주세요.", "error");
+            return;
+          }
           welcomeScreen.model.removeRecentProject(originalUrl);
           welcomeScreen.model.reloadModel();
         } else {
@@ -5941,12 +5968,17 @@ ApplicationWindow {
       if (!mainWindow.sungsanStartSurvey(true)) {
         return;
       }
+      const targetLayer = dashBoard.activeLayer;
       // A point is complete as soon as its one coordinate is captured.  Let
       // QField confirm it immediately so the attribute form opens without a
       // redundant vertex/geometry-complete step.  Line and polygon layers
       // keep the explicit multi-vertex controls below.
       Qt.callLater(function () {
-        if (stateMachine.state !== "digitize" || !dashBoard.activeLayer || !digitizingToolbar.digitizingAllowed) {
+        if (stateMachine.state !== "digitize" || !targetLayer || dashBoard.activeLayer !== targetLayer || !digitizingToolbar.digitizingAllowed) {
+          return;
+        }
+        if (mainWindow.sungsanPositionSwitchPending || (positionSource.active && coordinateLocator.positionLocked && !mainWindow.sungsanGnssFresh)) {
+          displayToast("위치 장치의 새 좌표를 받은 뒤 지점을 추가해 주세요.", "warning");
           return;
         }
         if (dashBoard.activeLayer.geometryType() === Qgis.GeometryType.Point) {
@@ -5978,7 +6010,7 @@ ApplicationWindow {
         displayToast("먼저 수정할 포인트·선·면 레이어를 선택해 주세요.", "warning");
         return;
       }
-      if (dashBoard.activeLayer.readOnly || !projectInfo.editRights) {
+      if (!dashBoard.canEditLayerAttributes(dashBoard.activeLayer)) {
         displayToast("이 레이어는 속성을 수정할 수 없습니다.", "warning");
         return;
       }
@@ -6005,6 +6037,10 @@ ApplicationWindow {
     }
 
     onAddVertexRequested: {
+      if (mainWindow.sungsanPositionSwitchPending) {
+        displayToast("위치 장치 전환 후 꼭짓점을 추가해 주세요.", "warning");
+        return;
+      }
       if (positionSource.active && coordinateLocator.positionLocked && !mainWindow.sungsanGnssFresh) {
         displayToast("GNSS 수신이 끊겨 이전 좌표가 남아 있습니다. FIX가 다시 들어온 뒤 꼭짓점을 추가해 주세요.", "warning");
         return;

@@ -54,5 +54,38 @@ int main( int argc, char **argv )
   write( root + "/blocked", "not a directory" );
   require( !ManagedPhotoStore::save( source, root + "/blocked/sub/photo.jpg", root )["ok"].toBool(), "Invalid parent accepted" );
   require( read( source ) == first && read( photo ) == second, "Failure deleted source or old photo" );
+  const auto append = [&]( const QString &target ) {
+    return ManagedPhotoStore::save( source, target, root, ManagedPhotoStore::WriteMode::NewAttachment );
+  };
+  const QString untouched = root + "/images/other/점 A (1).jpg";
+  require( append( untouched )["ok"].toBool() && read( source ) == first, "First attachment consumed preview" );
+  for ( const QString &projectType : { QStringLiteral( "기본" ), QStringLiteral( "QGIS" ) } )
+  {
+    for ( const QString &featureType : { QStringLiteral( "기존" ), QStringLiteral( "신규" ) } )
+    {
+      QStringList committed;
+      for ( int slot = 1; slot <= 4; ++slot )
+      {
+        const QString fileName = QStringLiteral( "측점 A (%1).jpg" ).arg( slot );
+        const QString path = root + "/" + projectType + "/" + featureType + "/images/" + fileName;
+        write( source, first );
+        require( append( path )["path"].toString() == path, "Wrong project/feature/slot" );
+        committed << path;
+      }
+      for ( const QString &oldPath : committed )
+      {
+        write( source, second );
+        const QVariantMap retake = append( oldPath );
+        const QString newPath = retake["path"].toString();
+        require( retake["ok"].toBool() && newPath != oldPath, "Repeated filename overwrote attachment" );
+        require( QFileInfo( oldPath ).fileName() == QFileInfo( newPath ).fileName(), "Revision changed requested filename" );
+        require( read( newPath ) == second && read( source ) == second, "Preview unavailable for retry" );
+        for ( const QString &linkedPath : committed )
+          require( read( linkedPath ) == first, "Retake or cancelled edit modified a previous slot" );
+        require( read( untouched ) == first, "Unrelated feature changed" );
+      }
+    }
+  }
+  std::cout << "PASS: exclusive attachment creation across two project folders, new/existing features, four slots, preserving names and prior image bytes on retakes\n";
   std::cout << "PASS: production Qt photo transaction; first capture, retake, URL/Unicode, failure preservation, traversal/symlinks\n";
 }

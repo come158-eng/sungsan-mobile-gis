@@ -57,6 +57,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.PackageManager.NameNotFoundException;
 import android.content.res.Configuration;
 import android.content.res.Resources;
+import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
@@ -129,6 +130,7 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.zip.CRC32;
@@ -1849,6 +1851,7 @@ public class QFieldActivity extends QtActivity {
         if (!isValidCapturedResource(source, false) ||
             safeDisplayName.trim().isEmpty()) {
             Log.e("QField", "Gallery publication rejected invalid photo");
+            showSungsanGalleryResult(false);
             return;
         }
 
@@ -1864,21 +1867,34 @@ public class QFieldActivity extends QtActivity {
         });
     }
 
-    private void publishImageToMediaStore(File source, String displayName) {
+    private synchronized void publishImageToMediaStore(File source, String displayName) {
         final ContentResolver resolver = getContentResolver();
         final Uri collection = MediaStore.Images.Media.getContentUri(
             MediaStore.VOLUME_EXTERNAL_PRIMARY);
         final String relativePath =
             Environment.DIRECTORY_PICTURES + "/성산 GIS/";
-        final String temporaryName =
-            ".sungsan_" + System.currentTimeMillis() + "_" + displayName;
         Uri newImage = null;
 
         try {
+            String album = relativePath;
+            // Names repeat across surveys. Preserve the exact display name and
+            // never modify a previous gallery item, even if it is app-owned.
+            try (Cursor rows = resolver.query(collection,
+                    new String[] {MediaStore.Images.Media._ID},
+                    MediaStore.Images.Media.DISPLAY_NAME + "=? AND " +
+                        MediaStore.Images.Media.RELATIVE_PATH + "=?",
+                    new String[] {displayName, relativePath}, null)) {
+                if (rows == null || rows.moveToFirst()) {
+                    album += "촬영-" + UUID.randomUUID() + "/";
+                }
+            } catch (SecurityException unavailableLibrary) {
+                // Publishing our own photo requires no broad library access.
+                album += "촬영-" + UUID.randomUUID() + "/";
+            }
             ContentValues values = new ContentValues();
-            values.put(MediaStore.Images.Media.DISPLAY_NAME, temporaryName);
+            values.put(MediaStore.Images.Media.DISPLAY_NAME, displayName);
             values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-            values.put(MediaStore.Images.Media.RELATIVE_PATH, relativePath);
+            values.put(MediaStore.Images.Media.RELATIVE_PATH, album);
             values.put(MediaStore.Images.Media.IS_PENDING, 1);
             newImage = resolver.insert(collection, values);
             if (newImage == null) {
@@ -1895,27 +1911,7 @@ public class QFieldActivity extends QtActivity {
                 }
             }
 
-            // Replace only an older copy created by this application, with the
-            // exact same requested name in our own album. The freshly written
-            // temporary row cannot match this selection.
-            try {
-                resolver.delete(
-                    collection,
-                    MediaStore.Images.Media.DISPLAY_NAME + "=? AND " +
-                        MediaStore.Images.Media.RELATIVE_PATH + "=? AND " +
-                        MediaStore.Images.Media.OWNER_PACKAGE_NAME + "=?",
-                    new String[] {displayName, relativePath,
-                                  getPackageName()});
-            } catch (Exception replacementException) {
-                // A reinstall changes MediaStore ownership. Keep the new copy
-                // instead of failing merely because an older copy cannot be
-                // removed without a user confirmation dialog.
-                Log.w("QField", "Older gallery photo was retained",
-                      replacementException);
-            }
-
             values.clear();
-            values.put(MediaStore.Images.Media.DISPLAY_NAME, displayName);
             values.put(MediaStore.Images.Media.IS_PENDING, 0);
             if (resolver.update(newImage, values, null, null) <= 0) {
                 throw new IOException("MediaStore publication update failed");
@@ -1939,29 +1935,26 @@ public class QFieldActivity extends QtActivity {
     }
 
     @SuppressWarnings("deprecation")
-    private void publishImageToLegacyGallery(File source,
+    private synchronized void publishImageToLegacyGallery(File source,
                                              String displayName) {
         File pictures = Environment.getExternalStoragePublicDirectory(
             Environment.DIRECTORY_PICTURES);
         File album = new File(pictures, "성산 GIS");
-        if (!album.exists() && !album.mkdirs()) {
-            Log.e("QField", "Unable to create legacy gallery album");
-            return;
-        }
-
-        File destination = new File(album, displayName);
-        File staged = new File(album, ".sungsan_" +
-                                          System.currentTimeMillis() + ".tmp");
+        File staged = null;
         try {
+            if (new File(album, displayName).exists()) {
+                album = new File(album, "촬영-" + UUID.randomUUID());
+            }
+            if (!album.isDirectory() && !album.mkdirs()) {
+                throw new IOException("Unable to create legacy gallery album");
+            }
+            File destination = new File(album, displayName);
+            staged = File.createTempFile(".field-photo-", ".tmp", album);
             if (!durableCopy(source, staged)) {
                 throw new IOException("Legacy gallery staging failed");
             }
-            if (destination.exists() && !destination.delete()) {
-                throw new IOException("Legacy gallery replacement failed");
-            }
-            if (!staged.renameTo(destination)) {
-                throw new IOException("Legacy gallery commit failed");
-            }
+            // Without REPLACE_EXISTING, a concurrent album write is preserved.
+            Files.move(staged.toPath(), destination.toPath());
             MediaScannerConnection.scanFile(
                 this, new String[] {destination.getAbsolutePath()},
                 new String[] {"image/jpeg"}, null);
@@ -1969,7 +1962,7 @@ public class QFieldActivity extends QtActivity {
         } catch (Exception exception) {
             Log.e("QField", "Unable to publish legacy gallery photo",
                   exception);
-            if (staged.exists() && !staged.delete()) {
+            if (staged != null && staged.exists() && !staged.delete()) {
                 Log.w("QField", "Unable to remove failed gallery staging");
             }
             showSungsanGalleryResult(false);

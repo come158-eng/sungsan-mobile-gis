@@ -5,9 +5,11 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QTemporaryFile>
+#include <QTemporaryDir>
 #include <QUuid>
 #include <QUrl>
 #include <QVariantMap>
+#include <memory>
 
 // Pure Qt file transaction, also exercised by the host-side regression test.
 namespace ManagedPhotoStore
@@ -48,13 +50,15 @@ namespace ManagedPhotoStore
            || resolved.startsWith( canonicalRoot + '/', sensitivity );
   }
 
-  inline QVariantMap save( const QString &sourceName, const QString &destinationName, const QString &projectDirectory )
+  enum class WriteMode { Replace, NewAttachment };
+
+  inline QVariantMap save( const QString &sourceName, const QString &destinationName, const QString &projectDirectory, WriteMode mode = WriteMode::Replace )
   {
     auto failure = []( const QString &code, const QString &error ) {
       return QVariantMap{ { QStringLiteral( "ok" ), false }, { QStringLiteral( "code" ), code }, { QStringLiteral( "error" ), error } };
     };
     const QString sourcePath = localPath( sourceName );
-    const QString destinationPath = localPath( destinationName );
+    QString destinationPath = localPath( destinationName );
     if ( sourcePath.isEmpty() || destinationPath.isEmpty() || !QDir::isAbsolutePath( destinationPath )
          || !inside( projectDirectory, destinationPath ) )
       return failure( QStringLiteral( "destination" ), QStringLiteral( "사진 저장 경로가 프로젝트 폴더 안에 있지 않습니다." ) );
@@ -63,7 +67,7 @@ namespace ManagedPhotoStore
       return failure( QStringLiteral( "source" ), QStringLiteral( "촬영 파일이 아직 준비되지 않았거나 읽을 수 없습니다." ) );
     const qint64 expected = source.size();
     if ( QFileInfo( sourcePath ).canonicalFilePath() == QFileInfo( destinationPath ).canonicalFilePath()
-         && QFileInfo( destinationPath ).exists() )
+         && QFileInfo( destinationPath ).exists() && mode == WriteMode::Replace )
       return { { QStringLiteral( "ok" ), true } };
     const QFileInfo destinationInfo( destinationPath );
     if ( destinationInfo.exists() && !destinationInfo.isFile() )
@@ -87,10 +91,19 @@ namespace ManagedPhotoStore
     source.close();
     staged.close();
 
-    // A new photo needs only a same-directory rename. A retake keeps the old
-    // attachment under a unique recovery name until the new file is verified.
+    // Assignment in a feature form can still be cancelled. Never overwrite a
+    // path which may be referenced by the persistent feature or another slot.
+    // A collision gets a separate folder, preserving the requested basename.
+    std::unique_ptr<QTemporaryDir> revision;
+    if ( mode == WriteMode::NewAttachment && QFileInfo::exists( destinationPath ) )
+    {
+      revision = std::make_unique<QTemporaryDir>( destinationInfo.absolutePath() + QStringLiteral( "/촬영-XXXXXX" ) );
+      if ( !revision->isValid() )
+        return failure( QStringLiteral( "revision" ), QStringLiteral( "기존 사진을 보존할 새 촬영 폴더를 만들 수 없습니다." ) );
+      destinationPath = revision->filePath( destinationInfo.fileName() );
+    }
     const QString backup = destinationPath + QStringLiteral( ".previous-" ) + QUuid::createUuid().toString( QUuid::WithoutBraces );
-    const bool hadPrevious = QFileInfo::exists( destinationPath );
+    const bool hadPrevious = mode == WriteMode::Replace && QFileInfo::exists( destinationPath );
     if ( hadPrevious && !QFile::rename( destinationPath, backup ) )
       return failure( QStringLiteral( "backup" ), QStringLiteral( "기존 사진을 보호할 수 없어 교체를 중단했습니다." ) );
     if ( !QFile::rename( staged.fileName(), destinationPath ) )
@@ -109,7 +122,10 @@ namespace ManagedPhotoStore
     }
     if ( hadPrevious )
       QFile::remove( backup );
-    QFile::remove( sourcePath );
+    if ( revision )
+      revision->setAutoRemove( false );
+    if ( mode == WriteMode::Replace )
+      QFile::remove( sourcePath );
     return { { QStringLiteral( "ok" ), true }, { QStringLiteral( "path" ), destinationPath } };
   }
 }

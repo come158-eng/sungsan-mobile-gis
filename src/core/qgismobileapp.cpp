@@ -779,6 +779,11 @@ bool QgisMobileapp::loadProjectFile( const QString &path, const QString &name )
   if ( suffix == QStringLiteral( "zip" ) )
   {
     const QStringList entries = QgsZipUtils::files( path );
+    if ( entries.isEmpty() )
+    {
+      QgsMessageLog::logMessage( tr( "The ZIP file is empty or unreadable." ), QStringLiteral( "QField" ), Qgis::Warning );
+      return false;
+    }
     QStringList projects;
     for ( const QString &entry : entries )
     {

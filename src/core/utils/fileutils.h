@@ -106,8 +106,14 @@ class QFIELD_CORE_EXPORT FileUtils : public QObject
      */
     Q_INVOKABLE static bool replaceFileSafely( const QString &sourceFilePath, const QString &destinationFilePath );
 
-    //! Save a completed capture, returning ok/code/error without losing the previous photo.
-    Q_INVOKABLE static QVariantMap storeCapturedPhoto( const QString &sourceFilePath, const QString &destinationFilePath );
+    //! Resolve a file or relative widget root against its supplied local directory.
+    Q_INVOKABLE static QString resolveAttachmentPath( const QString &base, const QString &path );
+
+    //! Reserve a private cache location for an in-progress field photograph.
+    Q_INVOKABLE static QString fieldCameraCapturePath();
+
+    //! Create a new immutable attachment and return its project-relative path.
+    Q_INVOKABLE static QVariantMap storeCapturedPhoto( const QString &sourceFilePath, const QString &baseDirectory, const QString &relativeName );
 
     /**
     * Gets detailed information about a file including MD5 hash and metadata.
