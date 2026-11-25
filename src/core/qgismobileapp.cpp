@@ -44,6 +44,8 @@
 #include "appinterface.h"
 #ifdef Q_OS_ANDROID
 #include "platforms/android/androidplatformutilities.h"
+#include <QScopeGuard>
+#include <qgspathresolver.h>
 #endif
 #include "attributeformmodel.h"
 #include "audioanalyzer.h"
@@ -904,6 +906,14 @@ void QgisMobileapp::readProjectFile()
   if ( SUPPORTED_PROJECT_EXTENSIONS.contains( suffix ) )
   {
     projectLoadAttempted = true;
+#ifdef Q_OS_ANDROID
+    const auto reader = AndroidPlatformUtilities::mobileProjectPathReader( mProjectFilePath );
+    const QString preprocessor = reader ? QgsPathResolver::setPathPreprocessor( reader ) : QString();
+    const auto removePreprocessor = qScopeGuard( [&preprocessor] {
+      if ( !preprocessor.isEmpty() )
+        QgsPathResolver::removePathPreprocessor( preprocessor );
+    } );
+#endif
     projectLoaded = mProject->read( mProjectFilePath, Qgis::ProjectReadFlag::DontLoadProjectStyles | Qgis::ProjectReadFlag::DontLoad3DViews );
   }
   else if ( suffix == QStringLiteral( "gpkg" ) )

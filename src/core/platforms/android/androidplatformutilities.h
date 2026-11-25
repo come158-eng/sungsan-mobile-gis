@@ -22,6 +22,7 @@
 #include "platformutilities.h"
 
 #include <QJniObject>
+#include <functional>
 
 class AppInterface;
 
@@ -30,6 +31,7 @@ class AndroidPlatformUtilities : public PlatformUtilities
   public:
     AndroidPlatformUtilities();
     static void startProjectOpenRequests( AppInterface *iface );
+    static std::function<QString( const QString & )> mobileProjectPathReader( const QString &projectPath );
 
     PlatformUtilities::Capabilities capabilities() const override;
     void afterUpdate() override;

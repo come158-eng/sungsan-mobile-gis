@@ -59,6 +59,7 @@ inline void runOnAndroidMainThread( const std::function<void()> &runnable )
 #include <QFile>
 #include <QFileInfo>
 #include <QGlobalStatic>
+#include <QHash>
 #include <QMap>
 #include <QMimeDatabase>
 #include <QQmlApplicationEngine>
@@ -396,11 +397,14 @@ void AndroidPlatformUtilities::sendCompressedFolderTo( const QString &path ) con
       const QFileInfo file( project->fileName() );
       const QString suffix = file.suffix().toLower();
       const auto sourceVersion = project->lastSaveVersion();
+      const bool fieldTemplate = project->readEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/template" ) ) == QStringLiteral( "field-landstar" );
       if ( ( suffix == QStringLiteral( "qgz" ) || suffix == QStringLiteral( "qgs" ) ) && file.canonicalPath() == QFileInfo( path ).canonicalFilePath()
-           && !sourceVersion.isNull() && sourceVersion.majorVersion() < Qgis::version().section( '.', 0, 0 ).toInt() )
+           && !sourceVersion.isNull() && ( fieldTemplate || sourceVersion.majorVersion() < Qgis::version().section( '.', 0, 0 ).toInt() ) )
       {
         projectFile = file.canonicalFilePath();
         photoSettings = SungsanSurveyBridge::returnPhotoSettings( project );
+        if ( fieldTemplate && photoSettings.isEmpty() )
+          photoSettings = QStringLiteral( "<photoExport sourcesOnly=\"1\"/>" );
       }
     }
     runOnAndroidMainThread( [path, projectFile, photoSettings] {
@@ -884,6 +888,52 @@ void AndroidPlatformUtilities::stopPositioningService() const
 }
 
 Q_GLOBAL_STATIC( AndroidProjectOpenRequests, projectOpenRequests )
+
+std::function<QString( const QString & )> AndroidPlatformUtilities::mobileProjectPathReader( const QString &projectPath )
+{
+  const QString root = QFileInfo( PlatformUtilities::instance()->applicationDirectory() ).canonicalFilePath();
+  const QFileInfo project( projectPath );
+  const QString dir = project.canonicalPath() + QLatin1Char( '/' );
+  if ( root.isEmpty() || !dir.startsWith( root + QLatin1Char( '/' ) ) )
+    return {};
+
+  QHash<QString, QString> sources;
+  if ( QFileInfo( dir + QStringLiteral( "sungsan_field.gpkg" ) ).isFile() )
+  {
+    const auto path = QJniObject::fromString( project.canonicalFilePath() );
+    const auto pairs = QJniObject::callStaticObjectMethod( APP_PACKAGE_PATH "/FieldPhotoProject", "mobileProjectSources",
+                                                        "(Ljava/lang/String;)[Ljava/lang/String;", path.object<jstring>() );
+    if ( pairs.isValid() )
+    {
+      QJniEnvironment env;
+      const auto array = pairs.object<jobjectArray>();
+      const jsize count = env->GetArrayLength( array );
+      for ( jsize i = 0; i + 1 < count; i += 2 )
+      {
+        const QString oldPath = QJniObject::fromLocalRef( env->GetObjectArrayElement( array, i ) ).toString();
+        const QString bundled = QJniObject::fromLocalRef( env->GetObjectArrayElement( array, i + 1 ) ).toString();
+        sources.insert( oldPath, bundled );
+      }
+    }
+  }
+  return [sources,dir]( const QString &uri ) {
+    const auto split = uri.indexOf( QLatin1Char( '|' ) );
+    const QString path = uri.left( split );
+    QString restored = sources.value( path );
+    if ( restored.isEmpty() && path.startsWith( QStringLiteral( "localized:" ) ) )
+    {
+      const QString absolute = QLatin1Char( '/' ) + path.mid( 10 );
+      if ( absolute.startsWith( dir ) )
+      {
+        const QFileInfo file( absolute );
+        const QString canonical = file.canonicalFilePath();
+        if ( file.isFile() && canonical.startsWith( dir ) )
+          restored = canonical;
+      }
+    }
+    return restored.isEmpty() ? uri : restored + ( split < 0 ? QString() : uri.mid( split ) );
+  };
+}
 
 void AndroidPlatformUtilities::startProjectOpenRequests( AppInterface *iface )
 {

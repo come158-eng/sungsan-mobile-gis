@@ -1163,9 +1163,12 @@ void QFieldCloudProjectsModel::updateLocalizedDataPaths( const QString &projectP
   QStringList localizedDataPaths = QgsApplication::instance()->localizedDataPathRegistry()->paths();
   localizedDataPaths.erase( std::remove_if( localizedDataPaths.begin(),
                                             localizedDataPaths.end(),
-                                            [&localizedDataPath]( const QString &path ) { return path.startsWith( QFieldCloudUtils::localCloudDirectory() ); } ),
+                                            []( const QString &path ) { return path.isEmpty() || path.startsWith( QFieldCloudUtils::localCloudDirectory() ); } ),
                             localizedDataPaths.end() );
-  localizedDataPaths << localizedDataPath;
+  // QGIS matches localized roots before it writes a project-relative URI.
+  // An empty QDir resolves to the current directory ("/" on Android).
+  if ( !localizedDataPath.isEmpty() )
+    localizedDataPaths << localizedDataPath;
   QgsApplication::instance()->localizedDataPathRegistry()->setPaths( localizedDataPaths );
 }
 

@@ -4,6 +4,7 @@ package ch.opengis.qfield;
 import java.io.*;
 import java.util.*;
 import java.util.zip.*;
+import java.util.regex.Pattern;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.transform.*;
@@ -29,7 +30,7 @@ final class FieldPhotoProject {
         if (source.getName().toLowerCase(Locale.ROOT).endsWith(".qgs")) {
             try (InputStream in = new BufferedInputStream(new FileInputStream(source));
                  OutputStream out = new BufferedOutputStream(new FileOutputStream(output))) {
-                patch(in, out, spec);
+                patch(in, out, spec, source.getCanonicalFile().getParentFile());
             }
             return;
         }
@@ -39,15 +40,7 @@ final class FieldPhotoProject {
         try (ZipFile archive = new ZipFile(source);
              ZipOutputStream out = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(output)))) {
             List<? extends ZipEntry> entries = Collections.list(archive.entries());
-            ZipEntry main = null;
-            for (ZipEntry entry : entries) {
-                String name = entry.getName();
-                if (!entry.isDirectory() && !name.contains("/") && name.toLowerCase(Locale.ROOT).endsWith(".qgs")) {
-                    if (main != null) throw new IOException("Ambiguous QGS in project archive");
-                    main = entry;
-                }
-            }
-            if (main == null) throw new IOException("Missing QGS in project archive");
+            ZipEntry main = projectEntry(entries);
             byte[] buffer = new byte[65536];
             for (ZipEntry entry : entries) {
                 ZipEntry copied = new ZipEntry(entry.getName());
@@ -57,7 +50,7 @@ final class FieldPhotoProject {
                 CRC32 crc = new CRC32();
                 try (CheckedInputStream in = new CheckedInputStream(archive.getInputStream(entry), crc)) {
                     if (entry == main) {
-                        patch(in, out, spec);
+                        patch(in, out, spec, source.getCanonicalFile().getParentFile());
                     } else {
                         int count;
                         while ((count = in.read(buffer)) != -1) out.write(buffer, 0, count);
@@ -180,7 +173,116 @@ final class FieldPhotoProject {
         return false;
     }
 
-    private static void patch(InputStream in, OutputStream out, Document spec) throws Exception {
+    private static ZipEntry projectEntry(List<? extends ZipEntry> entries) throws IOException {
+        ZipEntry main = null;
+        for (ZipEntry entry : entries) {
+            String name = entry.getName();
+            if (!entry.isDirectory() && !name.contains("/") && name.toLowerCase(Locale.ROOT).endsWith(".qgs")) {
+                if (main != null) throw new IOException("Ambiguous QGS in project archive");
+                main = entry;
+            }
+        }
+        if (main == null) throw new IOException("Missing QGS in project archive");
+        return main;
+    }
+
+    private static final Pattern ANDROID_FILES = Pattern.compile(
+            "^/(?:storage/(?:emulated/[0-9]+|self/primary|[A-Za-z0-9_-]+)/Android/data|data/(?:user/[0-9]+|data))/kr\\.co\\.sungsan\\.mobilegis/files/");
+    private static final String FIELD_STORE = "sungsan_field.gpkg";
+    private static final String FIELD_TABLE = "|layername=sungsan_field_objects";
+
+    // Return only actual files in this project. For relocated packages, recognize
+    // the app's generated table AND its project/layer markers and original site/date.
+    private static String packagedPath(Element project, Element layer, File dir, String uri) throws IOException {
+        String provider = text(layer,"provider");
+        if (!"ogr".equals(provider) && !"gdal".equals(provider)) return null;
+        int split = uri.indexOf('|');
+        String path = split < 0 ? uri : uri.substring(0,split);
+        String absolute = path.startsWith("localized:") ? "/" + path.substring(10) : path;
+        java.util.regex.Matcher app = ANDROID_FILES.matcher(absolute);
+        if (!app.find() || absolute.contains("//")
+                || absolute.contains("/../") || absolute.contains("/./") || absolute.contains("\\")) return null;
+        File source = new File(absolute);
+        // Check both the written and canonical paths, so a symlink cannot pull
+        // a file outside the export tree into the mapping.
+        if (source.getPath().startsWith(dir.getPath() + File.separator) && source.isFile()
+                && source.getCanonicalPath().startsWith(dir.getPath() + File.separator)) {
+            return "./" + source.getCanonicalPath().substring(dir.getPath().length() + 1).replace(File.separatorChar,'/');
+        }
+        String local = absolute.substring(app.end());
+        String[] parts = local.split("/", -1);
+        if (parts.length != 5 || !"Created Projects".equals(parts[0]) || !FIELD_STORE.equals(parts[4])
+                || !"ogr".equals(provider) || split < 0 || !FIELD_TABLE.equals(uri.substring(split))) return null;
+        Element config = child(child(project,"properties"),"SungsanMobileGIS");
+        if (!"field-landstar".equals(text(config,"template"))
+                || !"kr.co.sungsan.mobilegis.field-package/1".equals(text(config,"fieldPackage"))) return null;
+        Element properties = child(child(layer,"customproperties"),"Option");
+        Element marker = match(properties,"Option","name","kr.co.sungsan.mobilegis/fieldObjects");
+        if (marker == null || !"true".equals(marker.getAttribute("value"))) return null;
+        String date = text(config,"workDate");
+        if (!date.matches("[0-9]{8}") || !parts[3].matches(Pattern.quote(date + "_" + parts[2]) + "(?:_[0-9]+)?")
+                || !parts[1].equals(safePart(text(config,"regionName"),"지역"))
+                || !parts[2].equals(safePart(text(config,"siteName"),project.getAttribute("projectname")))) return null;
+        File bundled = new File(dir,FIELD_STORE);
+        if (!bundled.isFile() || !bundled.getCanonicalFile().getParentFile().equals(dir))
+            throw new IOException("Missing packaged field GeoPackage");
+        return "./" + FIELD_STORE;
+    }
+
+    private static String safePart(String input, String fallback) {
+        String s = input.trim();
+        if (s.isEmpty()) s = fallback;
+        s = s.replaceAll("[<>:\"/|?*\\\\]", "_").replace('\0','_');
+        String base = s.contains(".") ? s.substring(0,s.lastIndexOf('.')) : s;
+        if (base.matches("COM[0-9]|CON|LPT[0-9]|NUL|PRN|AUX|com[0-9]|con|lpt[0-9]|nul|prn|aux")) s = "_" + s;
+        return s.endsWith(".") ? s.substring(0,s.length()-1) + "_" : s;
+    }
+
+    private static String[] repairLayerSources(Element project, File dir, boolean rewrite) throws IOException {
+        Map<String,String> files = new LinkedHashMap<>();
+        Element tree = child(project,"layer-tree-group");
+        NodeList treeLayers = tree == null ? null : tree.getElementsByTagName("layer-tree-layer");
+        for (Element layer : children(child(project,"projectlayers"),"maplayer")) {
+            String uri = text(layer,"datasource");
+            String relative = packagedPath(project,layer,dir,uri);
+            if (relative == null) continue;
+            int split = uri.indexOf('|');
+            String path = split < 0 ? uri : uri.substring(0,split);
+            String previous = files.put(path, new File(dir,relative).getCanonicalPath());
+            if (previous != null && !previous.equals(files.get(path))) throw new IOException("Ambiguous project datasource");
+            if (!rewrite) continue;
+            String portable = relative + (split < 0 ? "" : uri.substring(split));
+            child(layer,"datasource").setTextContent(portable);
+            String id = text(layer,"id");
+            for (int i=0; treeLayers != null && i<treeLayers.getLength(); ++i) {
+                Element item = (Element)treeLayers.item(i);
+                if (id.equals(item.getAttribute("id")) && uri.equals(item.getAttribute("source"))) item.setAttribute("source",portable);
+            }
+        }
+        List<String> pairs = new ArrayList<>();
+        for (Map.Entry<String,String> f : files.entrySet()) { pairs.add(f.getKey()); pairs.add(f.getValue()); }
+        return pairs.toArray(new String[0]);
+    }
+
+    // Called before QGIS reads an old generated QGS/QGZ. The original stays untouched.
+    static String[] mobileProjectSources(String projectPath) throws Exception {
+        File source = new File(projectPath).getCanonicalFile();
+        File dir = source.getParentFile();
+        if (!new File(dir, FIELD_STORE).isFile()) return new String[0];
+        if (source.getName().toLowerCase(Locale.ROOT).endsWith(".qgs")) {
+            try (InputStream in = new BufferedInputStream(new FileInputStream(source))) {
+                return repairLayerSources(parse(new InputSource(in)).getDocumentElement(),dir,false);
+            }
+        }
+        try (ZipFile zip = new ZipFile(source)) {
+            ZipEntry main = projectEntry(Collections.list(zip.entries()));
+            try (InputStream in = zip.getInputStream(main)) {
+                return repairLayerSources(parse(new InputSource(in)).getDocumentElement(),dir,false);
+            }
+        }
+    }
+
+    private static void patch(InputStream in, OutputStream out, Document spec, File dir) throws Exception {
         Document project = parse(new InputSource(in));
         Element qgis = project.getDocumentElement();
         if (!"qgis".equals(qgis.getTagName())) throw new IOException("Invalid QGIS project");
@@ -189,7 +291,9 @@ final class FieldPhotoProject {
             String id = layer.getAttribute("id");
             if (id.isEmpty() || pending.put(id,layer) != null) throw new IOException("Invalid photo layer id");
         }
-        if (pending.isEmpty()) throw new IOException("Missing photo layer settings");
+        if (pending.isEmpty() && !"1".equals(spec.getDocumentElement().getAttribute("sourcesOnly")))
+            throw new IOException("Missing photo layer settings");
+        repairLayerSources(qgis,dir,true);
         normalizeLegacyObjectName(qgis);
         for (Element layer : children(child(qgis,"projectlayers"), "maplayer")) {
             Element layerId = child(layer, "id");

@@ -479,6 +479,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
 
   if ( sungsanFieldTemplate )
   {
+    createdProject->setFilePathStorage( Qgis::FilePathType::Relative );
     createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/fieldPackage" ), QStringLiteral( "kr.co.sungsan.mobilegis.field-package/1" ) );
     createdProject->writeEntry( QStringLiteral( "SungsanMobileGIS" ), QStringLiteral( "/template" ), QStringLiteral( "field-landstar" ) );
     // A newly created generic project cannot know the coordinate system used

@@ -20,6 +20,43 @@ public class TestFieldPhotoProject {
         if (!value) throw new AssertionError();
     }
 
+    private static void mobileLayerSources(Path temp) throws Exception {
+        Path dir=Files.createTempDirectory(temp,"portable-"), source=dir.resolve("survey.qgs");
+        Path gpkg=Files.write(dir.resolve("sungsan_field.gpkg"),new byte[]{0});
+        String old="localized:storage/emulated/0/Android/data/kr.co.sungsan.mobilegis/files/Created Projects/경남/A_1/20261125_A_1_2/sungsan_field.gpkg";
+        String uri=old+"|layername=sungsan_field_objects";
+        String config="<properties><SungsanMobileGIS><template>field-landstar</template><fieldPackage>kr.co.sungsan.mobilegis.field-package/1</fieldPackage>"
+                +"<workDate>20261125</workDate><siteName>A:1</siteName><regionName>경남</regionName></SungsanMobileGIS></properties>";
+        String marker="<customproperties><Option><Option name='kr.co.sungsan.mobilegis/fieldObjects' type='bool' value='true'/></Option></customproperties>";
+        String layer="<maplayer><id>main</id><provider>ogr</provider><datasource>"+uri+"</datasource>"+marker+"</maplayer>";
+        String xml="<qgis>"+config+"<layer-tree-group><layer-tree-layer id='main' source='"+uri+"'/></layer-tree-group>"
+                +"<projectlayers>"+layer+"</projectlayers></qgis>";
+        Files.writeString(source,xml);
+        require(Arrays.equals(FieldPhotoProject.mobileProjectSources(source.toString()),new String[]{old,gpkg.toFile().getCanonicalPath()}));
+        Path output=dir.resolve("return.qgs");
+        FieldPhotoProject.writeCopy(source.toFile(),"<photoExport sourcesOnly='1'/>",output.toFile());
+        Document doc=DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(output.toFile());
+        String relative="./sungsan_field.gpkg|layername=sungsan_field_objects";
+        require(relative.equals(doc.getElementsByTagName("datasource").item(0).getTextContent()));
+        require(relative.equals(((Element)doc.getElementsByTagName("layer-tree-layer").item(0)).getAttribute("source")));
+        for (String unrelated : Arrays.asList(xml.replace("A_1/20261125_A_1","Else/20261125_Else"),xml.replace("ogr","wms"),
+                xml.replace("field-landstar","custom"),xml.replace("/fieldObjects","/other"),xml.replace("Android/data","Android/../data"),
+                xml.replace("kr.co.sungsan.mobilegis/files/","another.app/files/"),xml.replace("localized:storage/","https://storage/"),
+                xml.replace("layername=sungsan_field_objects","layername=custom"))) {
+            Files.writeString(source,unrelated);
+            require(FieldPhotoProject.mobileProjectSources(source.toString()).length==0);
+            FieldPhotoProject.writeCopy(source.toFile(),"<photoExport sourcesOnly='1'/>",output.toFile());
+            Document before=DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(source.toFile());
+            Document after=DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(output.toFile());
+            require(before.getElementsByTagName("datasource").item(0).getTextContent().equals(after.getElementsByTagName("datasource").item(0).getTextContent()));
+        }
+        Files.writeString(source,xml); Files.delete(gpkg);
+        boolean rejected=false;
+        try { FieldPhotoProject.writeCopy(source.toFile(),"<photoExport sourcesOnly='1'/>",output.toFile()); }
+        catch (IOException e) { rejected=true; }
+        require(rejected);
+    }
+
     private static void legacyDisplayName(Path temp) throws Exception {
         String old = "성산_현장객체", ns = "kr.co.sungsan.mobilegis";
         String uri = "./data/field_data.gpkg|layername=" + old;
@@ -57,6 +94,7 @@ public class TestFieldPhotoProject {
     }
 
     public static void main(String[] args) throws Exception {
+        mobileLayerSources(Path.of(args[0]));
         Path temp = Paths.get(args[0]);
         legacyDisplayName(temp);
         String original = "<?xml version='1.0'?><!DOCTYPE qgis SYSTEM 'http://example.invalid/qgis.dtd'><qgis version='3.40'>"
