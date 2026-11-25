@@ -30,6 +30,35 @@ TEST_CASE( "FileUtils" )
     REQUIRE( FileUtils::mimeTypeName( QStringLiteral( "filename.txt" ) ) == QStringLiteral( "text/plain" ) );
   }
 
+  SECTION( "Mixed legacy field photos prefer the configured file and only fall back to an existing images path" )
+  {
+    QTemporaryDir project;
+    REQUIRE( project.isValid() );
+    const QDir home( project.path() );
+    const QString widgetRoot = home.filePath( QStringLiteral( "photos/near" ) );
+    const QString stored = QStringLiteral( "images/sites/asset (1).jpg" );
+    const QString primary = QDir( widgetRoot ).filePath( stored );
+    const QString legacy = home.filePath( stored );
+    REQUIRE( home.mkpath( QStringLiteral( "images/sites" ) ) );
+    REQUIRE( QDir().mkpath( QFileInfo( primary ).absolutePath() ) );
+    auto touch = []( const QString &path ) {
+      QFile file( path );
+      return file.open( QIODevice::WriteOnly ) && file.write( "x" ) == 1;
+    };
+
+    REQUIRE( FileUtils::resolveManagedPhotoPath( widgetRoot, home.path(), stored ) == primary );
+    REQUIRE( touch( legacy ) );
+    REQUIRE( QFileInfo( FileUtils::resolveManagedPhotoPath( widgetRoot, home.path(), stored ) ).canonicalFilePath()
+             == QFileInfo( legacy ).canonicalFilePath() );
+    REQUIRE( touch( primary ) );
+    REQUIRE( FileUtils::resolveManagedPhotoPath( widgetRoot, home.path(), stored ) == primary );
+    REQUIRE( touch( home.filePath( QStringLiteral( "bare.jpg" ) ) ) );
+    REQUIRE( FileUtils::resolveManagedPhotoPath( widgetRoot, home.path(), QStringLiteral( "bare.jpg" ) )
+             == QDir( widgetRoot ).filePath( QStringLiteral( "bare.jpg" ) ) );
+    REQUIRE( FileUtils::resolveManagedPhotoPath( widgetRoot, home.path(), QStringLiteral( "images/../bare.jpg" ) )
+             == QDir( widgetRoot ).filePath( QStringLiteral( "bare.jpg" ) ) );
+  }
+
 
   SECTION( "FileName" )
   {

@@ -711,6 +711,23 @@ QString FileUtils::resolveAttachmentPath( const QString &base, const QString &pa
   return QDir::cleanPath( QDir( root ).filePath( name ) );
 }
 
+QString FileUtils::resolveManagedPhotoPath( const QString &widgetRoot, const QString &projectHome, const QString &value )
+{
+  const QString configured = resolveAttachmentPath( widgetRoot, value );
+  if ( fileExists( configured ) || projectHome.isEmpty() || !value.startsWith( QStringLiteral( "images/" ) )
+       || value.contains( QLatin1Char( '\\' ) ) || value.contains( QLatin1Char( ':' ) ) || QDir::cleanPath( value ) != value )
+    return configured;
+
+  const QString home = QFileInfo( ManagedPhotoStore::localPath( projectHome ) ).canonicalFilePath();
+  const QFileInfo legacy( QDir( home ).filePath( value ) );
+  if ( home.isEmpty() || !legacy.isFile() )
+    return configured;
+  const QString relative = QDir( home ).relativeFilePath( legacy.canonicalFilePath() );
+  if ( QDir::isAbsolutePath( relative ) || relative == QStringLiteral( ".." ) || relative.startsWith( QStringLiteral( "../" ) ) )
+    return configured;
+  return legacy.absoluteFilePath();
+}
+
 QString FileUtils::fieldCameraCapturePath()
 {
   const QString cache = QStandardPaths::writableLocation( QStandardPaths::CacheLocation );

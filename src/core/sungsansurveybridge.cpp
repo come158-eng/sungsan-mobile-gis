@@ -59,6 +59,49 @@ namespace
 {
   using LandStarPointFile::normalized;
 
+  // Older Android releases stored some values as "images/..." even when the
+  // field was configured to store filenames relative to photos/<category>.
+  // The PC wrapper evaluates this expression for each feature it displays.
+  void configureManagedPhotoRoot( QVariantMap &options, const QString &field )
+  {
+    const QString root = options.value( QStringLiteral( "DefaultRoot" ) ).toString();
+    if ( root.isEmpty() || !QDir::isRelativePath( root ) || root.contains( QLatin1Char( ':' ) )
+         || !options.value( QStringLiteral( "StorageType" ) ).toString().isEmpty() )
+      return;
+
+    const QString stableRoot = QStringLiteral( "@project_home || '/' || " ) + QgsExpression::quotedString( root );
+    const QString mixedRoot = QStringLiteral(
+      "with_variable('field_gis_root', %1, with_variable('field_gis_photo', %2, "
+      "CASE WHEN left(@field_gis_photo, 7) = 'images/' "
+      "AND strpos(@field_gis_photo, char(92)) = 0 AND strpos(@field_gis_photo, ':') = 0 "
+      "AND strpos(@field_gis_photo, '//') = 0 AND strpos('/' || @field_gis_photo || '/', '/../') = 0 "
+      "AND strpos('/' || @field_gis_photo || '/', '/./') = 0 "
+      "AND NOT is_file(@field_gis_root || '/' || @field_gis_photo) "
+      "AND is_file(@project_home || '/' || @field_gis_photo) "
+      "THEN @project_home ELSE @field_gis_root END))" ).arg( stableRoot, QgsExpression::quotedColumnRef( field ) );
+    const QString modeKey = QStringLiteral( "FieldGisPhotoRootMode" );
+    const QString expressionKey = QStringLiteral( "FieldGisPhotoRootExpression" );
+    QVariantMap collection = options.value( QStringLiteral( "PropertyCollection" ) ).toMap();
+    QVariantMap properties = collection.value( QStringLiteral( "properties" ) ).toMap();
+    const QString key = QStringLiteral( "propertyRootPath" );
+    const QVariantMap binding = properties.value( key ).toMap();
+    const QString expression = binding.value( QStringLiteral( "expression" ) ).toString();
+    const bool managed = binding.value( QStringLiteral( "active" ) ).toBool() && binding.value( QStringLiteral( "type" ) ).toInt() == 3
+                         && ( expression == stableRoot || expression == mixedRoot
+                              || ( options.value( modeKey ).toString() == QStringLiteral( "legacyImagesV1" )
+                                   && !expression.isEmpty() && options.value( expressionKey ).toString() == expression ) );
+    if ( !binding.isEmpty() && !managed )
+      return;
+
+    properties.insert( key, QVariantMap{ { QStringLiteral( "active" ), true }, { QStringLiteral( "type" ), 3 },
+                                         { QStringLiteral( "expression" ), mixedRoot } } );
+    collection.insert( QStringLiteral( "type" ), QStringLiteral( "collection" ) );
+    collection.insert( QStringLiteral( "properties" ), properties );
+    options.insert( QStringLiteral( "PropertyCollection" ), collection );
+    options.insert( modeKey, QStringLiteral( "legacyImagesV1" ) );
+    options.insert( expressionKey, mixedRoot );
+  }
+
   constexpr qint64 MAX_POINT_FILE_BYTES = 25LL * 1024LL * 1024LL;
   struct LandStarMetadata
   {
@@ -656,25 +699,8 @@ QVariantMap SungsanSurveyBridge::prepareFieldSurveyLayer( QgsProject *project, Q
       if ( !existingRoot || it.key() != QStringLiteral( "RelativeStorage" ) )
         options.insert( it.key(), it.value() );
     }
-    // Older packages store bare filenames relative to e.g. photos/근경.
-    // Resolve that directory in the opened project even after moving its ZIP.
     if ( existingRoot )
-    {
-      const QString root = options.value( QStringLiteral( "DefaultRoot" ) ).toString();
-      QVariantMap collection = options.value( QStringLiteral( "PropertyCollection" ) ).toMap();
-      QVariantMap properties = collection.value( QStringLiteral( "properties" ) ).toMap();
-      const QString property = QStringLiteral( "propertyRootPath" );
-      if ( !root.isEmpty() && QDir::isRelativePath( root ) && !root.contains( QLatin1Char( ':' ) )
-           && !properties.value( property ).toMap().value( QStringLiteral( "active" ) ).toBool() )
-      {
-        const QString expression = QStringLiteral( "@project_home || '/' || " ) + QgsExpression::quotedString( root );
-        properties.insert( property, QVariantMap{ { QStringLiteral( "active" ), true }, { QStringLiteral( "type" ), 3 },
-                                                  { QStringLiteral( "expression" ), expression } } );
-        collection.insert( QStringLiteral( "type" ), QStringLiteral( "collection" ) );
-        collection.insert( QStringLiteral( "properties" ), properties );
-        options.insert( QStringLiteral( "PropertyCollection" ), collection );
-      }
-    }
+      configureManagedPhotoRoot( options, fieldName );
     layer->setEditorWidgetSetup( fieldIndex, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), options ) );
     attachmentNaming.insert(
       fieldName,

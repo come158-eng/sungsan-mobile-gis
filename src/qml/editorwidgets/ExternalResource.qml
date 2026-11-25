@@ -25,14 +25,19 @@ EditorWidgetBase {
   }
 
   readonly property bool hasCustomPhotoRoot: Number(config.RelativeStorage) === 2 && externalStorage.type === ""
+  readonly property var rootBinding: ((config.PropertyCollection || {}).properties || {}).propertyRootPath
+  readonly property bool hasManagedMixedRoot: hasCustomPhotoRoot && config.FieldGisPhotoRootMode === "legacyImagesV1"
+      && !!rootBinding && rootBinding.active === true && Number(rootBinding.type) === 3 && !!rootBinding.expression
+      && rootBinding.expression === config.FieldGisPhotoRootExpression
   property string prefixToRelativePath: {
     if (!qgisProject || !qgisProject.homePath)
       return "";
     let configuredRoot = "";
     if (hasCustomPhotoRoot) {
-      const props = (config.PropertyCollection || {}).properties || {};
-      const entry = props.propertyRootPath;
-      if (entry && entry.active !== false) {
+      const entry = rootBinding;
+      // The desktop wrapper's mixed-path expression follows the old field
+      // value. A new capture always belongs under the fixed configured root.
+      if (!hasManagedMixedRoot && entry && entry.active !== false) {
         let expression = entry.expression || "";
         if (!expression && entry.field)
           expression = '"' + String(entry.field).replace(/"/g, '""') + '"';
@@ -48,6 +53,8 @@ EditorWidgetBase {
   }
 
   function attachmentPath(name) {
+    if (hasManagedMixedRoot && qgisProject && qgisProject.homePath)
+      return FileUtils.resolveManagedPhotoPath(prefixToRelativePath, qgisProject.homePath, String(name));
     return FileUtils.resolveAttachmentPath(prefixToRelativePath, String(name));
   }
 

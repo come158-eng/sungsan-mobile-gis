@@ -109,6 +109,9 @@ class QFIELD_CORE_EXPORT FileUtils : public QObject
     //! Resolve a file or relative widget root against its supplied local directory.
     Q_INVOKABLE static QString resolveAttachmentPath( const QString &base, const QString &path );
 
+    //! For legacy field photographs, prefer the widget's existing file, then an existing project-local images/ file.
+    Q_INVOKABLE static QString resolveManagedPhotoPath( const QString &widgetRoot, const QString &projectHome, const QString &value );
+
     //! Reserve a private cache location for an in-progress field photograph.
     Q_INVOKABLE static QString fieldCameraCapturePath();
 
