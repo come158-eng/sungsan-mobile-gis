@@ -59,3 +59,75 @@ TEST_CASE( "FeatureModel" )
   std::unique_ptr<FeatureModel> modelTest = std::make_unique<FeatureModel>();
   std::unique_ptr<QAbstractItemModelTester> modelTester = std::make_unique<QAbstractItemModelTester>( modelTest.get(), QAbstractItemModelTester::FailureReportingMode::Fatal );
 }
+
+TEST_CASE( "Field form keeps the capture time and rejects partial photo updates" )
+{
+  QgsVectorLayer layer( QStringLiteral( "Point?crs=EPSG:4326&field=name:string&field=surveyed_at:datetime&field=photo:string" ), QStringLiteral( "survey" ), QStringLiteral( "memory" ) );
+  layer.setCustomProperty( QStringLiteral( "kr.co.sungsan.mobilegis/fieldObjects" ), true );
+  const int fixedField = layer.addExpressionField( QStringLiteral( "'fixed'" ), QgsField( QStringLiteral( "readonly_note" ), QMetaType::QString ) );
+  REQUIRE( fixedField >= 0 );
+  FeatureModel model;
+  model.setCurrentLayer( &layer );
+  model.resetFeature();
+  model.resetAttributes();
+  const QDateTime before = QDateTime::currentDateTime();
+  model.stampFieldSurveyTime();
+  const QDateTime captured = model.feature().attribute( 1 ).toDateTime();
+  REQUIRE( captured >= before );
+  REQUIRE( model.setData( model.index( 2 ), QStringLiteral( "original.jpg" ), FeatureModel::AttributeValue ) );
+  REQUIRE( model.create() );
+  const QgsFeatureId id = model.feature().id();
+  REQUIRE( layer.getFeature( id ).attribute( 1 ).toDateTime() == captured );
+  model.stampFieldSurveyTime();
+
+  REQUIRE( layer.startEditing() );
+  REQUIRE( layer.changeAttributeValue( id, 0, QStringLiteral( "unrelated" ) ) );
+  REQUIRE( model.setData( model.index( 2 ), QStringLiteral( "new.jpg" ), FeatureModel::AttributeValue ) );
+  REQUIRE( model.setData( model.index( fixedField ), QStringLiteral( "invalid" ), FeatureModel::AttributeValue ) );
+  REQUIRE_FALSE( model.save() );
+  REQUIRE( layer.isEditable() );
+  REQUIRE( layer.getFeature( id ).attribute( 0 ).toString() == QStringLiteral( "unrelated" ) );
+  REQUIRE( layer.getFeature( id ).attribute( 2 ).toString() == QStringLiteral( "original.jpg" ) );
+  REQUIRE( model.feature().attribute( 2 ).toString() == QStringLiteral( "new.jpg" ) );
+
+  REQUIRE( model.setData( model.index( fixedField ), QStringLiteral( "fixed" ), FeatureModel::AttributeValue ) );
+  REQUIRE( model.save() );
+  REQUIRE( layer.getFeature( id ).attribute( 1 ).toDateTime() == captured );
+  REQUIRE( layer.getFeature( id ).attribute( 2 ).toString() == QStringLiteral( "new.jpg" ) );
+}
+
+TEST_CASE( "Batch and multi-feature form saves return provider results" )
+{
+  QgsVectorLayer layer( QStringLiteral( "Point?field=photo:string" ), QStringLiteral( "survey" ), QStringLiteral( "memory" ) );
+  const int virtualIndex = layer.addExpressionField( QStringLiteral( "'fixed'" ), QgsField( QStringLiteral( "calculated_note" ), QMetaType::QString ) );
+  REQUIRE( layer.startEditing() );
+  QgsFeature first( layer.fields() );
+  QgsFeature second( layer.fields() );
+  first.setAttribute( 0, QStringLiteral( "original" ) );
+  second.setAttribute( 0, QStringLiteral( "original" ) );
+  REQUIRE( layer.addFeature( first ) );
+  REQUIRE( layer.addFeature( second ) );
+  REQUIRE( layer.commitChanges() );
+  QList<QgsFeature> rows;
+  QgsFeature f;
+  QgsFeatureIterator it = layer.getFeatures();
+  while ( it.nextFeature( f ) )
+    rows.append( f );
+  REQUIRE( rows.size() == 2 );
+  FeatureModel model;
+  model.setCurrentLayer( &layer );
+  model.setModelMode( FeatureModel::MultiFeatureModel );
+  model.setFeatures( rows );
+  REQUIRE( model.setData( model.index( 0 ), QStringLiteral( "replacement" ), FeatureModel::AttributeValue ) );
+  REQUIRE( model.setData( model.index( virtualIndex ), QStringLiteral( "invalid" ), FeatureModel::AttributeValue ) );
+  REQUIRE_FALSE( model.save() );
+  for ( const QgsFeature &row : rows )
+    REQUIRE( layer.getFeature( row.id() ).attribute( 0 ).toString() == QStringLiteral( "original" ) );
+  model.setModelMode( FeatureModel::SingleFeatureModel );
+  model.setFeature( rows.first() );
+  model.setBatchMode( true );
+  REQUIRE( model.setData( model.index( 0 ), QStringLiteral( "batch" ), FeatureModel::AttributeValue ) );
+  REQUIRE( model.save() );
+  model.setBatchMode( false );
+  REQUIRE( layer.getFeature( rows.first().id() ).attribute( 0 ).toString() == QStringLiteral( "batch" ) );
+}

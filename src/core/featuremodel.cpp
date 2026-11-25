@@ -24,6 +24,7 @@
 #include <QJSValue>
 #include <QDateTime>
 #include <QMutex>
+#include <QUndoStack>
 #include <qgscurvepolygon.h>
 #include <qgsexpressioncontextutils.h>
 #include <qgsgeometrycollection.h>
@@ -649,164 +650,115 @@ bool FeatureModel::changeGeometry( const QgsGeometry &geometry )
 bool FeatureModel::save( bool flushBuffer )
 {
   if ( !mLayer )
-  {
     return false;
-  }
-
-  bool isSuccess = true;
 
   if ( mBatchMode )
   {
-    // We take charge of default values that are set to be applied on feature update to take into account positioning and cloud context
     updateDefaultValues();
-
     QgsFeature temporaryFeature = mFeature;
-    isSuccess = !mLayer->updateFeature( temporaryFeature, true );
+    return mLayer->updateFeature( temporaryFeature, true );
+  }
+
+  const bool wasEditing = isEditing();
+  if ( mLayer->isEditCommandActive() || !startEditing() )
+    return false;
+
+  const int undoIndex = mLayer->undoStack()->index();
+  mLayer->beginEditCommand( tr( "Update feature" ) );
+  bool applied = true;
+  if ( mModelMode == SingleFeatureModel )
+  {
+    // Only write changed fields to preserve concurrent edits to other attributes.
+    updateDefaultValues();
+    if ( mSavedFeature.id() == mFeature.id() && mSavedFeature.fields() == mFeature.fields() )
+    {
+      if ( ( mFeature.hasGeometry() || mSavedFeature.hasGeometry() ) && !mFeature.geometry().equals( mSavedFeature.geometry() ) )
+      {
+        QgsGeometry geometry = mFeature.geometry();
+        applied = mLayer->changeGeometry( mFeature.id(), geometry, true );
+      }
+
+      const QgsAttributes attributes = mFeature.attributes();
+      const QgsAttributes originalAttributes = mSavedFeature.attributes();
+      for ( int idx = 0; applied && idx < attributes.count(); ++idx )
+      {
+        if ( !qgsVariantEqual( attributes.at( idx ), originalAttributes.at( idx ) ) )
+          applied = mLayer->changeAttributeValue( mFeature.id(), idx, attributes.at( idx ), originalAttributes.at( idx ), true );
+      }
+    }
+    else
+    {
+      applied = mLayer->updateFeature( mFeature, true );
+    }
   }
   else
   {
-    const bool wasEditing = isEditing();
-    flushBuffer = flushBuffer || !wasEditing;
-
-    if ( !startEditing() )
+    // We need to copy these members as the first feature updated triggers a refresh of the selected features, leading to changes in feature model members
+    const QgsFeature referenceFeature = mFeature;
+    const QList<bool> attributesAllowEdit = mAttributesAllowEdit;
+    QList<QgsFeature> features = mFeatures;
+    for ( QgsFeature &feature : features )
     {
-      isSuccess = false;
-    }
-
-    switch ( mModelMode )
-    {
-      case SingleFeatureModel:
+      for ( int i = 0; i < referenceFeature.attributes().count(); i++ )
       {
-        // We take charge of default values that are set to be applied on feature update to take into account positioning and cloud context
-        updateDefaultValues();
+        if ( !attributesAllowEdit[i] )
+          continue;
 
-        bool changed = false;
-        if ( mSavedFeature.id() == mFeature.id() && mSavedFeature.fields() == mFeature.fields() )
-        {
-          bool hasChanged = false;
-          if ( ( mFeature.hasGeometry() || mSavedFeature.hasGeometry() ) && !mFeature.geometry().equals( mSavedFeature.geometry() ) )
-          {
-            hasChanged = true;
-            QgsGeometry temporaryGeometry = mFeature.geometry();
-            changed = mLayer->changeGeometry( mFeature.id(), temporaryGeometry, true );
-          }
-
-          const QgsAttributes attributes = mFeature.attributes();
-          const QgsAttributes originalAttributes = mSavedFeature.attributes();
-          for ( int idx = 0; idx < attributes.count(); ++idx )
-          {
-            if ( !qgsVariantEqual( attributes.at( idx ), originalAttributes.at( idx ) ) )
-            {
-              hasChanged = true;
-              changed |= mLayer->changeAttributeValue( mFeature.id(), idx, attributes.at( idx ), originalAttributes.at( idx ), true );
-            }
-          }
-
-          if ( hasChanged )
-          {
-            if ( changed )
-            {
-              mSavedFeature = mFeature;
-            }
-            else
-            {
-              QgsMessageLog::logMessage( tr( "Cannot update feature" ), QStringLiteral( "QField" ), Qgis::Warning );
-            }
-          }
-        }
-        else
-        {
-          changed = mLayer->updateFeature( mFeature, true );
-          if ( changed )
-          {
-            mSavedFeature = mFeature;
-          }
-
-          if ( !changed )
-          {
-            QgsMessageLog::logMessage( tr( "Cannot update feature" ), QStringLiteral( "QField" ), Qgis::Warning );
-          }
-        }
-
-        if ( flushBuffer )
-        {
-          isSuccess &= commit( !wasEditing );
-          if ( isSuccess && !wasEditing )
-          {
-            QgsFeature modifiedFeature;
-            if ( mLayer->getFeatures( QgsFeatureRequest().setFilterFid( mFeature.id() ) ).nextFeature( modifiedFeature ) )
-            {
-              if ( modifiedFeature != mFeature )
-              {
-                setFeature( modifiedFeature );
-                mSavedFeature = mFeature;
-              }
-              else
-              {
-                emit featureUpdated();
-              }
-            }
-            else
-            {
-              QgsMessageLog::logMessage( tr( "Feature %1 could not be fetched after commit" ).arg( mFeature.id() ), QStringLiteral( "QField" ), Qgis::Warning );
-            }
-          }
-        }
-        break;
+        feature.setAttribute( i, referenceFeature.attributes().at( i ) );
       }
 
-      case MultiFeatureModel:
+      QgsExpressionContext expressionContext = createExpressionContext();
+      expressionContext.setFeature( feature );
+
+      QgsFields fields = mLayer->fields();
+      for ( int i = 0; i < fields.count(); ++i )
       {
-        // We need to copy these members as the first feature updated triggers a refresh of the selected features, leading to changes in feature model members
-        const QgsFeature referenceFeature = mFeature;
-        const QList<bool> attributesAllowEdit = mAttributesAllowEdit;
-        QList<QgsFeature> features = mFeatures;
-        for ( QgsFeature &feature : features )
+        if ( fields.at( i ).defaultValueDefinition().isValid() && fields.at( i ).defaultValueDefinition().applyOnUpdate() )
         {
-          for ( int i = 0; i < referenceFeature.attributes().count(); i++ )
-          {
-            if ( !attributesAllowEdit[i] )
-              continue;
+          QgsExpression exp( fields.at( i ).defaultValueDefinition().expression() );
+          exp.prepare( &expressionContext );
+          if ( exp.hasParserError() )
+            QgsMessageLog::logMessage( tr( "Default value expression for %1:%2 has parser error: %3" ).arg( mLayer->name(), fields.at( i ).name(), exp.parserErrorString() ), QStringLiteral( "QField" ) );
 
-            feature.setAttribute( i, referenceFeature.attributes().at( i ) );
-          }
+          QVariant value = exp.evaluate( &expressionContext );
+          if ( exp.hasEvalError() )
+            QgsMessageLog::logMessage( tr( "Default value expression for %1:%2 has evaluation error: %3" ).arg( mLayer->name(), fields.at( i ).name(), exp.evalErrorString() ), QStringLiteral( "QField" ) );
 
-          QgsExpressionContext expressionContext = createExpressionContext();
-          expressionContext.setFeature( feature );
-
-          QgsFields fields = mLayer->fields();
-          for ( int i = 0; i < fields.count(); ++i )
-          {
-            if ( fields.at( i ).defaultValueDefinition().isValid() && fields.at( i ).defaultValueDefinition().applyOnUpdate() )
-            {
-              QgsExpression exp( fields.at( i ).defaultValueDefinition().expression() );
-              exp.prepare( &expressionContext );
-              if ( exp.hasParserError() )
-                QgsMessageLog::logMessage( tr( "Default value expression for %1:%2 has parser error: %3" ).arg( mLayer->name(), fields.at( i ).name(), exp.parserErrorString() ), QStringLiteral( "QField" ) );
-
-              QVariant value = exp.evaluate( &expressionContext );
-              if ( exp.hasEvalError() )
-                QgsMessageLog::logMessage( tr( "Default value expression for %1:%2 has evaluation error: %3" ).arg( mLayer->name(), fields.at( i ).name(), exp.evalErrorString() ), QStringLiteral( "QField" ) );
-
-              feature.setAttribute( i, value );
-            }
-          }
-
-          if ( !mLayer->updateFeature( feature, true ) )
-          {
-            QgsMessageLog::logMessage( tr( "Cannot update feature" ), QStringLiteral( "QField" ), Qgis::Warning );
-          }
+          feature.setAttribute( i, value );
         }
+      }
 
-        if ( flushBuffer )
-        {
-          isSuccess &= commit( !wasEditing );
-        }
+      if ( !mLayer->updateFeature( feature, true ) )
+      {
+        applied = false;
+        break;
       }
     }
   }
 
-  return isSuccess;
+  if ( !finishFormEdit( applied, flushBuffer || !wasEditing, wasEditing, undoIndex ) )
+    return false;
+
+  if ( mModelMode == SingleFeatureModel )
+  {
+    mSavedFeature = mFeature;
+    if ( !wasEditing )
+    {
+      QgsFeature modifiedFeature;
+      if ( !mLayer->getFeatures( QgsFeatureRequest().setFilterFid( mFeature.id() ) ).nextFeature( modifiedFeature ) )
+        return false;
+      if ( modifiedFeature != mFeature )
+      {
+        setFeature( modifiedFeature );
+        mSavedFeature = mFeature;
+      }
+      else
+      {
+        emit featureUpdated();
+      }
+    }
+  }
+  return true;
 }
 
 void FeatureModel::reset()
@@ -1201,7 +1153,7 @@ bool FeatureModel::create( bool flushBuffer )
 
   // The connection below will be triggered when the new feature is committed and will provide
   // the saved feature ID needed to fetch the saved feature back from the data provider
-  QgsFeatureId createdFeatureId;
+  QgsFeatureId createdFeatureId = FID_NULL;
   QMetaObject::Connection connection = connect( mLayer, &QgsVectorLayer::featureAdded, this, [&createdFeatureId]( QgsFeatureId fid ) { createdFeatureId = fid; } );
 
   if ( mBatchMode )
@@ -1216,8 +1168,9 @@ bool FeatureModel::create( bool flushBuffer )
   {
     const bool wasEditing = isEditing();
 
-    if ( !wasEditing && !startEditing() )
+    if ( mLayer->isEditCommandActive() || !startEditing() )
     {
+      disconnect( connection );
       QgsMessageLog::logMessage( tr( "Cannot start editing on layer \"%1\" to create feature %2" ).arg( mLayer->name() ).arg( mFeature.id() ), QStringLiteral( "QField" ), Qgis::Critical );
       return false;
     }
@@ -1250,67 +1203,60 @@ bool FeatureModel::create( bool flushBuffer )
     }
 
     flushBuffer = flushBuffer || !wasEditing || hasRelations;
-    if ( mLayer->addFeature( mFeature ) )
+    const QgsFeature draft = mFeature;
+    const int undoIndex = mLayer->undoStack()->index();
+    mLayer->beginEditCommand( tr( "Create feature" ) );
+    const bool added = mLayer->addFeature( mFeature );
+    if ( added && mProject && mProject->topologicalEditing() && !mFeature.geometry().isEmpty() )
+      applyGeometryTopography( mFeature.geometry() );
+    isSuccess = finishFormEdit( added, flushBuffer, wasEditing, undoIndex );
+    if ( isSuccess )
     {
       mSavedFeature = mFeature;
-      if ( mProject && mProject->topologicalEditing() && !mFeature.geometry().isEmpty() )
-      {
-        applyGeometryTopography( mFeature.geometry() );
-      }
-
       if ( flushBuffer )
       {
-        if ( commit( !wasEditing ) )
+        QgsFeature feat;
+        if ( mLayer->getFeatures( QgsFeatureRequest().setFilterFid( createdFeatureId ) ).nextFeature( feat ) )
         {
-          QgsFeature feat;
-          if ( mLayer->getFeatures( QgsFeatureRequest().setFilterFid( createdFeatureId ) ).nextFeature( feat ) )
-          {
-            setFeature( feat );
-            mSavedFeature = mFeature;
+          setFeature( feat );
+          mSavedFeature = mFeature;
 
-            if ( hasRelations )
+          if ( hasRelations )
+          {
+            // Revisit relations in need of attribute updates
+            for ( const QPair<QgsRelation, QgsFeatureRequest> &revisitRelation : std::as_const( revisitRelations ) )
             {
-              // Revisit relations in need of attribute updates
-              for ( const QPair<QgsRelation, QgsFeatureRequest> &revisitRelation : std::as_const( revisitRelations ) )
+              const QList<QgsRelation::FieldPair> fieldPairs = revisitRelation.first.fieldPairs();
+              revisitRelation.first.referencingLayer()->startEditing();
+              QgsFeatureIterator it = revisitRelation.first.referencingLayer()->getFeatures( revisitRelation.second );
+              QgsFeature childFeature;
+              while ( it.nextFeature( childFeature ) )
               {
-                const QList<QgsRelation::FieldPair> fieldPairs = revisitRelation.first.fieldPairs();
-                revisitRelation.first.referencingLayer()->startEditing();
-                QgsFeatureIterator it = revisitRelation.first.referencingLayer()->getFeatures( revisitRelation.second );
-                QgsFeature childFeature;
-                while ( it.nextFeature( childFeature ) )
+                for ( const QgsRelation::FieldPair &fieldPair : fieldPairs )
                 {
-                  for ( const QgsRelation::FieldPair &fieldPair : fieldPairs )
-                  {
-                    childFeature.setAttribute( fieldPair.referencingField(), feat.attribute( fieldPair.referencedField() ) );
-                  }
-                  revisitRelation.first.referencingLayer()->updateFeature( childFeature );
+                  childFeature.setAttribute( fieldPair.referencingField(), feat.attribute( fieldPair.referencedField() ) );
                 }
-                revisitRelation.first.referencingLayer()->commitChanges();
+                revisitRelation.first.referencingLayer()->updateFeature( childFeature );
               }
-
-              // We need to update default values after creation to insure expression relying on relation children compute properly
-              updateDefaultValues();
-              save();
+              revisitRelation.first.referencingLayer()->commitChanges();
             }
-          }
-          else
-          {
-            QgsMessageLog::logMessage( tr( "Layer \"%1\" has been commited but the newly created feature %2 could not be fetched" ).arg( mLayer->name() ).arg( mFeature.id() ), QStringLiteral( "QField" ), Qgis::Critical );
-            isSuccess = false;
+
+            // We need to update default values after creation to insure expression relying on relation children compute properly
+            updateDefaultValues();
+            save();
           }
         }
         else
         {
-          const QString msgs = mLayer->commitErrors().join( QStringLiteral( "\n" ) );
-          QgsMessageLog::logMessage( tr( "Layer \"%1\" cannot be commited with the newly created feature %2. Reason:\n%3" ).arg( mLayer->name() ).arg( mFeature.id() ).arg( msgs ), QStringLiteral( "QField" ), Qgis::Critical );
+          QgsMessageLog::logMessage( tr( "Layer \"%1\" has been commited but the newly created feature %2 could not be fetched" ).arg( mLayer->name() ).arg( mFeature.id() ), QStringLiteral( "QField" ), Qgis::Critical );
           isSuccess = false;
         }
       }
     }
     else
     {
-      QgsMessageLog::logMessage( tr( "Feature %2 could not be added in layer \"%1\"" ).arg( mLayer->name() ).arg( mFeature.id() ), QStringLiteral( "QField" ), Qgis::Critical );
-      isSuccess = false;
+      // addFeature assigned a temporary FID. A retry needs the original new-feature draft.
+      mFeature = draft;
     }
 
     if ( isSuccess && sRememberings->contains( mLayer ) )
@@ -1331,18 +1277,27 @@ bool FeatureModel::deleteFeature()
   return LayerUtils::deleteFeature( mProject, mLayer, mFeature.id(), true );
 }
 
-bool FeatureModel::commit( bool stopEditing )
+bool FeatureModel::finishFormEdit( bool applied, bool flushBuffer, bool wasEditing, int undoIndex )
 {
-  if ( !mLayer->commitChanges( stopEditing ) )
+  if ( !applied )
   {
-    QgsMessageLog::logMessage( tr( "Could not save changes. Rolling back." ), QStringLiteral( "QField" ), Qgis::Critical );
-    mLayer->rollBack();
+    mLayer->destroyEditCommand();
+    if ( !wasEditing )
+      mLayer->rollBack();
+    QgsMessageLog::logMessage( tr( "Could not apply feature changes" ), QStringLiteral( "QField" ), Qgis::Warning );
     return false;
   }
-  else
-  {
+
+  mLayer->endEditCommand();
+  if ( !flushBuffer || mLayer->commitChanges( !wasEditing ) )
     return true;
-  }
+
+  QgsMessageLog::logMessage( mLayer->commitErrors().join( QLatin1Char( '\n' ) ), QStringLiteral( "QField" ), Qgis::Critical );
+  if ( !wasEditing )
+    mLayer->rollBack();
+  else if ( mLayer->undoStack()->index() == undoIndex + 1 )
+    mLayer->undoStack()->undo(); // Keep changes which were pending before this form.
+  return false;
 }
 
 bool FeatureModel::isEditing() const

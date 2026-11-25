@@ -5,18 +5,18 @@ const vm = require("node:vm");
 const assert = require("node:assert/strict");
 const qml = fs.readFileSync(process.argv[2] || path.join(__dirname, "../src/qml/qgismobileapp.qml"), "utf8");
 
-function body(signature, after = 0) {
-  const start = qml.indexOf(signature, after);
+function body(signature, after = 0, source = qml) {
+  const start = source.indexOf(signature, after);
   assert.ok(start >= 0, signature);
-  const brace = qml.indexOf("{", start);
+  const brace = source.indexOf("{", start);
   let depth = 1, end = brace + 1;
-  while (depth > 0 && end < qml.length) {
-    if (qml[end] === "{") ++depth;
-    if (qml[end] === "}") --depth;
+  while (depth > 0 && end < source.length) {
+    if (source[end] === "{") ++depth;
+    if (source[end] === "}") --depth;
     ++end;
   }
   assert.equal(depth, 0, signature);
-  return qml.slice(brace, end);
+  return source.slice(brace, end);
 }
 function handler(ctx, signature, args = "", after = 0) {
   return vm.runInContext("(function(" + args + ")" + body(signature, after) + ")", ctx);
@@ -114,3 +114,22 @@ add(); callbacks.shift()(); assert.equal(captures, 1);
 edit.positionSource.active=true; edit.coordinateLocator.positionLocked=true; edit.mainWindow.sungsanGnssFresh=false;
 add(); assert.equal(callbacks.length, 0); assert.equal(captures, 1);
 console.log("PASS overlapping feature IDs across layers, multiple hits, empty layer, cancel selection, deferred point and stale GNSS");
+
+const toolbarQml = fs.readFileSync(path.join(__dirname, "../src/qml/DigitizingToolbar.qml"), "utf8");
+let hardwareAdded = 0, handledByGeometryTool = 0;
+const hardware = context({
+  mainWindow: {sungsanGnssFresh: false, sungsanPositionSwitchPending: false},
+  coordinateLocator: {positionLocked: true}, positionSource: {active: true}, positioningSettings: {},
+  Qt: {Key_VolumeUp: 1, Key_VolumeDown: 2}, stateMachine: {state: "digitize"}, mapCanvasMap: {isEnabled: true},
+  digitizingToolbar: {digitizingAllowed: true, triggerAddVertex() { ++hardwareAdded; }},
+  geometryEditorsToolbar: {canvasClicked() { ++handledByGeometryTool; return false; }}
+});
+hardware.digitizingToolbar.checkAccuracyRequirement = vm.runInContext("(function()" + body("function checkAccuracyRequirement", 0, toolbarQml) + ")", hardware);
+const volumeUp = handler(hardware, "function onVolumeKeyUp", "volumeKeyCode");
+volumeUp(1); assert.equal(hardwareAdded, 0); assert.equal(handledByGeometryTool, 0);
+hardware.mainWindow.sungsanGnssFresh = true; volumeUp(1); assert.equal(hardwareAdded, 1);
+hardware.mainWindow.sungsanPositionSwitchPending = true; volumeUp(1); assert.equal(hardwareAdded, 1);
+hardware.mainWindow.sungsanPositionSwitchPending = false; hardware.positionSource.active = false; volumeUp(1); assert.equal(hardwareAdded, 1);
+hardware.coordinateLocator.positionLocked = false; volumeUp(1); assert.equal(hardwareAdded, 2);
+hardware.digitizingToolbar.digitizingAllowed = false; volumeUp(1); assert.equal(hardwareAdded, 2);
+console.log("PASS hardware volume-key point capture: no stale, switching, inactive or locked-layer coordinates; fresh and manual capture pass");

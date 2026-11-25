@@ -313,6 +313,10 @@ QfVisibilityFadingRow {
   }
 
   function checkAccuracyRequirement() {
+    if (mainWindow.sungsanPositionSwitchPending || (coordinateLocator && coordinateLocator.positionLocked && (!positionSource.active || !mainWindow.sungsanGnssFresh))) {
+      displayToast("위치 장치에서 유효한 새 좌표를 수신한 뒤 추가해 주세요.", "warning");
+      return false;
+    }
     if (coordinateLocator && coordinateLocator.positionLocked && positioningSettings.accuracyIndicator && positioningSettings.accuracyRequirement) {
       if (positioningSettings.accuracyBad > 0 && (!coordinateLocator.positionInformation || !coordinateLocator.positionInformation.haccValid || coordinateLocator.positionInformation.hacc >= positioningSettings.accuracyBad)) {
         displayToast(qsTr("Position accuracy doesn't meet the minimum requirement, vertex not added"), 'warning');

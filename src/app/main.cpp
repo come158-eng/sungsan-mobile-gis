@@ -46,11 +46,13 @@
 #include <QDialog>
 #include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QLabel>
 #include <QLocale>
 #include <QMainWindow>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTemporaryDir>
 #include <QTranslator>
 #include <QtWebView/QtWebView>
 
@@ -129,6 +131,16 @@ int main( int argc, char **argv )
   Q_INIT_RESOURCE( qml );
 
 #if defined( Q_OS_ANDROID )
+  // QGIS opens and writes QGZ files through QTemporaryDir. Pin its scratch
+  // space to the app's own cache before QGIS constructs any project archive.
+  const QString cache = QStandardPaths::writableLocation( QStandardPaths::CacheLocation );
+  if ( !cache.isEmpty() && QDir().mkpath( cache ) )
+    qputenv( "TMPDIR", QFile::encodeName( cache ) );
+  {
+    QTemporaryDir probe;
+    if ( !probe.isValid() )
+      qWarning() << "Project archive scratch directory unavailable" << QDir::tempPath() << probe.errorString();
+  }
   if ( argc > 1 )
   {
     if ( strcmp( argv[1], "--cloudservice" ) == 0 )

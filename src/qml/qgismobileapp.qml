@@ -5335,7 +5335,11 @@ ApplicationWindow {
         }
         break;
       case Qt.Key_VolumeUp:
-        if (!geometryEditorsToolbar.canvasClicked(coordinateLocator.currentCoordinate)) {
+        if (!digitizingToolbar.checkAccuracyRequirement()) {
+          return;
+        }
+        if (!geometryEditorsToolbar.canvasClicked(coordinateLocator.currentCoordinate)
+            && (stateMachine.state !== "digitize" || digitizingToolbar.geometryRequested || digitizingToolbar.digitizingAllowed)) {
           digitizingToolbar.triggerAddVertex();
         }
         break;

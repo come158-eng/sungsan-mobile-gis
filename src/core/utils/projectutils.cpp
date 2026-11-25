@@ -24,6 +24,7 @@
 #include <qgsattributeeditorcontainer.h>
 #include <qgsattributeeditorfield.h>
 #include <qgsattributeeditorrelation.h>
+#include <qgserror.h>
 #include <qgslayertree.h>
 #include <qgsmaplayer.h>
 #include <qgsprojectdisplaysettings.h>
@@ -452,8 +453,12 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     createdProjectDir = QStringLiteral( "%1_%2" ).arg( createdProjectsDir.filePath( QStringLiteral( "%1/%2/%3" ).arg( safeRegion, safeSite, QStringLiteral( "%1_%2" ).arg( safeDate, safeSite ) ) ), QString::number( uniqueSuffix++ ) );
   }
   createdProjectDir = QDir::cleanPath( createdProjectDir );
-  createdProjectsDir.mkpath( createdProjectDir );
-  const QString projectFilepath = QStringLiteral( "%1/%2.qgz" ).arg( createdProjectDir, projectFilename );
+  if ( !createdProjectsDir.mkpath( createdProjectDir ) )
+  {
+    qWarning() << "Cannot create project folder" << createdProjectDir;
+    return QString();
+  }
+  QString projectFilepath = QStringLiteral( "%1/%2.qgz" ).arg( createdProjectDir, projectFilename );
 
   QList<QgsMapLayer *> createdProjectLayers;
   QgsProject *createdProject = new QgsProject();
@@ -524,6 +529,7 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     sungsanFieldObjectsLayer = new QgsVectorLayer( objectUri, QStringLiteral( "현장객체" ) );
     if ( !sungsanFieldObjectsLayer->isValid() )
     {
+      qWarning() << "Cannot open new field layer" << sungsanFieldObjectsLayer->error().summary();
       delete sungsanFieldObjectsLayer;
       delete createdProject;
       return QString();
@@ -1177,7 +1183,21 @@ QString ProjectUtils::createProject( const QVariantMap &options, const GnssPosit
     }
   } );
 
-  const bool written = createdProject->write( projectFilepath );
+  bool written = createdProject->write( projectFilepath );
+  if ( !written )
+  {
+    qWarning() << "Cannot write project archive" << createdProject->error();
+    // This template is a new project. A plain QGIS document in the same
+    // folder uses the same relative layer/attachment paths. Never create
+    // two project files when the archive writer produced a partial result.
+    if ( sungsanFieldTemplate && !QFileInfo::exists( projectFilepath ) )
+    {
+      projectFilepath = QDir( createdProjectDir ).filePath( projectFilename + QStringLiteral( ".qgs" ) );
+      written = createdProject->write( projectFilepath );
+      if ( !written )
+        qWarning() << "Cannot write field project document" << createdProject->error();
+    }
+  }
   createdProject->clear();
   createdProject->deleteLater();
 

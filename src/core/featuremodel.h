@@ -333,7 +333,7 @@ class FeatureModel : public QAbstractListModel
     QgsFeatureIds applyVertexModelTopography();
     void applyGeometryTopography( const QgsGeometry &geometry );
 
-    bool commit( bool stopEditing = true );
+    bool finishFormEdit( bool applied, bool flushBuffer, bool wasEditing, int undoIndex );
     bool startEditing();
     bool isEditing() const;
 
